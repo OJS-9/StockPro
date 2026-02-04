@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - StockIntel{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-surface-dark border-b border-border-dark px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="{{ url_for('index') }}" class="flex items-center gap-2 text-primary hover:text-white transition-colors">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                    <span class="font-display font-bold text-xl">StockIntel</span>
+                </a>
+                <span class="text-stone-500">/</span>
+                <h1 class="font-display font-semibold text-lg">Portfolio</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="{{ url_for('add_transaction') }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                    <span class="material-symbols-outlined text-xl">add</span>
+                    Add Transaction
+                </a>
+                <a href="{{ url_for('import_csv') }}" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
+                    <span class="material-symbols-outlined text-xl">upload_file</span>
+                    Import CSV
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 px-6 py-8">
+        <div class="max-w-7xl mx-auto">
+            <!-- Status Message -->
+            {% if status_message %}
+            <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
+                <p class="text-sm">{{ status_message }}</p>
+            </div>
+            {% endif %}
+
+            {% if summary %}
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <!-- Total Value -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">account_balance_wallet</span>
+                        <span class="text-sm">Total Value</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold">${{ "%.2f"|format(summary.total_market_value|float) }}</p>
+                </div>
+
+                <!-- Cost Basis -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">payments</span>
+                        <span class="text-sm">Cost Basis</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold">${{ "%.2f"|format(summary.total_cost_basis|float) }}</p>
+                </div>
+
+                <!-- Unrealized Gain/Loss -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">trending_up</span>
+                        <span class="text-sm">Unrealized P&L</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold {% if summary.total_unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
+                        {% if summary.total_unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(summary.total_unrealized_gain|float) }}
+                        <span class="text-sm font-normal">({{ "%.1f"|format(summary.total_unrealized_gain_pct|float) }}%)</span>
+                    </p>
+                </div>
+
+                <!-- Allocation -->
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">pie_chart</span>
+                        <span class="text-sm">Allocation</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-1">
+                            <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                            <span class="text-sm">Stocks {{ "%.0f"|format(summary.stock_allocation_pct|float) }}%</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="w-3 h-3 rounded-full bg-orange-500"></span>
+                            <span class="text-sm">Crypto {{ "%.0f"|format(summary.crypto_allocation_pct|float) }}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Holdings Table -->
+            <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden">
+                <div class="px-5 py-4 border-b border-border-dark">
+                    <h2 class="font-display font-semibold text-lg">Holdings ({{ summary.holdings_count }})</h2>
+                </div>
+
+                {% if holdings %}
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="text-stone-400 text-sm border-b border-border-dark">
+                                <th class="text-left px-5 py-3 font-medium">Asset</th>
+                                <th class="text-right px-5 py-3 font-medium">Quantity</th>
+                                <th class="text-right px-5 py-3 font-medium">Avg Cost</th>
+                                <th class="text-right px-5 py-3 font-medium">Current Price</th>
+                                <th class="text-right px-5 py-3 font-medium">Market Value</th>
+                                <th class="text-right px-5 py-3 font-medium">P&L</th>
+                                <th class="text-right px-5 py-3 font-medium">P&L %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for holding in holdings %}
+                            <tr class="border-b border-border-dark hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('holding_detail', symbol=holding.symbol) }}'">
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center {% if holding.asset_type == 'crypto' %}bg-orange-500/20 text-orange-400{% else %}bg-blue-500/20 text-blue-400{% endif %}">
+                                            <span class="material-symbols-outlined">{% if holding.asset_type == 'crypto' %}currency_bitcoin{% else %}trending_up{% endif %}</span>
+                                        </div>
+                                        <div>
+                                            <p class="font-semibold">{{ holding.symbol }}</p>
+                                            <p class="text-xs text-stone-400 capitalize">{{ holding.asset_type }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 text-right font-mono">{{ "%.4f"|format(holding.total_quantity|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono">${{ "%.2f"|format(holding.average_cost|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono">${{ "%.2f"|format(holding.current_price|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono font-semibold">${{ "%.2f"|format(holding.market_value|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono {% if holding.unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
+                                    {% if holding.unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(holding.unrealized_gain|float) }}
+                                </td>
+                                <td class="px-5 py-4 text-right font-mono {% if holding.unrealized_gain_pct|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
+                                    {% if holding.unrealized_gain_pct|float >= 0 %}+{% endif %}{{ "%.1f"|format(holding.unrealized_gain_pct|float) }}%
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="px-5 py-12 text-center">
+                    <span class="material-symbols-outlined text-5xl text-stone-500 mb-4">inventory_2</span>
+                    <p class="text-stone-400 mb-4">No holdings yet</p>
+                    <a href="{{ url_for('add_transaction') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                        <span class="material-symbols-outlined">add</span>
+                        Add your first transaction
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="bg-surface-dark rounded-xl border border-border-dark px-5 py-12 text-center">
+                <span class="material-symbols-outlined text-5xl text-stone-500 mb-4">account_balance_wallet</span>
+                <h2 class="font-display font-semibold text-xl mb-2">Start tracking your portfolio</h2>
+                <p class="text-stone-400 mb-6">Add transactions to track your stocks and crypto holdings</p>
+                <div class="flex items-center justify-center gap-3">
+                    <a href="{{ url_for('add_transaction') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                        <span class="material-symbols-outlined">add</span>
+                        Add Transaction
+                    </a>
+                    <a href="{{ url_for('import_csv') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
+                        <span class="material-symbols-outlined">upload_file</span>
+                        Import CSV
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+{% endblock %}

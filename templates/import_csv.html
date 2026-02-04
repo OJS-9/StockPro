@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Import CSV - StockIntel{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-surface-dark border-b border-border-dark px-6 py-4">
+        <div class="max-w-3xl mx-auto flex items-center gap-4">
+            <a href="{{ url_for('portfolio') }}" class="flex items-center gap-2 text-primary hover:text-white transition-colors">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </a>
+            <h1 class="font-display font-semibold text-lg">Import CSV</h1>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 px-6 py-8">
+        <div class="max-w-3xl mx-auto">
+            <!-- Status Message -->
+            {% if status_message %}
+            <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
+                <p class="text-sm">{{ status_message }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Import Errors -->
+            {% if import_errors %}
+            <div class="mb-6 p-4 rounded-lg bg-red-500/20 border border-red-500/50">
+                <h3 class="font-semibold mb-2">Import Errors:</h3>
+                <ul class="text-sm space-y-1">
+                    {% for error in import_errors %}
+                    <li>Row {{ error.row }}: {{ error.error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Supported Formats -->
+            <div class="bg-surface-dark rounded-xl border border-border-dark p-6 mb-6">
+                <h2 class="font-display font-semibold text-lg mb-4">Supported Formats</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="p-4 bg-background-dark rounded-lg">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="material-symbols-outlined text-orange-400">currency_bitcoin</span>
+                            <span class="font-medium">Coinbase</span>
+                        </div>
+                        <p class="text-xs text-stone-400">Export from Coinbase transaction history</p>
+                    </div>
+                    <div class="p-4 bg-background-dark rounded-lg">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="material-symbols-outlined text-green-400">eco</span>
+                            <span class="font-medium">Robinhood</span>
+                        </div>
+                        <p class="text-xs text-stone-400">Export from Robinhood account statements</p>
+                    </div>
+                    <div class="p-4 bg-background-dark rounded-lg">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="material-symbols-outlined text-blue-400">table_chart</span>
+                            <span class="font-medium">Generic CSV</span>
+                        </div>
+                        <p class="text-xs text-stone-400">Columns: date, symbol, type, quantity, price</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Form -->
+            <form method="POST" action="{{ url_for('import_csv') }}" enctype="multipart/form-data" class="bg-surface-dark rounded-xl border border-border-dark">
+                <div class="p-6">
+                    <label for="csv_file" class="block">
+                        <div class="border-2 border-dashed border-border-dark rounded-xl p-12 text-center hover:border-primary transition-colors cursor-pointer" id="dropzone">
+                            <span class="material-symbols-outlined text-5xl text-stone-500 mb-4">upload_file</span>
+                            <p class="text-lg font-medium mb-2">Drop your CSV file here</p>
+                            <p class="text-stone-400 mb-4">or click to browse</p>
+                            <input
+                                type="file"
+                                id="csv_file"
+                                name="csv_file"
+                                accept=".csv"
+                                required
+                                class="hidden"
+                            />
+                            <p id="file-name" class="text-accent-up font-medium hidden"></p>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="px-6 py-4 bg-background-dark/50 border-t border-border-dark flex items-center justify-end gap-3">
+                    <a href="{{ url_for('portfolio') }}" class="px-4 py-2 text-stone-400 hover:text-white transition-colors">
+                        Cancel
+                    </a>
+                    <button type="submit" id="submit-btn" disabled class="flex items-center gap-2 px-6 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span class="material-symbols-outlined">upload</span>
+                        Import Transactions
+                    </button>
+                </div>
+            </form>
+
+            <!-- Generic CSV Format Info -->
+            <div class="mt-6 bg-surface-dark rounded-xl border border-border-dark p-6">
+                <h3 class="font-display font-semibold mb-4">Generic CSV Format</h3>
+                <p class="text-sm text-stone-400 mb-4">If you're creating your own CSV, use these column headers:</p>
+                <div class="bg-background-dark rounded-lg p-4 font-mono text-sm overflow-x-auto">
+                    <pre class="text-stone-300">date,symbol,type,quantity,price,fees,notes
+2024-01-15,AAPL,buy,10,185.50,0,Initial purchase
+2024-01-20,BTC,buy,0.5,42000.00,2.50,DCA
+2024-02-01,AAPL,sell,5,190.00,0,Partial exit</pre>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    const fileInput = document.getElementById('csv_file');
+    const fileName = document.getElementById('file-name');
+    const submitBtn = document.getElementById('submit-btn');
+    const dropzone = document.getElementById('dropzone');
+
+    fileInput.addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            fileName.textContent = this.files[0].name;
+            fileName.classList.remove('hidden');
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Drag and drop
+    dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('border-primary');
+    });
+
+    dropzone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.classList.remove('border-primary');
+    });
+
+    dropzone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('border-primary');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileName.textContent = e.dataTransfer.files[0].name;
+            fileName.classList.remove('hidden');
+            submitBtn.disabled = false;
+        }
+    });
+</script>
+{% endblock %}
