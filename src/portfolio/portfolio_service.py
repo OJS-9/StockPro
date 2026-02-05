@@ -115,6 +115,9 @@ class PortfolioService:
             - unrealized_gain_pct
         """
         holdings = self.db.get_holdings(portfolio_id)
+        
+        # Filter out holdings with zero quantity (closed positions)
+        holdings = [h for h in holdings if h.get('total_quantity', Decimal('0')) > Decimal('0')]
 
         # Group by asset type for efficient price fetching
         stocks = [h for h in holdings if h['asset_type'] == 'stock']

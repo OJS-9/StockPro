@@ -216,23 +216,30 @@ class MCPClient:
     
     def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute an MCP tool.
+        Execute an MCP tool via the TOOL_CALL meta-wrapper.
+        
+        Alpha Vantage MCP uses a meta-tool architecture where all API tools
+        must be called through the TOOL_CALL wrapper.
         
         Args:
-            tool_name: Name of the tool to call
+            tool_name: Name of the tool to call (e.g., GLOBAL_QUOTE, COMPANY_OVERVIEW)
             arguments: Tool arguments
         
         Returns:
             Tool execution result
         """
         try:
-            # MCP protocol: tools/call endpoint
+            # Alpha Vantage MCP requires calling tools via TOOL_CALL meta-wrapper
+            # The arguments must be JSON-encoded as a string
             request_data = {
                 "jsonrpc": "2.0",
                 "method": "tools/call",
                 "params": {
-                    "name": tool_name,
-                    "arguments": arguments
+                    "name": "TOOL_CALL",
+                    "arguments": {
+                        "tool_name": tool_name,
+                        "arguments": json.dumps(arguments)
+                    }
                 },
                 "id": int(time.time() * 1000)  # Unique ID
             }
@@ -252,6 +259,7 @@ class MCPClient:
                         try:
                             return json.loads(text_content)
                         except json.JSONDecodeError:
+                            # Return CSV or other text as raw
                             return {"raw": text_content}
                     return result
                 return result

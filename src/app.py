@@ -144,70 +144,11 @@ def start_research():
 @app.route('/continue', methods=['POST'])
 def continue_conversation():
     """Handle form submission to continue conversation."""
-    # #region agent log
-    log_path = '/Users/orsalinas/projects/Stock Protfolio Agent/.cursor/debug.log'
-    import json
-    from datetime import datetime
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C",
-                "location": "app.py:continue_conversation:entry",
-                "message": "Route entry - checking request data",
-                "data": {
-                    "form_keys": list(request.form.keys()),
-                    "user_response_raw": request.form.get('user_response', 'NOT_FOUND'),
-                    "is_ajax": request.headers.get('X-Requested-With') == 'XMLHttpRequest',
-                    "content_type": request.content_type
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }) + '\n')
-    except: pass
-    # #endregion
-    
     user_input = request.form.get('user_response', '').strip()
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C",
-                "location": "app.py:continue_conversation:after_get",
-                "message": "After getting user_input",
-                "data": {
-                    "user_input": user_input,
-                    "user_input_length": len(user_input),
-                    "is_empty": not user_input
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }) + '\n')
-    except: pass
-    # #endregion
-    
     # Validate input
     if not user_input:
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C",
-                    "location": "app.py:continue_conversation:validation_failed",
-                    "message": "Validation failed - empty input",
-                    "data": {
-                        "is_ajax": is_ajax,
-                        "user_input": user_input
-                    },
-                    "timestamp": int(datetime.now().timestamp() * 1000)
-                }) + '\n')
-        except: pass
-        # #endregion
         if is_ajax:
             return jsonify({'success': False, 'error': '⚠️ Please enter a response.'}), 400
         session['status_message'] = '⚠️ Please enter a response.'
