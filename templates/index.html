@@ -12,9 +12,9 @@
     </div>
     <div class="hidden md:flex flex-1 justify-end gap-8">
         <div class="flex items-center gap-9">
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('index') }}">Markets</a>
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">News</a>
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Screener</a>
+            <a class="text-primary text-sm font-bold leading-normal" href="{{ url_for('index') }}">Markets</a>
+            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('report_history') }}">Reports</a>
+            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('chat') }}">AI Agent</a>
             <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Portfolio</a>
         </div>
         <div class="flex gap-2">

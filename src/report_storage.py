@@ -120,9 +120,32 @@ class ReportStorage:
     def delete_report(self, report_id: str):
         """
         Delete a report and all its chunks.
-        
+
         Args:
             report_id: Report ID
         """
         self.db.delete_report(report_id)
+
+    def get_all_reports(
+        self,
+        ticker: str = None,
+        trade_type: str = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0
+    ):
+        """
+        Get paginated reports with optional filtering.
+
+        Args:
+            ticker: Optional ticker filter
+            trade_type: Optional trade type filter
+            sort_order: Sort order (ASC or DESC)
+            limit: Maximum number of reports
+            offset: Number of reports to skip
+
+        Returns:
+            Tuple of (reports list, total count)
+        """
+        return self.db.get_all_reports(ticker, trade_type, sort_order, limit, offset)
 

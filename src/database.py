@@ -184,11 +184,11 @@ class DatabaseManager:
     def get_reports_by_ticker(self, ticker: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get recent reports for a ticker.
-        
+
         Args:
             ticker: Stock ticker symbol
             limit: Maximum number of reports to return
-        
+
         Returns:
             List of report dictionaries
         """
@@ -196,7 +196,7 @@ class DatabaseManager:
         try:
             connection = self.get_connection()
             cursor = connection.cursor(dictionary=True)
-            
+
             cursor.execute("""
                 SELECT report_id, ticker, trade_type, report_text, metadata, created_at
                 FROM reports
@@ -204,16 +204,90 @@ class DatabaseManager:
                 ORDER BY created_at DESC
                 LIMIT %s
             """, (ticker.upper(), limit))
-            
+
             results = cursor.fetchall()
             for result in results:
                 if result.get('metadata'):
                     result['metadata'] = json.loads(result['metadata'])
-            
+
             return results
-            
+
         except Error as e:
             raise RuntimeError(f"Failed to get reports by ticker: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_all_reports(
+        self,
+        ticker: Optional[str] = None,
+        trade_type: Optional[str] = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get paginated reports with optional filtering.
+
+        Args:
+            ticker: Optional ticker filter
+            trade_type: Optional trade type filter
+            sort_order: Sort order for created_at (ASC or DESC)
+            limit: Maximum number of reports to return
+            offset: Number of reports to skip
+
+        Returns:
+            Tuple of (reports list, total count)
+        """
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            # Build WHERE clause dynamically
+            where_clauses = []
+            params = []
+
+            if ticker:
+                where_clauses.append("ticker = %s")
+                params.append(ticker.upper())
+
+            if trade_type:
+                where_clauses.append("trade_type = %s")
+                params.append(trade_type)
+
+            where_sql = ""
+            if where_clauses:
+                where_sql = "WHERE " + " AND ".join(where_clauses)
+
+            # Validate sort order
+            sort_order = "DESC" if sort_order.upper() not in ("ASC", "DESC") else sort_order.upper()
+
+            # Get total count
+            count_sql = f"SELECT COUNT(*) as total FROM reports {where_sql}"
+            cursor.execute(count_sql, params)
+            total_count = cursor.fetchone()['total']
+
+            # Get paginated results
+            query_sql = f"""
+                SELECT report_id, ticker, trade_type, report_text, metadata, created_at
+                FROM reports
+                {where_sql}
+                ORDER BY created_at {sort_order}
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(query_sql, params + [limit, offset])
+
+            results = cursor.fetchall()
+            for result in results:
+                if result.get('metadata'):
+                    result['metadata'] = json.loads(result['metadata'])
+
+            return results, total_count
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get all reports: {e}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()

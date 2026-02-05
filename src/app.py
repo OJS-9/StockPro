@@ -9,12 +9,15 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 import os
+import io
 from dotenv import load_dotenv
 import uuid
 
 from agent import create_agent, StockResearchAgent
+from report_storage import ReportStorage
+from pdf_generator import get_pdf_generator
 
 # Load environment variables
 load_dotenv()
@@ -346,7 +349,7 @@ def clear_conversation():
     session['current_ticker'] = ''
     session['current_trade_type'] = 'Investment'
     session['status_message'] = 'Conversation cleared. Ready for new research.'
-    
+
     # Optionally reset agent
     session_id = get_or_create_session_id()
     if session_id in agent_sessions:
@@ -354,8 +357,192 @@ def clear_conversation():
             agent_sessions[session_id].reset_conversation()
         except:
             pass
-    
+
     return redirect(url_for('chat'))
+
+
+# ============================================================================
+# Report History & Export Routes
+# ============================================================================
+
+@app.route('/reports')
+def report_history():
+    """Render the report history page with filters."""
+    get_or_create_session_id()
+
+    # Get filter parameters from query string
+    ticker = request.args.get('ticker', '').strip().upper() or None
+    trade_type = request.args.get('trade_type', '').strip() or None
+    sort_order = request.args.get('sort', 'DESC').upper()
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 12
+
+    # Calculate offset
+    offset = (page - 1) * per_page
+
+    try:
+        storage = ReportStorage()
+        reports, total_count = storage.get_all_reports(
+            ticker=ticker,
+            trade_type=trade_type,
+            sort_order=sort_order,
+            limit=per_page,
+            offset=offset
+        )
+
+        # Calculate pagination info
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+
+        return render_template(
+            'reports.html',
+            reports=reports,
+            total_count=total_count,
+            current_page=page,
+            total_pages=total_pages,
+            per_page=per_page,
+            filter_ticker=ticker or '',
+            filter_trade_type=trade_type or '',
+            sort_order=sort_order
+        )
+    except Exception as e:
+        return render_template(
+            'reports.html',
+            reports=[],
+            total_count=0,
+            current_page=1,
+            total_pages=1,
+            per_page=per_page,
+            filter_ticker='',
+            filter_trade_type='',
+            sort_order='DESC',
+            error=str(e)
+        )
+
+
+@app.route('/api/reports')
+def api_reports():
+    """AJAX endpoint for filtered reports (returns JSON)."""
+    ticker = request.args.get('ticker', '').strip().upper() or None
+    trade_type = request.args.get('trade_type', '').strip() or None
+    sort_order = request.args.get('sort', 'DESC').upper()
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 12
+
+    offset = (page - 1) * per_page
+
+    try:
+        storage = ReportStorage()
+        reports, total_count = storage.get_all_reports(
+            ticker=ticker,
+            trade_type=trade_type,
+            sort_order=sort_order,
+            limit=per_page,
+            offset=offset
+        )
+
+        # Convert datetime objects to ISO strings for JSON
+        for report in reports:
+            if report.get('created_at'):
+                report['created_at'] = report['created_at'].isoformat()
+
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+
+        return jsonify({
+            'success': True,
+            'reports': reports,
+            'total_count': total_count,
+            'current_page': page,
+            'total_pages': total_pages
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/report/<report_id>')
+def view_report(report_id):
+    """View a single report (public shareable link)."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id)
+
+        if not report:
+            abort(404)
+
+        return render_template(
+            'report_view.html',
+            report=report
+        )
+    except Exception as e:
+        abort(404)
+
+
+@app.route('/report/<report_id>/pdf')
+def download_report_pdf(report_id):
+    """Download report as PDF."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id)
+
+        if not report:
+            abort(404)
+
+        # Generate PDF
+        pdf_generator = get_pdf_generator()
+        pdf_bytes = pdf_generator.generate_pdf(
+            ticker=report['ticker'],
+            trade_type=report['trade_type'],
+            report_text=report['report_text'],
+            created_at=report.get('created_at')
+        )
+
+        # Create filename
+        filename = f"{report['ticker']}_report_{report_id[:8]}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': len(pdf_bytes)
+            }
+        )
+    except Exception as e:
+        abort(500)
+
+
+@app.route('/report/<report_id>/chat')
+def chat_with_report(report_id):
+    """Open chat interface with report context pre-loaded."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id)
+
+        if not report:
+            abort(404)
+
+        # Store report context in session for chat
+        session['current_report_id'] = report_id
+        session['current_ticker'] = report['ticker']
+        session['current_trade_type'] = report['trade_type']
+        session['report_text'] = report['report_text']
+
+        # Initialize conversation with report context
+        session['conversation_history'] = [
+            {
+                "role": "assistant",
+                "content": f"I've loaded the research report for **{report['ticker']}** ({report['trade_type']}). "
+                           f"Feel free to ask me any questions about this analysis!"
+            }
+        ]
+        session['status_message'] = f'Report loaded: {report["ticker"]}'
+
+        return redirect(url_for('chat'))
+    except Exception as e:
+        session['status_message'] = f'Error loading report: {str(e)}'
+        return redirect(url_for('report_history'))
 
 
 def main():
