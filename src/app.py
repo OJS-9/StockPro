@@ -447,6 +447,10 @@ def holding_detail(symbol: str):
             session['status_message'] = f'⚠️ Holding not found: {symbol}'
             return redirect(url_for('portfolio'))
 
+        if holding.get('total_quantity', Decimal('0')) <= Decimal('0'):
+            session['status_message'] = f'⚠️ {symbol} is a closed position with no remaining quantity.'
+            return redirect(url_for('portfolio'))
+
         transactions = portfolio_service.get_transactions(holding['holding_id'])
 
         # Get current price

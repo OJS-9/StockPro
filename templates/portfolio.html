@@ -126,13 +126,33 @@
                                 </td>
                                 <td class="px-5 py-4 text-right font-mono">{{ "%.4f"|format(holding.total_quantity|float) }}</td>
                                 <td class="px-5 py-4 text-right font-mono">${{ "%.2f"|format(holding.average_cost|float) }}</td>
-                                <td class="px-5 py-4 text-right font-mono">${{ "%.2f"|format(holding.current_price|float) }}</td>
-                                <td class="px-5 py-4 text-right font-mono font-semibold">${{ "%.2f"|format(holding.market_value|float) }}</td>
-                                <td class="px-5 py-4 text-right font-mono {% if holding.unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
-                                    {% if holding.unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(holding.unrealized_gain|float) }}
+                                <td class="px-5 py-4 text-right font-mono">
+                                    {% if holding.price_available %}
+                                        ${{ "%.2f"|format(holding.current_price|float) }}
+                                    {% else %}
+                                        <span class="text-stone-500 text-xs">N/A</span>
+                                    {% endif %}
                                 </td>
-                                <td class="px-5 py-4 text-right font-mono {% if holding.unrealized_gain_pct|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
-                                    {% if holding.unrealized_gain_pct|float >= 0 %}+{% endif %}{{ "%.1f"|format(holding.unrealized_gain_pct|float) }}%
+                                <td class="px-5 py-4 text-right font-mono font-semibold">
+                                    {% if holding.price_available %}
+                                        ${{ "%.2f"|format(holding.market_value|float) }}
+                                    {% else %}
+                                        <span class="text-stone-500 text-xs">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-5 py-4 text-right font-mono {% if holding.price_available and holding.unrealized_gain|float >= 0 %}text-accent-up{% elif holding.price_available %}text-accent-down{% endif %}">
+                                    {% if holding.price_available %}
+                                        {% if holding.unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(holding.unrealized_gain|float) }}
+                                    {% else %}
+                                        <span class="text-stone-500 text-xs">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-5 py-4 text-right font-mono {% if holding.price_available and holding.unrealized_gain_pct|float >= 0 %}text-accent-up{% elif holding.price_available %}text-accent-down{% endif %}">
+                                    {% if holding.price_available %}
+                                        {% if holding.unrealized_gain_pct|float >= 0 %}+{% endif %}{{ "%.1f"|format(holding.unrealized_gain_pct|float) }}%
+                                    {% else %}
+                                        <span class="text-stone-500 text-xs">N/A</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

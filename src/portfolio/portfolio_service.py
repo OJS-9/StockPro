@@ -129,7 +129,9 @@ class PortfolioService:
             stock_symbols = [h['symbol'] for h in stocks]
             stock_prices = stock_provider.get_prices_batch(stock_symbols)
             for h in stocks:
-                h['current_price'] = stock_prices.get(h['symbol'], Decimal('0'))
+                price = stock_prices.get(h['symbol'])
+                h['current_price'] = price if price is not None else Decimal('0')
+                h['price_available'] = price is not None
 
         # Fetch crypto prices
         if cryptos:
@@ -137,21 +139,30 @@ class PortfolioService:
             crypto_symbols = [h['symbol'] for h in cryptos]
             crypto_prices = crypto_provider.get_prices_batch(crypto_symbols)
             for h in cryptos:
-                h['current_price'] = crypto_prices.get(h['symbol'], Decimal('0'))
+                price = crypto_prices.get(h['symbol'])
+                h['current_price'] = price if price is not None else Decimal('0')
+                h['price_available'] = price is not None
 
         # Calculate market value and gains for all holdings
         for h in holdings:
             current_price = h.get('current_price', Decimal('0'))
+            price_available = h.get('price_available', False)
             total_quantity = h.get('total_quantity', Decimal('0'))
             total_cost_basis = h.get('total_cost_basis', Decimal('0'))
 
-            h['market_value'] = total_quantity * current_price
-            h['unrealized_gain'] = h['market_value'] - total_cost_basis
-
-            if total_cost_basis > 0:
-                h['unrealized_gain_pct'] = (h['unrealized_gain'] / total_cost_basis) * 100
+            if not price_available:
+                # Can't compute meaningful values without a real price
+                h['market_value'] = None
+                h['unrealized_gain'] = None
+                h['unrealized_gain_pct'] = None
             else:
-                h['unrealized_gain_pct'] = Decimal('0')
+                h['market_value'] = total_quantity * current_price
+                h['unrealized_gain'] = h['market_value'] - total_cost_basis
+
+                if total_cost_basis > 0:
+                    h['unrealized_gain_pct'] = (h['unrealized_gain'] / total_cost_basis) * 100
+                else:
+                    h['unrealized_gain_pct'] = Decimal('0')
 
         return holdings
 
@@ -302,13 +313,9 @@ class PortfolioService:
         transactions = self.db.get_transactions(holding_id)
 
         if not transactions:
-            # No transactions, zero out holding
-            self.db.update_holding(
-                holding_id,
-                Decimal('0'),
-                Decimal('0'),
-                Decimal('0')
-            )
+            # No transactions left — delete the holding row entirely so it
+            # doesn't appear as a ghost row in exports or future queries.
+            self.db.delete_holding(holding_id)
             return
 
         # Calculate using simple average method
@@ -421,7 +428,7 @@ class PortfolioService:
             h.get('total_cost_basis', Decimal('0')) for h in holdings
         )
         total_market_value = sum(
-            h.get('market_value', Decimal('0')) for h in holdings
+            h.get('market_value') or Decimal('0') for h in holdings
         )
         total_unrealized_gain = total_market_value - total_cost_basis
 
@@ -432,11 +439,11 @@ class PortfolioService:
 
         # Allocation by asset type
         stock_value = sum(
-            h.get('market_value', Decimal('0'))
+            h.get('market_value') or Decimal('0')
             for h in holdings if h['asset_type'] == 'stock'
         )
         crypto_value = sum(
-            h.get('market_value', Decimal('0'))
+            h.get('market_value') or Decimal('0')
             for h in holdings if h['asset_type'] == 'crypto'
         )
 

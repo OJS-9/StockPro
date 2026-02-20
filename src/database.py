@@ -588,15 +588,6 @@ class DatabaseManager:
             """, (portfolio_id,))
 
             results = cursor.fetchall()
-            # #region agent log
-            log_path = '/Users/orsalinas/.claude-worktrees/Stock Protfolio Agent/clever-poitras/.cursor/debug.log'
-            import json as _json
-            from datetime import datetime as _dt
-            try:
-                with open(log_path, 'a') as f:
-                    f.write(_json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"database.py:get_holdings","message":"Raw holdings from DB","data":{"count":len(results),"holdings":[{"symbol":r.get("symbol"),"total_quantity":str(r.get("total_quantity"))} for r in results]},"timestamp":int(_dt.now().timestamp()*1000)})+'\n')
-            except: pass
-            # #endregion
             for result in results:
                 result['total_quantity'] = Decimal(str(result['total_quantity']))
                 result['average_cost'] = Decimal(str(result['average_cost']))
