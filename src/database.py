@@ -91,16 +91,47 @@ class DatabaseManager:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
+            # Create users table (must come before portfolios for FK)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id VARCHAR(36) PRIMARY KEY,
+                    username VARCHAR(80) NOT NULL UNIQUE,
+                    email VARCHAR(120) NOT NULL UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_username (username),
+                    INDEX idx_email (email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             # Create portfolios table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS portfolios (
                     portfolio_id VARCHAR(36) PRIMARY KEY,
                     name VARCHAR(100) NOT NULL DEFAULT 'My Portfolio',
                     description TEXT,
+                    user_id VARCHAR(36) NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_portfolio_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
+
+            # Inline migration: add user_id column if it doesn't exist yet
+            cursor.execute("""
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'portfolios'
+                  AND COLUMN_NAME = 'user_id'
+            """)
+            (col_exists,) = cursor.fetchone()
+            if not col_exists:
+                cursor.execute("""
+                    ALTER TABLE portfolios
+                    ADD COLUMN user_id VARCHAR(36) NULL,
+                    ADD CONSTRAINT fk_portfolio_user
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
+                """)
 
             # Create holdings table
             cursor.execute("""
@@ -413,7 +444,8 @@ class DatabaseManager:
         self,
         portfolio_id: str,
         name: str = "My Portfolio",
-        description: str = ""
+        description: str = "",
+        user_id: Optional[str] = None
     ):
         """Create a new portfolio."""
         connection = None
@@ -422,9 +454,9 @@ class DatabaseManager:
             cursor = connection.cursor()
 
             cursor.execute("""
-                INSERT INTO portfolios (portfolio_id, name, description)
-                VALUES (%s, %s, %s)
-            """, (portfolio_id, name, description))
+                INSERT INTO portfolios (portfolio_id, name, description, user_id)
+                VALUES (%s, %s, %s, %s)
+            """, (portfolio_id, name, description, user_id))
 
             connection.commit()
 
@@ -459,23 +491,100 @@ class DatabaseManager:
                 cursor.close()
                 connection.close()
 
-    def list_portfolios(self) -> List[Dict[str, Any]]:
-        """List all portfolios."""
+    def list_portfolios(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List portfolios, optionally filtered by user."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            if user_id is not None:
+                cursor.execute("""
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                    FROM portfolios
+                    WHERE user_id = %s
+                    ORDER BY created_at ASC
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                    FROM portfolios
+                    ORDER BY created_at ASC
+                """)
+
+            return cursor.fetchall()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to list portfolios: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    # ==================== User Methods ====================
+
+    def create_user(self, user_id: str, username: str, email: str, password_hash: str):
+        """Create a new user."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                INSERT INTO users (user_id, username, email, password_hash)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, username, email, password_hash))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to create user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get a user by username."""
         connection = None
         try:
             connection = self.get_connection()
             cursor = connection.cursor(dictionary=True)
 
             cursor.execute("""
-                SELECT portfolio_id, name, description, created_at, updated_at
-                FROM portfolios
-                ORDER BY created_at ASC
-            """)
+                SELECT user_id, username, email, password_hash, created_at
+                FROM users
+                WHERE username = %s
+            """, (username,))
 
-            return cursor.fetchall()
+            return cursor.fetchone()
 
         except Error as e:
-            raise RuntimeError(f"Failed to list portfolios: {e}")
+            raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get a user by ID."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT user_id, username, email, password_hash, created_at
+                FROM users
+                WHERE user_id = %s
+            """, (user_id,))
+
+            return cursor.fetchone()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get user: {e}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()

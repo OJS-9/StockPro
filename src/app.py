@@ -16,6 +16,8 @@ import uuid
 import markdown
 from decimal import Decimal
 from datetime import datetime
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from agent import create_agent, StockResearchAgent
 from portfolio.portfolio_service import get_portfolio_service
@@ -33,6 +35,15 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
 
 # Register markdown filter for Jinja2 templates
 app.jinja_env.filters['markdown'] = markdown.markdown
+
+
+@app.context_processor
+def inject_user():
+    return {'current_user': {
+        'is_authenticated': 'user_id' in session,
+        'user_id': session.get('user_id'),
+        'username': session.get('username'),
+    }}
 
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
@@ -63,7 +74,101 @@ def get_or_create_session_id():
     return session['session_id']
 
 
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            session['next_url'] = request.url
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ==================== Auth Routes ====================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page."""
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if not username or not password:
+            error = 'Username and password are required.'
+        else:
+            from database import get_database_manager
+            db = get_database_manager()
+            user = db.get_user_by_username(username)
+
+            if user and check_password_hash(user['password_hash'], password):
+                next_url = session.get('next_url')
+                session.clear()
+                session['user_id'] = user['user_id']
+                session['username'] = user['username']
+                get_or_create_session_id()
+                return redirect(next_url or url_for('index'))
+            else:
+                error = 'Invalid username or password.'
+
+    return render_template('login.html', error=error)
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Registration page."""
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        if len(username) < 3:
+            error = 'Username must be at least 3 characters.'
+        elif len(password) < 8:
+            error = 'Password must be at least 8 characters.'
+        elif password != confirm_password:
+            error = 'Passwords do not match.'
+        elif not email:
+            error = 'Email is required.'
+        else:
+            try:
+                from database import get_database_manager
+                db = get_database_manager()
+                user_id = str(uuid.uuid4())
+                password_hash = generate_password_hash(password)
+                db.create_user(user_id, username, email, password_hash)
+
+                session.clear()
+                session['user_id'] = user_id
+                session['username'] = username
+                get_or_create_session_id()
+                return redirect(url_for('index'))
+            except RuntimeError as e:
+                if 'Duplicate entry' in str(e):
+                    error = 'Username or email already taken.'
+                else:
+                    error = f'Registration failed: {str(e)}'
+
+    return render_template('register.html', error=error)
+
+
+@app.route('/logout')
+def logout():
+    """Log out and redirect to login."""
+    session.clear()
+    return redirect(url_for('login'))
+
+
 @app.route('/')
+@login_required
 def index():
     """Render the main landing page."""
     # Initialize session ID if needed
@@ -81,6 +186,7 @@ def index():
 
 
 @app.route('/chat')
+@login_required
 def chat():
     """Render the chat interface."""
     # Initialize session ID if needed
@@ -100,6 +206,7 @@ def chat():
 
 
 @app.route('/start_research', methods=['POST'])
+@login_required
 def start_research():
     """Handle form submission to start research."""
     ticker = request.form.get('ticker', '').strip()
@@ -142,6 +249,7 @@ def start_research():
 
 
 @app.route('/continue', methods=['POST'])
+@login_required
 def continue_conversation():
     """Handle form submission to continue conversation."""
     user_input = request.form.get('user_response', '').strip()
@@ -214,6 +322,7 @@ def continue_conversation():
 
 
 @app.route('/generate_report', methods=['POST'])
+@login_required
 def generate_report():
     """Handle form submission to generate report after followup questions."""
     try:
@@ -255,6 +364,7 @@ def generate_report():
 
 
 @app.route('/chat_report', methods=['POST'])
+@login_required
 def chat_report():
     """Handle form submission to chat with report."""
     question = request.form.get('chat_question', '').strip()
@@ -290,6 +400,7 @@ def chat_report():
 
 
 @app.route('/clear', methods=['POST'])
+@login_required
 def clear_conversation():
     """Handle form submission to clear conversation."""
     session['conversation_history'] = []
@@ -311,11 +422,12 @@ def clear_conversation():
 # ==================== Portfolio Routes ====================
 
 @app.route('/portfolio')
+@login_required
 def portfolio():
     """Portfolio dashboard."""
     try:
         portfolio_service = get_portfolio_service()
-        portfolio_data = portfolio_service.get_default_portfolio()
+        portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
         summary = portfolio_service.get_portfolio_summary(portfolio_data['portfolio_id'])
 
         # Get status message if any
@@ -340,12 +452,13 @@ def portfolio():
 
 
 @app.route('/portfolio/add', methods=['GET', 'POST'])
+@login_required
 def add_transaction():
     """Add transaction form."""
     if request.method == 'POST':
         try:
             portfolio_service = get_portfolio_service()
-            portfolio_data = portfolio_service.get_default_portfolio()
+            portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
 
             # Parse form data
             symbol = request.form.get('symbol', '').strip().upper()
@@ -397,12 +510,13 @@ def add_transaction():
 
 
 @app.route('/portfolio/import', methods=['GET', 'POST'])
+@login_required
 def import_csv():
     """CSV import page."""
     if request.method == 'POST':
         try:
             portfolio_service = get_portfolio_service()
-            portfolio_data = portfolio_service.get_default_portfolio()
+            portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
 
             if 'csv_file' not in request.files:
                 raise ValueError("No file uploaded")
@@ -436,11 +550,12 @@ def import_csv():
 
 
 @app.route('/portfolio/holding/<symbol>')
+@login_required
 def holding_detail(symbol: str):
     """View holding details and transactions."""
     try:
         portfolio_service = get_portfolio_service()
-        portfolio_data = portfolio_service.get_default_portfolio()
+        portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
         holding = portfolio_service.get_holding(portfolio_data['portfolio_id'], symbol)
 
         if not holding:
@@ -481,6 +596,7 @@ def holding_detail(symbol: str):
 
 
 @app.route('/portfolio/transaction/<transaction_id>/delete', methods=['POST'])
+@login_required
 def delete_transaction(transaction_id: str):
     """Delete a transaction."""
     try:

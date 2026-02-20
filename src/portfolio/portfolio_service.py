@@ -46,7 +46,8 @@ class PortfolioService:
     def create_portfolio(
         self,
         name: str = "My Portfolio",
-        description: str = ""
+        description: str = "",
+        user_id: Optional[str] = None
     ) -> str:
         """
         Create a new portfolio.
@@ -54,12 +55,13 @@ class PortfolioService:
         Args:
             name: Portfolio name
             description: Portfolio description
+            user_id: Owner user ID (optional)
 
         Returns:
             portfolio_id: Generated portfolio ID
         """
         portfolio_id = str(uuid.uuid4())
-        self.db.create_portfolio(portfolio_id, name, description)
+        self.db.create_portfolio(portfolio_id, name, description, user_id=user_id)
         return portfolio_id
 
     def get_portfolio(self, portfolio_id: str) -> Optional[Dict]:
@@ -74,29 +76,39 @@ class PortfolioService:
         """
         return self.db.get_portfolio(portfolio_id)
 
-    def list_portfolios(self) -> List[Dict]:
+    def list_portfolios(self, user_id: Optional[str] = None) -> List[Dict]:
         """
-        List all portfolios.
+        List portfolios, optionally filtered by user.
 
         Returns:
             List of portfolio dicts
         """
-        return self.db.list_portfolios()
+        return self.db.list_portfolios(user_id=user_id)
 
-    def get_default_portfolio(self) -> Dict:
+    def get_default_portfolio(self, user_id: Optional[str] = None) -> Dict:
         """
-        Get or create the default portfolio.
+        Get or create the default portfolio for a user.
+
+        Args:
+            user_id: User ID (optional — falls back to legacy behavior)
 
         Returns:
             Default portfolio dict
         """
-        portfolios = self.db.list_portfolios()
-        if portfolios:
-            return portfolios[0]
-
-        # Create default portfolio
-        portfolio_id = self.create_portfolio()
-        return self.get_portfolio(portfolio_id)
+        if user_id is not None:
+            portfolios = self.db.list_portfolios(user_id=user_id)
+            if portfolios:
+                return portfolios[0]
+            # First login — create a personal portfolio
+            portfolio_id = self.create_portfolio(user_id=user_id)
+            return self.get_portfolio(portfolio_id)
+        else:
+            # Legacy fallback (unauthenticated callers)
+            portfolios = self.db.list_portfolios()
+            if portfolios:
+                return portfolios[0]
+            portfolio_id = self.create_portfolio()
+            return self.get_portfolio(portfolio_id)
 
     # ==================== Holdings ====================
 

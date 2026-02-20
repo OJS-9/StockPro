@@ -16,8 +16,11 @@
             <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('chat') }}">AI Agent</a>
             <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Watchlist</a>
         </div>
-        <div class="flex items-center justify-center size-10 rounded-full bg-surface-dark border border-border-dark">
-            <span class="material-symbols-outlined text-white text-xl">account_circle</span>
+        <div class="flex items-center gap-3">
+            {% if current_user.is_authenticated %}
+              <span class="text-stone-400 text-sm font-medium">{{ current_user.username }}</span>
+              <a href="{{ url_for('logout') }}" class="flex items-center justify-center rounded-full h-9 px-4 bg-surface-dark border border-border-dark text-white text-sm font-medium hover:bg-opacity-80 transition-all">Log Out</a>
+            {% endif %}
         </div>
     </div>
     <div class="md:hidden text-white">
