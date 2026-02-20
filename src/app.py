@@ -13,8 +13,15 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import os
 from dotenv import load_dotenv
 import uuid
+import markdown
+from decimal import Decimal
+from datetime import datetime
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from agent import create_agent, StockResearchAgent
+from portfolio.portfolio_service import get_portfolio_service
+from data_providers import DataProviderFactory
 
 # Load environment variables
 load_dotenv()
@@ -25,6 +32,18 @@ app = Flask(__name__,
             template_folder=str(project_root / 'templates'), 
             static_folder=str(project_root / 'static'))
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
+
+# Register markdown filter for Jinja2 templates
+app.jinja_env.filters['markdown'] = markdown.markdown
+
+
+@app.context_processor
+def inject_user():
+    return {'current_user': {
+        'is_authenticated': 'user_id' in session,
+        'user_id': session.get('user_id'),
+        'username': session.get('username'),
+    }}
 
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
@@ -55,7 +74,101 @@ def get_or_create_session_id():
     return session['session_id']
 
 
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            session['next_url'] = request.url
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ==================== Auth Routes ====================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page."""
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if not username or not password:
+            error = 'Username and password are required.'
+        else:
+            from database import get_database_manager
+            db = get_database_manager()
+            user = db.get_user_by_username(username)
+
+            if user and check_password_hash(user['password_hash'], password):
+                next_url = session.get('next_url')
+                session.clear()
+                session['user_id'] = user['user_id']
+                session['username'] = user['username']
+                get_or_create_session_id()
+                return redirect(next_url or url_for('index'))
+            else:
+                error = 'Invalid username or password.'
+
+    return render_template('login.html', error=error)
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Registration page."""
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        if len(username) < 3:
+            error = 'Username must be at least 3 characters.'
+        elif len(password) < 8:
+            error = 'Password must be at least 8 characters.'
+        elif password != confirm_password:
+            error = 'Passwords do not match.'
+        elif not email:
+            error = 'Email is required.'
+        else:
+            try:
+                from database import get_database_manager
+                db = get_database_manager()
+                user_id = str(uuid.uuid4())
+                password_hash = generate_password_hash(password)
+                db.create_user(user_id, username, email, password_hash)
+
+                session.clear()
+                session['user_id'] = user_id
+                session['username'] = username
+                get_or_create_session_id()
+                return redirect(url_for('index'))
+            except RuntimeError as e:
+                if 'Duplicate entry' in str(e):
+                    error = 'Username or email already taken.'
+                else:
+                    error = f'Registration failed: {str(e)}'
+
+    return render_template('register.html', error=error)
+
+
+@app.route('/logout')
+def logout():
+    """Log out and redirect to login."""
+    session.clear()
+    return redirect(url_for('login'))
+
+
 @app.route('/')
+@login_required
 def index():
     """Render the main landing page."""
     # Initialize session ID if needed
@@ -73,6 +186,7 @@ def index():
 
 
 @app.route('/chat')
+@login_required
 def chat():
     """Render the chat interface."""
     # Initialize session ID if needed
@@ -92,6 +206,7 @@ def chat():
 
 
 @app.route('/start_research', methods=['POST'])
+@login_required
 def start_research():
     """Handle form submission to start research."""
     ticker = request.form.get('ticker', '').strip()
@@ -134,72 +249,14 @@ def start_research():
 
 
 @app.route('/continue', methods=['POST'])
+@login_required
 def continue_conversation():
     """Handle form submission to continue conversation."""
-    # #region agent log
-    log_path = '/Users/orsalinas/projects/Stock Protfolio Agent/.cursor/debug.log'
-    import json
-    from datetime import datetime
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C",
-                "location": "app.py:continue_conversation:entry",
-                "message": "Route entry - checking request data",
-                "data": {
-                    "form_keys": list(request.form.keys()),
-                    "user_response_raw": request.form.get('user_response', 'NOT_FOUND'),
-                    "is_ajax": request.headers.get('X-Requested-With') == 'XMLHttpRequest',
-                    "content_type": request.content_type
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }) + '\n')
-    except: pass
-    # #endregion
-    
     user_input = request.form.get('user_response', '').strip()
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C",
-                "location": "app.py:continue_conversation:after_get",
-                "message": "After getting user_input",
-                "data": {
-                    "user_input": user_input,
-                    "user_input_length": len(user_input),
-                    "is_empty": not user_input
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }) + '\n')
-    except: pass
-    # #endregion
-    
     # Validate input
     if not user_input:
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C",
-                    "location": "app.py:continue_conversation:validation_failed",
-                    "message": "Validation failed - empty input",
-                    "data": {
-                        "is_ajax": is_ajax,
-                        "user_input": user_input
-                    },
-                    "timestamp": int(datetime.now().timestamp() * 1000)
-                }) + '\n')
-        except: pass
-        # #endregion
         if is_ajax:
             return jsonify({'success': False, 'error': '⚠️ Please enter a response.'}), 400
         session['status_message'] = '⚠️ Please enter a response.'
@@ -228,10 +285,11 @@ def continue_conversation():
         report_preview = None
         
         if current_report_id and current_report_id != previous_report_id:
-            # A new report was generated - get report text from agent and add preview to conversation
+            # A new report was generated - get full report text from agent and add to conversation
             report_text = getattr(agent, 'last_report_text', None) or session.get('report_text', '')
             if report_text:
-                report_preview = f"Report Generated:\n\n{report_text[:500] if report_text else 'No report content'}...\n\n[Full report stored. You can now chat with it using the chat interface.]"
+                # Display the full report text in the chat
+                report_preview = f"# Research Report\n\n{report_text}"
                 conversation_history.append({
                     "role": "assistant",
                     "content": report_preview
@@ -264,6 +322,7 @@ def continue_conversation():
 
 
 @app.route('/generate_report', methods=['POST'])
+@login_required
 def generate_report():
     """Handle form submission to generate report after followup questions."""
     try:
@@ -290,8 +349,8 @@ def generate_report():
         session['report_text'] = report_text
         session['status_message'] = f'✅ Report generated successfully! Report ID: {report_id[:8]}...'
         
-        # Add report to conversation
-        report_preview = f"Report Generated:\n\n{report_text[:500] if report_text else 'No report content'}...\n\n[Full report stored. You can now chat with it using the chat interface.]"
+        # Add full report to conversation
+        report_preview = f"# Research Report\n\n{report_text}"
         conversation_history.append({
             "role": "assistant",
             "content": report_preview
@@ -305,6 +364,7 @@ def generate_report():
 
 
 @app.route('/chat_report', methods=['POST'])
+@login_required
 def chat_report():
     """Handle form submission to chat with report."""
     question = request.form.get('chat_question', '').strip()
@@ -340,13 +400,14 @@ def chat_report():
 
 
 @app.route('/clear', methods=['POST'])
+@login_required
 def clear_conversation():
     """Handle form submission to clear conversation."""
     session['conversation_history'] = []
     session['current_ticker'] = ''
     session['current_trade_type'] = 'Investment'
     session['status_message'] = 'Conversation cleared. Ready for new research.'
-    
+
     # Optionally reset agent
     session_id = get_or_create_session_id()
     if session_id in agent_sessions:
@@ -354,8 +415,215 @@ def clear_conversation():
             agent_sessions[session_id].reset_conversation()
         except:
             pass
-    
+
     return redirect(url_for('chat'))
+
+
+# ==================== Portfolio Routes ====================
+
+@app.route('/portfolio')
+@login_required
+def portfolio():
+    """Portfolio dashboard."""
+    try:
+        portfolio_service = get_portfolio_service()
+        portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
+        summary = portfolio_service.get_portfolio_summary(portfolio_data['portfolio_id'])
+
+        # Get status message if any
+        status_message = session.pop('status_message', None)
+
+        return render_template(
+            'portfolio.html',
+            portfolio=portfolio_data,
+            summary=summary,
+            holdings=summary['holdings'],
+            status_message=status_message
+        )
+    except Exception as e:
+        session['status_message'] = f'❌ Error loading portfolio: {str(e)}'
+        return render_template(
+            'portfolio.html',
+            portfolio=None,
+            summary=None,
+            holdings=[],
+            status_message=session.pop('status_message', None)
+        )
+
+
+@app.route('/portfolio/add', methods=['GET', 'POST'])
+@login_required
+def add_transaction():
+    """Add transaction form."""
+    if request.method == 'POST':
+        try:
+            portfolio_service = get_portfolio_service()
+            portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
+
+            # Parse form data
+            symbol = request.form.get('symbol', '').strip().upper()
+            transaction_type = request.form.get('transaction_type', '')
+            quantity = Decimal(request.form.get('quantity', '0'))
+            price = Decimal(request.form.get('price', '0'))
+            date_str = request.form.get('date', '')
+            fees = Decimal(request.form.get('fees', '0') or '0')
+            notes = request.form.get('notes', '')
+            asset_type = request.form.get('asset_type', None)
+
+            # Validate
+            if not symbol:
+                raise ValueError("Symbol is required")
+            if transaction_type not in ('buy', 'sell'):
+                raise ValueError("Invalid transaction type")
+            if quantity <= 0:
+                raise ValueError("Quantity must be positive")
+            if price <= 0:
+                raise ValueError("Price must be positive")
+            if not date_str:
+                raise ValueError("Date is required")
+
+            transaction_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+            # Add transaction
+            portfolio_service.add_transaction(
+                portfolio_id=portfolio_data['portfolio_id'],
+                symbol=symbol,
+                transaction_type=transaction_type,
+                quantity=quantity,
+                price_per_unit=price,
+                transaction_date=transaction_date,
+                fees=fees,
+                notes=notes,
+                asset_type=asset_type if asset_type else None,
+            )
+
+            session['status_message'] = f'✅ Transaction added: {transaction_type.upper()} {quantity} {symbol}'
+
+        except Exception as e:
+            session['status_message'] = f'❌ Error: {str(e)}'
+
+        return redirect(url_for('portfolio'))
+
+    # GET request - show form
+    status_message = session.pop('status_message', None)
+    return render_template('add_transaction.html', status_message=status_message)
+
+
+@app.route('/portfolio/import', methods=['GET', 'POST'])
+@login_required
+def import_csv():
+    """CSV import page."""
+    if request.method == 'POST':
+        try:
+            portfolio_service = get_portfolio_service()
+            portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
+
+            if 'csv_file' not in request.files:
+                raise ValueError("No file uploaded")
+
+            file = request.files['csv_file']
+            if file.filename == '':
+                raise ValueError("No file selected")
+
+            csv_content = file.read().decode('utf-8')
+            result = portfolio_service.import_csv(
+                portfolio_id=portfolio_data['portfolio_id'],
+                csv_content=csv_content,
+                filename=file.filename
+            )
+
+            if result.error_count > 0:
+                session['status_message'] = f'⚠️ Imported {result.success_count} transactions, {result.error_count} errors'
+                session['import_errors'] = result.errors[:10]  # Limit to first 10 errors
+            else:
+                session['status_message'] = f'✅ Successfully imported {result.success_count} transactions'
+
+        except Exception as e:
+            session['status_message'] = f'❌ Import failed: {str(e)}'
+
+        return redirect(url_for('portfolio'))
+
+    # GET request - show import form
+    status_message = session.pop('status_message', None)
+    import_errors = session.pop('import_errors', None)
+    return render_template('import_csv.html', status_message=status_message, import_errors=import_errors)
+
+
+@app.route('/portfolio/holding/<symbol>')
+@login_required
+def holding_detail(symbol: str):
+    """View holding details and transactions."""
+    try:
+        portfolio_service = get_portfolio_service()
+        portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
+        holding = portfolio_service.get_holding(portfolio_data['portfolio_id'], symbol)
+
+        if not holding:
+            session['status_message'] = f'⚠️ Holding not found: {symbol}'
+            return redirect(url_for('portfolio'))
+
+        if holding.get('total_quantity', Decimal('0')) <= Decimal('0'):
+            session['status_message'] = f'⚠️ {symbol} is a closed position with no remaining quantity.'
+            return redirect(url_for('portfolio'))
+
+        transactions = portfolio_service.get_transactions(holding['holding_id'])
+
+        # Get current price
+        provider, _ = DataProviderFactory.get_provider_for_symbol(symbol)
+        current_price = provider.get_current_price(symbol) or Decimal('0')
+
+        holding['current_price'] = current_price
+        holding['market_value'] = holding['total_quantity'] * current_price
+        holding['unrealized_gain'] = holding['market_value'] - holding['total_cost_basis']
+
+        if holding['total_cost_basis'] > 0:
+            holding['unrealized_gain_pct'] = (holding['unrealized_gain'] / holding['total_cost_basis']) * 100
+        else:
+            holding['unrealized_gain_pct'] = Decimal('0')
+
+        status_message = session.pop('status_message', None)
+
+        return render_template(
+            'holding_detail.html',
+            holding=holding,
+            transactions=transactions,
+            status_message=status_message
+        )
+
+    except Exception as e:
+        session['status_message'] = f'❌ Error: {str(e)}'
+        return redirect(url_for('portfolio'))
+
+
+@app.route('/portfolio/transaction/<transaction_id>/delete', methods=['POST'])
+@login_required
+def delete_transaction(transaction_id: str):
+    """Delete a transaction."""
+    try:
+        portfolio_service = get_portfolio_service()
+
+        # Get transaction to find symbol for redirect
+        txn = portfolio_service.get_transaction(transaction_id)
+        if not txn:
+            session['status_message'] = '❌ Transaction not found'
+            return redirect(url_for('portfolio'))
+
+        holding = portfolio_service.get_holding_by_id(txn['holding_id'])
+        symbol = holding['symbol'] if holding else None
+
+        if portfolio_service.delete_transaction(transaction_id):
+            session['status_message'] = '✅ Transaction deleted'
+        else:
+            session['status_message'] = '❌ Failed to delete transaction'
+
+        # Redirect back to holding detail if we have the symbol
+        if symbol:
+            return redirect(url_for('holding_detail', symbol=symbol))
+
+    except Exception as e:
+        session['status_message'] = f'❌ Error: {str(e)}'
+
+    return redirect(url_for('portfolio'))
 
 
 def main():

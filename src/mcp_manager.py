@@ -154,7 +154,7 @@ class MCPManager:
     # Convenience methods for common operations
     def get_company_overview(self, symbol: str) -> Dict[str, Any]:
         """Get company overview data."""
-        return self.call_tool("OVERVIEW", {"symbol": symbol.upper()})
+        return self.call_tool("COMPANY_OVERVIEW", {"symbol": symbol.upper()})
     
     def get_income_statement(self, symbol: str) -> Dict[str, Any]:
         """Get income statement data."""
@@ -171,6 +171,10 @@ class MCPManager:
     def get_news_sentiment(self, ticker: str, limit: int = 50) -> Dict[str, Any]:
         """Get news and sentiment data."""
         return self.call_tool("NEWS_SENTIMENT", {"ticker": ticker.upper(), "limit": limit})
+
+    def get_global_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get real-time stock quote with current price."""
+        return self.call_tool("GLOBAL_QUOTE", {"symbol": symbol.upper()})
 
 
 def get_mcp_manager() -> MCPManager:

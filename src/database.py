@@ -1,10 +1,11 @@
 """
-MySQL database connection and schema management for reports and chunks.
+MySQL database connection and schema management for reports, chunks, and portfolios.
 """
 
 import os
 import json
 import uuid
+from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import mysql.connector
@@ -89,7 +90,103 @@ class DatabaseManager:
                     INDEX idx_section (section)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
-            
+
+            # Create users table (must come before portfolios for FK)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id VARCHAR(36) PRIMARY KEY,
+                    username VARCHAR(80) NOT NULL UNIQUE,
+                    email VARCHAR(120) NOT NULL UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_username (username),
+                    INDEX idx_email (email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Create portfolios table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS portfolios (
+                    portfolio_id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL DEFAULT 'My Portfolio',
+                    description TEXT,
+                    user_id VARCHAR(36) NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    CONSTRAINT fk_portfolio_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Inline migration: add user_id column if it doesn't exist yet
+            cursor.execute("""
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'portfolios'
+                  AND COLUMN_NAME = 'user_id'
+            """)
+            (col_exists,) = cursor.fetchone()
+            if not col_exists:
+                cursor.execute("""
+                    ALTER TABLE portfolios
+                    ADD COLUMN user_id VARCHAR(36) NULL,
+                    ADD CONSTRAINT fk_portfolio_user
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
+                """)
+
+            # Create holdings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS holdings (
+                    holding_id VARCHAR(36) PRIMARY KEY,
+                    portfolio_id VARCHAR(36) NOT NULL,
+                    symbol VARCHAR(20) NOT NULL,
+                    asset_type ENUM('stock', 'crypto') NOT NULL,
+                    total_quantity DECIMAL(18, 8) NOT NULL DEFAULT 0,
+                    average_cost DECIMAL(18, 8) NOT NULL DEFAULT 0,
+                    total_cost_basis DECIMAL(18, 2) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (portfolio_id) REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
+                    UNIQUE KEY unique_portfolio_symbol (portfolio_id, symbol),
+                    INDEX idx_portfolio_id (portfolio_id),
+                    INDEX idx_symbol (symbol)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Create transactions table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    transaction_id VARCHAR(36) PRIMARY KEY,
+                    holding_id VARCHAR(36) NOT NULL,
+                    transaction_type ENUM('buy', 'sell') NOT NULL,
+                    quantity DECIMAL(18, 8) NOT NULL,
+                    price_per_unit DECIMAL(18, 8) NOT NULL,
+                    fees DECIMAL(18, 2) DEFAULT 0,
+                    transaction_date TIMESTAMP NOT NULL,
+                    notes TEXT,
+                    import_source VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (holding_id) REFERENCES holdings(holding_id) ON DELETE CASCADE,
+                    INDEX idx_holding_id (holding_id),
+                    INDEX idx_transaction_date (transaction_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Create csv_imports table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS csv_imports (
+                    import_id VARCHAR(36) PRIMARY KEY,
+                    portfolio_id VARCHAR(36) NOT NULL,
+                    filename VARCHAR(255) NOT NULL,
+                    row_count INT NOT NULL,
+                    success_count INT NOT NULL,
+                    error_count INT NOT NULL,
+                    errors_json JSON,
+                    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (portfolio_id) REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
+                    INDEX idx_portfolio_id (portfolio_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             connection.commit()
             print("✓ Database schema initialized")
             
@@ -320,7 +417,7 @@ class DatabaseManager:
     def delete_report(self, report_id: str):
         """
         Delete a report and all its chunks (cascade).
-        
+
         Args:
             report_id: Report ID
         """
@@ -328,14 +425,500 @@ class DatabaseManager:
         try:
             connection = self.get_connection()
             cursor = connection.cursor()
-            
+
             cursor.execute("DELETE FROM reports WHERE report_id = %s", (report_id,))
             connection.commit()
-            
+
         except Error as e:
             if connection:
                 connection.rollback()
             raise RuntimeError(f"Failed to delete report: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    # ==================== Portfolio Methods ====================
+
+    def create_portfolio(
+        self,
+        portfolio_id: str,
+        name: str = "My Portfolio",
+        description: str = "",
+        user_id: Optional[str] = None
+    ):
+        """Create a new portfolio."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                INSERT INTO portfolios (portfolio_id, name, description, user_id)
+                VALUES (%s, %s, %s, %s)
+            """, (portfolio_id, name, description, user_id))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to create portfolio: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_portfolio(self, portfolio_id: str) -> Optional[Dict[str, Any]]:
+        """Get portfolio by ID."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT portfolio_id, name, description, created_at, updated_at
+                FROM portfolios
+                WHERE portfolio_id = %s
+            """, (portfolio_id,))
+
+            return cursor.fetchone()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get portfolio: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def list_portfolios(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List portfolios, optionally filtered by user."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            if user_id is not None:
+                cursor.execute("""
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                    FROM portfolios
+                    WHERE user_id = %s
+                    ORDER BY created_at ASC
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                    FROM portfolios
+                    ORDER BY created_at ASC
+                """)
+
+            return cursor.fetchall()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to list portfolios: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    # ==================== User Methods ====================
+
+    def create_user(self, user_id: str, username: str, email: str, password_hash: str):
+        """Create a new user."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                INSERT INTO users (user_id, username, email, password_hash)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, username, email, password_hash))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to create user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get a user by username."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT user_id, username, email, password_hash, created_at
+                FROM users
+                WHERE username = %s
+            """, (username,))
+
+            return cursor.fetchone()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get a user by ID."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT user_id, username, email, password_hash, created_at
+                FROM users
+                WHERE user_id = %s
+            """, (user_id,))
+
+            return cursor.fetchone()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    # ==================== Holdings Methods ====================
+
+    def create_holding(
+        self,
+        holding_id: str,
+        portfolio_id: str,
+        symbol: str,
+        asset_type: str
+    ):
+        """Create a new holding."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                INSERT INTO holdings (holding_id, portfolio_id, symbol, asset_type)
+                VALUES (%s, %s, %s, %s)
+            """, (holding_id, portfolio_id, symbol.upper(), asset_type))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to create holding: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_holding(self, portfolio_id: str, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get a specific holding by portfolio and symbol."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT holding_id, portfolio_id, symbol, asset_type,
+                       total_quantity, average_cost, total_cost_basis,
+                       created_at, updated_at
+                FROM holdings
+                WHERE portfolio_id = %s AND symbol = %s
+            """, (portfolio_id, symbol.upper()))
+
+            result = cursor.fetchone()
+            if result:
+                # Convert Decimal to Decimal for consistency
+                result['total_quantity'] = Decimal(str(result['total_quantity']))
+                result['average_cost'] = Decimal(str(result['average_cost']))
+                result['total_cost_basis'] = Decimal(str(result['total_cost_basis']))
+            return result
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get holding: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_holding_by_id(self, holding_id: str) -> Optional[Dict[str, Any]]:
+        """Get a holding by its ID."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT holding_id, portfolio_id, symbol, asset_type,
+                       total_quantity, average_cost, total_cost_basis,
+                       created_at, updated_at
+                FROM holdings
+                WHERE holding_id = %s
+            """, (holding_id,))
+
+            result = cursor.fetchone()
+            if result:
+                result['total_quantity'] = Decimal(str(result['total_quantity']))
+                result['average_cost'] = Decimal(str(result['average_cost']))
+                result['total_cost_basis'] = Decimal(str(result['total_cost_basis']))
+            return result
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get holding: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_holdings(self, portfolio_id: str) -> List[Dict[str, Any]]:
+        """Get all holdings for a portfolio."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT holding_id, portfolio_id, symbol, asset_type,
+                       total_quantity, average_cost, total_cost_basis,
+                       created_at, updated_at
+                FROM holdings
+                WHERE portfolio_id = %s
+                ORDER BY symbol ASC
+            """, (portfolio_id,))
+
+            results = cursor.fetchall()
+            for result in results:
+                result['total_quantity'] = Decimal(str(result['total_quantity']))
+                result['average_cost'] = Decimal(str(result['average_cost']))
+                result['total_cost_basis'] = Decimal(str(result['total_cost_basis']))
+            return results
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get holdings: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def update_holding(
+        self,
+        holding_id: str,
+        total_quantity: Decimal,
+        average_cost: Decimal,
+        total_cost_basis: Decimal
+    ):
+        """Update holding totals."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                UPDATE holdings
+                SET total_quantity = %s,
+                    average_cost = %s,
+                    total_cost_basis = %s
+                WHERE holding_id = %s
+            """, (str(total_quantity), str(average_cost), str(total_cost_basis), holding_id))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to update holding: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def delete_holding(self, holding_id: str):
+        """Delete a holding and all its transactions (cascade)."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("DELETE FROM holdings WHERE holding_id = %s", (holding_id,))
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to delete holding: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    # ==================== Transaction Methods ====================
+
+    def add_transaction(
+        self,
+        transaction_id: str,
+        holding_id: str,
+        transaction_type: str,
+        quantity: Decimal,
+        price_per_unit: Decimal,
+        fees: Decimal,
+        transaction_date: datetime,
+        notes: str = "",
+        import_source: str = "manual"
+    ):
+        """Add a transaction to a holding."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                INSERT INTO transactions
+                (transaction_id, holding_id, transaction_type, quantity,
+                 price_per_unit, fees, transaction_date, notes, import_source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                transaction_id,
+                holding_id,
+                transaction_type,
+                str(quantity),
+                str(price_per_unit),
+                str(fees),
+                transaction_date,
+                notes,
+                import_source
+            ))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to add transaction: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_transaction(self, transaction_id: str) -> Optional[Dict[str, Any]]:
+        """Get a transaction by ID."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT transaction_id, holding_id, transaction_type, quantity,
+                       price_per_unit, fees, transaction_date, notes, import_source,
+                       created_at
+                FROM transactions
+                WHERE transaction_id = %s
+            """, (transaction_id,))
+
+            result = cursor.fetchone()
+            if result:
+                result['quantity'] = Decimal(str(result['quantity']))
+                result['price_per_unit'] = Decimal(str(result['price_per_unit']))
+                result['fees'] = Decimal(str(result['fees']))
+            return result
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get transaction: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_transactions(self, holding_id: str) -> List[Dict[str, Any]]:
+        """Get all transactions for a holding."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT transaction_id, holding_id, transaction_type, quantity,
+                       price_per_unit, fees, transaction_date, notes, import_source,
+                       created_at
+                FROM transactions
+                WHERE holding_id = %s
+                ORDER BY transaction_date ASC
+            """, (holding_id,))
+
+            results = cursor.fetchall()
+            for result in results:
+                result['quantity'] = Decimal(str(result['quantity']))
+                result['price_per_unit'] = Decimal(str(result['price_per_unit']))
+                result['fees'] = Decimal(str(result['fees']))
+            return results
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get transactions: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def delete_transaction(self, transaction_id: str):
+        """Delete a transaction."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("DELETE FROM transactions WHERE transaction_id = %s", (transaction_id,))
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to delete transaction: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    # ==================== CSV Import Logging ====================
+
+    def log_csv_import(
+        self,
+        import_id: str,
+        portfolio_id: str,
+        filename: str,
+        row_count: int,
+        success_count: int,
+        error_count: int,
+        errors_json: List[Dict[str, Any]]
+    ):
+        """Log a CSV import operation."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            errors_str = json.dumps(errors_json) if errors_json else None
+
+            cursor.execute("""
+                INSERT INTO csv_imports
+                (import_id, portfolio_id, filename, row_count, success_count, error_count, errors_json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (import_id, portfolio_id, filename, row_count, success_count, error_count, errors_str))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to log CSV import: {e}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()
