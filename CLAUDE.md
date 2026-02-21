@@ -1,5 +1,20 @@
 # StockIntel - AI Stock Research Agent
 
+## ⚡ URGENT MISSION (Active Development Priority)
+
+**Re-design the entire agentic research flow.**
+
+Goals:
+- Rethink how specialized agents are orchestrated, what they research, and how results are synthesized
+- Evaluate replacing or augmenting the current RAG-lite chat with **NotebookLM integration** (Google NotebookLM API or export pipeline) for deeper, source-grounded Q&A on generated reports
+- Consider whether the current `ThreadPoolExecutor` parallel approach is the right model, or if a more dynamic agent-routing architecture fits better
+- Keep the Flask + MySQL foundation; redesign the AI layer on top of it
+
+Open questions to resolve during this work:
+1. How does NotebookLM integrate — direct API, PDF upload pipeline, or export + link?
+2. Should synthesis be a single agent or a multi-step critique/refine loop?
+3. What research subjects and data sources give the highest signal for stock analysis?
+
 ## Project Overview
 
 StockIntel is a Flask-based web application that uses OpenAI's Agents SDK to generate comprehensive stock research reports. It features parallel specialized agents for different research topics, RAG-lite chat with reports, and PDF export.

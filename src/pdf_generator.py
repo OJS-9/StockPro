@@ -6,7 +6,6 @@ Uses WeasyPrint to convert markdown reports to PDF.
 import io
 import markdown
 from datetime import datetime
-from weasyprint import HTML, CSS
 
 
 class PDFGenerator:
@@ -171,9 +170,6 @@ class PDFGenerator:
 
     def __init__(self):
         """Initialize PDF generator."""
-        self.md = markdown.Markdown(
-            extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists']
-        )
 
     def generate_pdf(
         self,
@@ -194,12 +190,17 @@ class PDFGenerator:
         Returns:
             PDF file as bytes
         """
+        try:
+            from weasyprint import HTML, CSS
+        except ImportError:
+            raise RuntimeError("WeasyPrint is not installed. Run: pip install weasyprint")
+
         if created_at is None:
             created_at = datetime.now()
 
-        # Convert markdown to HTML
-        self.md.reset()
-        report_html = self.md.convert(report_text)
+        # Convert markdown to HTML (local instance for thread safety)
+        md = markdown.Markdown(extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists'])
+        report_html = md.convert(report_text)
 
         # Format date
         date_str = created_at.strftime("%B %d, %Y at %I:%M %p")

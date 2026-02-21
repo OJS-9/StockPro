@@ -145,7 +145,7 @@
                 <!-- Card Body - Report Preview -->
                 <div class="p-6 flex-1">
                     <p class="text-stone-600 dark:text-stone-400 text-sm leading-relaxed line-clamp-4">
-                        {{ report.report_text[:250] | replace('#', '') | replace('*', '') | replace('_', '') }}{% if report.report_text|length > 250 %}...{% endif %}
+                        {{ report.report_text | markdown_preview }}
                     </p>
                 </div>
 
@@ -175,18 +175,16 @@
         </a>
         {% endif %}
 
-        {% for page_num in range(1, total_pages + 1) %}
-            {% if page_num == current_page %}
-            <span class="flex items-center justify-center size-10 rounded-xl bg-primary text-background-dark font-bold">
-                {{ page_num }}
-            </span>
-            {% elif page_num == 1 or page_num == total_pages or (page_num >= current_page - 2 and page_num <= current_page + 2) %}
-            <a href="{{ url_for('report_history', page=page_num, ticker=filter_ticker, trade_type=filter_trade_type, sort=sort_order) }}"
+        {% for p in page_range %}
+            {% if p is none %}
+            <span class="text-stone-500 px-2">...</span>
+            {% elif p == current_page %}
+            <span class="flex items-center justify-center size-10 rounded-xl bg-primary text-background-dark font-bold">{{ p }}</span>
+            {% else %}
+            <a href="{{ url_for('report_history', page=p, ticker=filter_ticker, trade_type=filter_trade_type, sort=sort_order) }}"
                class="flex items-center justify-center size-10 rounded-xl bg-surface-dark border border-border-dark text-white hover:bg-primary hover:text-background-dark transition-all">
-                {{ page_num }}
+                {{ p }}
             </a>
-            {% elif page_num == current_page - 3 or page_num == current_page + 3 %}
-            <span class="text-stone-500">...</span>
             {% endif %}
         {% endfor %}
 

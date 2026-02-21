@@ -148,7 +148,7 @@
 
     <!-- Report Content -->
     <article class="bg-white dark:bg-surface-dark rounded-3xl p-8 md:p-10 border border-stone-200 dark:border-border-dark">
-        <div class="markdown-content text-stone-300 whitespace-pre-wrap">{{ report.report_text }}</div>
+        <div class="markdown-content text-stone-300">{{ report.report_text | markdown }}</div>
     </article>
 </main>
 

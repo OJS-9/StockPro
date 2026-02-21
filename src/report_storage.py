@@ -31,17 +31,19 @@ class ReportStorage:
         ticker: str,
         trade_type: str,
         report_text: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None
     ) -> str:
         """
         Store a report with chunking and embeddings.
-        
+
         Args:
             ticker: Stock ticker symbol
             trade_type: Type of trade
             report_text: Full report text
             metadata: Optional metadata dictionary
-        
+            user_id: Optional user ID for ownership
+
         Returns:
             report_id: Generated report ID
         """
@@ -50,7 +52,8 @@ class ReportStorage:
             ticker=ticker,
             trade_type=trade_type,
             report_text=report_text,
-            metadata=metadata
+            metadata=metadata,
+            user_id=user_id
         )
         
         # Chunk the report
@@ -75,17 +78,18 @@ class ReportStorage:
         
         return report_id
     
-    def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+    def get_report(self, report_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a report by ID.
-        
+        Retrieve a report by ID, optionally verifying ownership.
+
         Args:
             report_id: Report ID
-        
+            user_id: If provided, only return the report if it belongs to this user
+
         Returns:
-            Report dictionary or None if not found
+            Report dictionary or None if not found / not owned by user
         """
-        return self.db.get_report(report_id)
+        return self.db.get_report(report_id, user_id=user_id)
     
     def get_report_chunks(
         self,
@@ -132,7 +136,8 @@ class ReportStorage:
         trade_type: str = None,
         sort_order: str = "DESC",
         limit: int = 20,
-        offset: int = 0
+        offset: int = 0,
+        user_id: str = None
     ):
         """
         Get paginated reports with optional filtering.
@@ -143,9 +148,10 @@ class ReportStorage:
             sort_order: Sort order (ASC or DESC)
             limit: Maximum number of reports
             offset: Number of reports to skip
+            user_id: If provided, only return reports belonging to this user
 
         Returns:
             Tuple of (reports list, total count)
         """
-        return self.db.get_all_reports(ticker, trade_type, sort_order, limit, offset)
+        return self.db.get_all_reports(ticker, trade_type, sort_order, limit, offset, user_id=user_id)
 
