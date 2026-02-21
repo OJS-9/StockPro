@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockIntel — Create Account</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0c0a09; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-stone-950">
+    <div class="w-full max-w-sm px-4">
+        <!-- Logo -->
+        <div class="flex items-center justify-center gap-3 mb-8">
+            <div class="size-9 text-amber-400">
+                <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
+                </svg>
+            </div>
+            <span class="text-white text-2xl font-bold tracking-tight" style="font-family: 'Space Grotesk', sans-serif;">StockIntel</span>
+        </div>
+
+        <!-- Card -->
+        <div class="bg-stone-900 border border-stone-800 rounded-2xl p-8">
+            <h1 class="text-white text-xl font-semibold mb-1">Create your account</h1>
+            <p class="text-stone-400 text-sm mb-6">Get started with StockIntel</p>
+
+            {% if error %}
+            <div class="mb-4 px-4 py-3 rounded-lg bg-red-900/40 border border-red-700 text-red-300 text-sm">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('register') }}" class="space-y-4">
+                <div>
+                    <label class="block text-stone-300 text-sm font-medium mb-1.5" for="username">Username</label>
+                    <input
+                        id="username"
+                        name="username"
+                        type="text"
+                        autocomplete="username"
+                        required
+                        minlength="3"
+                        class="w-full bg-stone-800 border border-stone-700 text-white rounded-lg px-3.5 py-2.5 text-sm placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                        placeholder="at least 3 characters"
+                    >
+                </div>
+                <div>
+                    <label class="block text-stone-300 text-sm font-medium mb-1.5" for="email">Email</label>
+                    <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autocomplete="email"
+                        required
+                        class="w-full bg-stone-800 border border-stone-700 text-white rounded-lg px-3.5 py-2.5 text-sm placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                        placeholder="you@example.com"
+                    >
+                </div>
+                <div>
+                    <label class="block text-stone-300 text-sm font-medium mb-1.5" for="password">Password</label>
+                    <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autocomplete="new-password"
+                        required
+                        minlength="8"
+                        class="w-full bg-stone-800 border border-stone-700 text-white rounded-lg px-3.5 py-2.5 text-sm placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                        placeholder="at least 8 characters"
+                    >
+                </div>
+                <div>
+                    <label class="block text-stone-300 text-sm font-medium mb-1.5" for="confirm_password">Confirm password</label>
+                    <input
+                        id="confirm_password"
+                        name="confirm_password"
+                        type="password"
+                        autocomplete="new-password"
+                        required
+                        class="w-full bg-stone-800 border border-stone-700 text-white rounded-lg px-3.5 py-2.5 text-sm placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition"
+                        placeholder="••••••••"
+                    >
+                </div>
+                <button
+                    type="submit"
+                    class="w-full bg-amber-400 hover:brightness-110 text-stone-900 font-bold rounded-lg py-2.5 text-sm transition-all mt-2"
+                >
+                    Create account
+                </button>
+            </form>
+
+            <p class="text-stone-500 text-sm text-center mt-5">
+                Already have an account?
+                <a href="{{ url_for('login') }}" class="text-amber-400 hover:text-amber-300 font-medium transition-colors">Sign in</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

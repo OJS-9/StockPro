@@ -12,8 +12,13 @@ sys.path.insert(0, str(project_root))
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 import os
 import io
+import re
+from functools import wraps
 from dotenv import load_dotenv
 import uuid
+import markdown as md_lib
+from markupsafe import Markup
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from agent import create_agent, StockResearchAgent
 from report_storage import ReportStorage
@@ -28,6 +33,59 @@ app = Flask(__name__,
             template_folder=str(project_root / 'templates'), 
             static_folder=str(project_root / 'static'))
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            session['next_url'] = request.url
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.context_processor
+def inject_user():
+    return {'current_user': {
+        'is_authenticated': 'user_id' in session,
+        'user_id': session.get('user_id'),
+        'username': session.get('username'),
+    }}
+
+
+@app.template_filter('markdown')
+def markdown_filter(text):
+    return Markup(md_lib.markdown(
+        text or '',
+        extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists']
+    ))
+
+
+@app.template_filter('markdown_preview')
+def markdown_preview_filter(text, length=250):
+    if not text:
+        return ''
+    text = re.sub(r'#{1,6}\s+', '', text)
+    text = re.sub(r'\*{1,2}([^*\n]+)\*{1,2}', r'\1', text)
+    text = re.sub(r'_([^_\n]+)_', r'\1', text)
+    text = re.sub(r'`[^`\n]+`', '', text)
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    text = re.sub(r'^[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = ' '.join(text.split())
+    return text[:length] + ('...' if len(text) > length else '')
+
+
+def _page_range(current, total, delta=2):
+    pages = sorted({1, total} | set(range(max(1, current - delta), min(total, current + delta) + 1)))
+    result, prev = [], None
+    for p in pages:
+        if prev and p - prev > 1:
+            result.append(None)  # None = ellipsis
+        result.append(p)
+        prev = p
+    return result
+
 
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
@@ -211,10 +269,11 @@ def continue_conversation():
     try:
         session_id = get_or_create_session_id()
         agent = initialize_session(session_id)
-        
+        agent.user_id = session.get('user_id')
+
         # Store previous report_id to detect if a new report was generated
         previous_report_id = session.get('current_report_id')
-        
+
         # Get agent response
         response = agent.continue_conversation(user_input)
         
@@ -362,10 +421,82 @@ def clear_conversation():
 
 
 # ============================================================================
+# Auth Routes
+# ============================================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        if not username or not password:
+            error = 'Username and password are required.'
+        else:
+            from database import get_database_manager
+            db = get_database_manager()
+            user = db.get_user_by_username(username)
+            if user and check_password_hash(user['password_hash'], password):
+                next_url = session.get('next_url')
+                session.clear()
+                session['user_id'] = user['user_id']
+                session['username'] = user['username']
+                get_or_create_session_id()
+                return redirect(next_url or url_for('index'))
+            else:
+                error = 'Invalid username or password.'
+    return render_template('login.html', error=error)
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        if len(username) < 3:
+            error = 'Username must be at least 3 characters.'
+        elif len(password) < 8:
+            error = 'Password must be at least 8 characters.'
+        elif password != confirm_password:
+            error = 'Passwords do not match.'
+        elif not email:
+            error = 'Email is required.'
+        else:
+            try:
+                from database import get_database_manager
+                db = get_database_manager()
+                user_id = str(uuid.uuid4())
+                password_hash = generate_password_hash(password)
+                db.create_user(user_id, username, email, password_hash)
+                session.clear()
+                session['user_id'] = user_id
+                session['username'] = username
+                get_or_create_session_id()
+                return redirect(url_for('index'))
+            except RuntimeError as e:
+                error = 'Username or email already taken.' if 'Duplicate entry' in str(e) else f'Registration failed: {str(e)}'
+    return render_template('register.html', error=error)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# ============================================================================
 # Report History & Export Routes
 # ============================================================================
 
 @app.route('/reports')
+@login_required
 def report_history():
     """Render the report history page with filters."""
     get_or_create_session_id()
@@ -374,7 +505,10 @@ def report_history():
     ticker = request.args.get('ticker', '').strip().upper() or None
     trade_type = request.args.get('trade_type', '').strip() or None
     sort_order = request.args.get('sort', 'DESC').upper()
-    page = max(1, int(request.args.get('page', 1)))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 12
 
     # Calculate offset
@@ -382,12 +516,14 @@ def report_history():
 
     try:
         storage = ReportStorage()
+        user_id = session.get('user_id')
         reports, total_count = storage.get_all_reports(
             ticker=ticker,
             trade_type=trade_type,
             sort_order=sort_order,
             limit=per_page,
-            offset=offset
+            offset=offset,
+            user_id=user_id
         )
 
         # Calculate pagination info
@@ -402,7 +538,8 @@ def report_history():
             per_page=per_page,
             filter_ticker=ticker or '',
             filter_trade_type=trade_type or '',
-            sort_order=sort_order
+            sort_order=sort_order,
+            page_range=_page_range(page, total_pages)
         )
     except Exception as e:
         return render_template(
@@ -415,29 +552,36 @@ def report_history():
             filter_ticker='',
             filter_trade_type='',
             sort_order='DESC',
+            page_range=[1],
             error=str(e)
         )
 
 
 @app.route('/api/reports')
+@login_required
 def api_reports():
     """AJAX endpoint for filtered reports (returns JSON)."""
     ticker = request.args.get('ticker', '').strip().upper() or None
     trade_type = request.args.get('trade_type', '').strip() or None
     sort_order = request.args.get('sort', 'DESC').upper()
-    page = max(1, int(request.args.get('page', 1)))
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 12
 
     offset = (page - 1) * per_page
 
     try:
         storage = ReportStorage()
+        user_id = session.get('user_id')
         reports, total_count = storage.get_all_reports(
             ticker=ticker,
             trade_type=trade_type,
             sort_order=sort_order,
             limit=per_page,
-            offset=offset
+            offset=offset,
+            user_id=user_id
         )
 
         # Convert datetime objects to ISO strings for JSON
@@ -462,11 +606,12 @@ def api_reports():
 
 
 @app.route('/report/<report_id>')
+@login_required
 def view_report(report_id):
-    """View a single report (public shareable link)."""
+    """View a single report."""
     try:
         storage = ReportStorage()
-        report = storage.get_report(report_id)
+        report = storage.get_report(report_id, user_id=session.get('user_id'))
 
         if not report:
             abort(404)
@@ -476,15 +621,17 @@ def view_report(report_id):
             report=report
         )
     except Exception as e:
-        abort(404)
+        app.logger.error(f"Error loading report {report_id}: {e}")
+        abort(500)
 
 
 @app.route('/report/<report_id>/pdf')
+@login_required
 def download_report_pdf(report_id):
     """Download report as PDF."""
     try:
         storage = ReportStorage()
-        report = storage.get_report(report_id)
+        report = storage.get_report(report_id, user_id=session.get('user_id'))
 
         if not report:
             abort(404)
@@ -510,15 +657,17 @@ def download_report_pdf(report_id):
             }
         )
     except Exception as e:
+        app.logger.error(f"Error generating PDF for report {report_id}: {e}")
         abort(500)
 
 
 @app.route('/report/<report_id>/chat')
+@login_required
 def chat_with_report(report_id):
     """Open chat interface with report context pre-loaded."""
     try:
         storage = ReportStorage()
-        report = storage.get_report(report_id)
+        report = storage.get_report(report_id, user_id=session.get('user_id'))
 
         if not report:
             abort(404)
@@ -527,7 +676,6 @@ def chat_with_report(report_id):
         session['current_report_id'] = report_id
         session['current_ticker'] = report['ticker']
         session['current_trade_type'] = report['trade_type']
-        session['report_text'] = report['report_text']
 
         # Initialize conversation with report context
         session['conversation_history'] = [

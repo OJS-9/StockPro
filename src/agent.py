@@ -60,6 +60,7 @@ class StockResearchAgent:
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
+        self.user_id = None
         self.research_orchestrator = ResearchOrchestrator(api_key=self.api_key)
         self.synthesis_agent = SynthesisAgent(api_key=self.api_key)
         self.report_storage = ReportStorage()
@@ -366,6 +367,7 @@ class StockResearchAgent:
                 trade_type=trade_type,
                 report_text=report_text,
                 metadata=metadata,
+                user_id=self.user_id,
             )
             
             self.current_report_id = report_id
