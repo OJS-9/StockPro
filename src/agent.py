@@ -6,6 +6,7 @@ import os
 import json
 import re
 import time
+import uuid
 from typing import Optional, Dict, Any, List, Any as AnyType
 from dotenv import load_dotenv
 
@@ -17,6 +18,8 @@ from research_orchestrator import ResearchOrchestrator
 from synthesis_agent import SynthesisAgent
 from report_storage import ReportStorage
 from report_chat_agent import ReportChatAgent
+from planner_agent import PlannerAgent
+from research_plan import ResearchPlan
 
 # Load environment variables
 load_dotenv()
@@ -60,8 +63,10 @@ class StockResearchAgent:
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
+        self.current_plan: Optional[ResearchPlan] = None
         self.research_orchestrator = ResearchOrchestrator(api_key=self.api_key)
         self.synthesis_agent = SynthesisAgent(api_key=self.api_key)
+        self.planner_agent = PlannerAgent(api_key=self.api_key)
         self.report_storage = ReportStorage()
         self.chat_agent = ReportChatAgent(api_key=self.api_key)
         
@@ -110,11 +115,11 @@ class StockResearchAgent:
                 # Generate report (this is synchronous but called from async function - OK)
                 report_text = self.generate_report(context=context_str)
                 report_id = self.current_report_id
-                
-                # Store report text for Flask session access
-                self.last_report_text = report_text
 
-                return f"Report generated successfully! Report ID: {report_id[:8] if report_id else 'N/A'}...\n\nThe comprehensive research report has been created. You can inform the user that the report is ready."
+                return (
+                    f"Report generated successfully! Report ID: {report_id[:8]}...\n\n"
+                    "The comprehensive research report has been created and is ready to view."
+                )
             except Exception as e:
                 return f"Error generating report: {str(e)}"
         
@@ -329,51 +334,74 @@ class StockResearchAgent:
         print(f"\n{'='*60}")
         print(f"Starting parallel research for {ticker} ({trade_type})")
         print(f"{'='*60}\n")
-        
+
         try:
-            # Step 1: Run parallel research
-            research_outputs = self.research_orchestrator.run_parallel_research(
+            # Step 1: Build research plan
+            print(f"{'='*60}")
+            print("Building research plan with PlannerAgent...")
+            print(f"{'='*60}\n")
+
+            plan = self.planner_agent.build_plan(
                 ticker=ticker,
                 trade_type=trade_type,
-                context=context,
+                conversation_context=context,
             )
-            
-            # Step 2: Synthesize report
+            self.current_plan = plan
+
+            print(
+                f"Research plan: {len(plan.selected_subject_ids)} subjects — "
+                + ", ".join(plan.selected_subject_ids)
+            )
+
+            # Step 2: Run parallel research
+            research_outputs = self.research_orchestrator.run_parallel_research(
+                plan=plan,
+            )
+
+            # Step 3: Synthesize report
             print(f"\n{'='*60}")
             print("Synthesizing research findings into final report...")
             print(f"{'='*60}\n")
-            
+
             report_text = self.synthesis_agent.synthesize_report(
                 ticker=ticker,
                 trade_type=trade_type,
                 research_outputs=research_outputs,
-                context=context,
+                plan=plan,
             )
-            
-            # Step 3: Store report with chunks and embeddings
+
+            # Set display-facing state immediately so the report renders even if storage fails
+            self.last_report_text = report_text
+            self.current_report_id = str(uuid.uuid4())  # temp ID — guarantees display works
+
+            # Step 4: Store report with chunks and embeddings
             print(f"\n{'='*60}")
             print("Storing report with chunking and embeddings...")
             print(f"{'='*60}\n")
-            
+
             metadata = {
                 "trade_type": trade_type,
-                "research_subjects": list(research_outputs.keys()),
-                "context": context,
+                "research_subjects": plan.selected_subject_ids,
+                "trade_context": plan.trade_context,
+                "planner_reasoning": plan.planner_reasoning,
             }
-            
-            report_id = self.report_storage.store_report(
-                ticker=ticker,
-                trade_type=trade_type,
-                report_text=report_text,
-                metadata=metadata,
-            )
-            
-            self.current_report_id = report_id
-            
-            print(f"\n{'='*60}")
-            print(f"✓ Report generated and stored: {report_id}")
-            print(f"{'='*60}\n")
-            
+
+            try:
+                report_id = self.report_storage.store_report(
+                    ticker=ticker,
+                    trade_type=trade_type,
+                    report_text=report_text,
+                    metadata=metadata,
+                )
+                self.current_report_id = report_id  # overwrite temp ID with real DB ID
+                print(f"\n{'='*60}")
+                print(f"✓ Report generated and stored: {report_id}")
+                print(f"{'='*60}\n")
+            except Exception as storage_err:
+                print(
+                    f"⚠ Report storage failed (display will still work, RAG chat disabled): {storage_err}"
+                )
+
             return report_text
         
         except Exception as e:
@@ -405,6 +433,7 @@ class StockResearchAgent:
         self.current_ticker = None
         self.current_trade_type = None
         self.current_report_id = None
+        self.current_plan = None
         self.chat_agent.reset_conversation()
 
 

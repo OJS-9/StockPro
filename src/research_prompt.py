@@ -86,7 +86,7 @@ def get_specialized_agent_instructions(subject_id: str, ticker: str, trade_type:
     Returns:
         System instructions string for the specialized agent
     """
-    from src.research_subjects import get_research_subject_by_id, format_subject_prompt
+    from src.research_subjects import get_research_subject_by_id
     
     subject = get_research_subject_by_id(subject_id)
     
@@ -111,15 +111,17 @@ Your specific research task: {subject.description}
 - Alpha Vantage MCP: structured financial data, fundamentals, statements.
 - Perplexity Research: real-time news, analysis, qualitative insights.
 
-**Output Requirements:**
-1. Provide clear research findings on {subject.name}.
-2. Include only the most relevant metrics and facts.
-3. Cite sources (tool outputs, research results) as needed.
-4. Structure your response with:
-   - Key findings
-   - Supporting data
-   - Sources/citations
-   - Brief analysis and context
+**Output Format (required):**
+- Use markdown headers for each analytical section
+- Lead every section with a 1-sentence "bottom line" finding, then support with data
+- Quantify every claim — avoid vague language ("growing well" → "revenue +23% YoY")
+- Flag any data gaps or conflicting signals explicitly
+- End with a **Key Takeaways** section: 3–5 bullets, each containing a specific metric or fact
+
+**Scope constraint:**
+- Focus exclusively on {subject.name}
+- Do not duplicate findings that belong to other research subjects
+- Cite the specific tool or source for each data point
 
 Begin your research now."""
     

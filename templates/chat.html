@@ -141,19 +141,11 @@
         const input = document.getElementById('user_response');
         const chatMessages = document.getElementById('chat-messages');
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/27ce924a-188a-4f1b-bc7b-66a0f39e7341',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat.html:185',message:'DOMContentLoaded - checking form elements',data:{formFound:!!form,inputFound:!!input,chatMessagesFound:!!chatMessages},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        
         if (form && input && chatMessages) {
             form.addEventListener('submit', async function(e) {
                 e.preventDefault(); // Prevent default form submission
                 
                 const userMessage = input.value.trim();
-                
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/27ce924a-188a-4f1b-bc7b-66a0f39e7341',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat.html:194',message:'Form submit - userMessage value',data:{userMessage:userMessage,userMessageLength:userMessage.length,inputValue:input.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
                 
                 if (!userMessage) return;
                 
@@ -161,11 +153,6 @@
                 const formData = new FormData(form);
                 // Manually append userMessage to ensure it's included (disabled fields may not be captured)
                 formData.set('user_response', userMessage);
-                
-                // #region agent log
-                const formDataEntries = Array.from(formData.entries());
-                fetch('http://127.0.0.1:7242/ingest/27ce924a-188a-4f1b-bc7b-66a0f39e7341',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat.html:214',message:'FormData created and userMessage appended',data:{formDataEntries:formDataEntries,userResponseInFormData:formData.get('user_response'),userMessage:userMessage},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-v2',hypothesisId:'B'})}).catch(()=>{});
-                // #endregion
                 
                 // Disable form while processing
                 const submitButton = form.querySelector('button[type="submit"]');

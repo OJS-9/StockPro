@@ -3,148 +3,135 @@ Research orchestrator for coordinating parallel specialized research agents.
 """
 
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
-from research_subjects import get_research_subjects, format_subject_prompt
+from research_plan import ResearchPlan
+from research_subjects import get_research_subject_by_id
 from specialized_agent import SpecializedResearchAgent
 
 # Default maximum worker count – controls how many specialized agents
-# run concurrently. This spreads token usage over time.
+# run concurrently.  Spreads token usage over time.
 DEFAULT_MAX_WORKERS = int(os.getenv("RESEARCH_MAX_WORKERS", "3"))
 
 
 class ResearchOrchestrator:
     """Orchestrates parallel research across multiple specialized agents."""
-    
+
     def __init__(self, api_key: str = None):
         """
         Initialize the research orchestrator.
-        
+
         Args:
             api_key: OpenAI API key (optional)
         """
         self.api_key = api_key
-    
-    def craft_research_prompts(
-        self,
-        ticker: str,
-        trade_type: str,
-        context: str = ""
-    ) -> Dict[str, str]:
-        """
-        Craft research prompts for all research subjects.
-        
-        Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade
-            context: Additional context from followup questions
-        
-        Returns:
-            Dictionary mapping subject_id -> formatted prompt
-        """
-        subjects = get_research_subjects()
-        prompts = {}
-        
-        for subject in subjects:
-            prompt = format_subject_prompt(subject, ticker, trade_type, context)
-            prompts[subject.id] = prompt
-        
-        return prompts
-    
+
     def run_parallel_research(
         self,
-        ticker: str,
-        trade_type: str,
-        context: str = "",
+        plan: ResearchPlan,
         max_workers: int = DEFAULT_MAX_WORKERS,
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Execute parallel research using specialized agents.
-        
+        Execute parallel research using specialized agents driven by a ResearchPlan.
+
+        Subjects are submitted to the thread pool in priority order
+        (plan.selected_subject_ids is already sorted).
+
         Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade
-            context: Additional context from followup questions
-            max_workers: Maximum number of parallel workers (default: 6)
-        
+            plan: ResearchPlan from PlannerAgent
+            max_workers: Maximum number of parallel workers
+
         Returns:
-            Dictionary mapping subject_id -> research results
+            Dictionary mapping subject_id → research result dict
         """
-        subjects = get_research_subjects()
-        results = {}
-        
+        ticker = plan.ticker
+        trade_type = plan.trade_type
+        subject_ids = plan.selected_subject_ids
+
         print(f"Starting parallel research for {ticker} ({trade_type})...")
         print(
-            f"Researching {len(subjects)} subjects with up to "
+            f"Researching {len(subject_ids)} subjects with up to "
             f"{max_workers} concurrent workers..."
         )
-        
+
         start_time = time.time()
-        
-        # Use ThreadPoolExecutor for parallel execution
+        results: Dict[str, Dict[str, Any]] = {}
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all research tasks
-            future_to_subject = {}
-            
-            for subject in subjects:
+            future_to_id: Dict[Any, str] = {}
+
+            # Submit futures in priority order so the thread pool schedules
+            # higher-priority work first.
+            for subject_id in subject_ids:
+                try:
+                    subject = get_research_subject_by_id(subject_id)
+                except ValueError as exc:
+                    print(f"⚠  Skipping unknown subject id '{subject_id}': {exc}")
+                    continue
+
+                focus_hint = plan.subject_focus.get(subject_id, "")
                 agent = SpecializedResearchAgent(api_key=self.api_key)
                 future = executor.submit(
                     agent.research_subject,
                     ticker,
                     subject,
                     trade_type,
-                    context
+                    focus_hint,
                 )
-                future_to_subject[future] = subject
-            
+                future_to_id[future] = subject_id
+
             # Collect results as they complete
             completed = 0
-            for future in as_completed(future_to_subject):
-                subject = future_to_subject[future]
+            total = len(future_to_id)
+            for future in as_completed(future_to_id):
+                subject_id = future_to_id[future]
                 try:
                     result = future.result()
-                    results[subject.id] = result
+                    results[subject_id] = result
                     completed += 1
-                    print(f"✓ Completed research for: {subject.name} ({completed}/{len(subjects)})")
+                    print(
+                        f"✓ Completed research for: {result.get('subject_name', subject_id)} "
+                        f"({completed}/{total})"
+                    )
                 except Exception as e:
-                    print(f"✗ Error researching {subject.name}: {e}")
-                    results[subject.id] = {
-                        "subject_id": subject.id,
-                        "subject_name": subject.name,
+                    print(f"✗ Error researching {subject_id}: {e}")
+                    results[subject_id] = {
+                        "subject_id": subject_id,
+                        "subject_name": subject_id,
                         "research_output": f"Error: {str(e)}",
                         "sources": [],
                         "ticker": ticker,
                         "trade_type": trade_type,
-                        "error": str(e)
+                        "focus_hint": plan.subject_focus.get(subject_id, ""),
+                        "error": str(e),
                     }
                     completed += 1
-        
-        elapsed_time = time.time() - start_time
-        print(f"✓ Parallel research completed in {elapsed_time:.2f} seconds")
-        
+
+        elapsed = time.time() - start_time
+        print(f"✓ Parallel research completed in {elapsed:.2f} seconds")
+
         return results
-    
+
     def get_research_summary(self, results: Dict[str, Dict[str, Any]]) -> str:
         """
         Generate a summary of research results.
-        
+
         Args:
             results: Dictionary of research results from parallel execution
-        
+
         Returns:
             Summary string
         """
         summary_lines = ["Research Summary:"]
         summary_lines.append(f"Total subjects researched: {len(results)}")
-        
+
         successful = sum(1 for r in results.values() if "error" not in r)
         summary_lines.append(f"Successful: {successful}/{len(results)}")
-        
+
         if successful < len(results):
             failed = [r["subject_name"] for r in results.values() if "error" in r]
             summary_lines.append(f"Failed subjects: {', '.join(failed)}")
-        
-        return "\n".join(summary_lines)
 
+        return "\n".join(summary_lines)

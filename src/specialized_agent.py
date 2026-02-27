@@ -84,24 +84,35 @@ class SpecializedResearchAgent:
         self,
         subject: ResearchSubject,
         ticker: str,
-        trade_type: str
+        trade_type: str,
+        focus_hint: str = "",
     ) -> str:
         """
         Generate specialized system instructions for a research subject.
-        
+
         Args:
             subject: ResearchSubject object
             ticker: Stock ticker symbol
             trade_type: Type of trade
-        
+            focus_hint: Optional per-subject focus hint from PlannerAgent
+
         Returns:
             System instructions string
         """
         from src.date_utils import get_datetime_context_string
-        
+
         # Get current date/time context
         datetime_context = get_datetime_context_string()
-        
+
+        # Build optional focus block
+        focus_block = ""
+        if focus_hint:
+            focus_block = f"""
+**Specific Research Focus (from user context):**
+{focus_hint}
+Prioritize this focus while still covering the full subject area.
+"""
+
         instructions = f"""You are a specialized research analyst focusing on {subject.name} for {ticker}.
 
 {datetime_context}
@@ -110,7 +121,7 @@ Your specific research task: {subject.description}
 
 **Research Objective:**
 {subject.prompt_template.format(ticker=ticker)}
-
+{focus_block}
 **Trade Type Context:** {trade_type}
 - Adjust your research depth and focus based on this trade type
 - For Day Trade: Focus on immediate, actionable insights
@@ -138,38 +149,68 @@ Your specific research task: {subject.description}
 - Format your response for easy integration into a final report
 
 Begin your research now."""
-        
+
         return instructions
+
+    def _build_research_prompt(
+        self,
+        subject: ResearchSubject,
+        ticker: str,
+        trade_type: str,
+        focus_hint: str = "",
+    ) -> str:
+        """
+        Build the user-facing research prompt for a subject.
+
+        Args:
+            subject: ResearchSubject object
+            ticker: Stock ticker symbol
+            trade_type: Type of trade
+            focus_hint: Optional per-subject focus hint
+
+        Returns:
+            Formatted research prompt string
+        """
+        base_prompt = subject.prompt_template.format(ticker=ticker)
+
+        if focus_hint:
+            base_prompt += f"\n\nSpecific focus for this analysis: {focus_hint}"
+
+        return base_prompt
     
     def research_subject(
         self,
         ticker: str,
         subject: ResearchSubject,
         trade_type: str,
-        context: str = ""
+        focus_hint: str = "",
     ) -> Dict[str, Any]:
         """
         Research a specific subject for a ticker.
-        
+
         Args:
             ticker: Stock ticker symbol
             subject: ResearchSubject to investigate
             trade_type: Type of trade
-            context: Additional context from followup questions
-        
+            focus_hint: Per-subject focus hint from PlannerAgent
+
         Returns:
             Dictionary with research results:
             - subject_id: Subject ID
             - subject_name: Subject name
             - research_output: Agent's research output
             - sources: List of sources used
+            - focus_hint: The focus hint used for this subject
         """
-        # Get specialized instructions
-        instructions = self.get_specialized_instructions(subject, ticker, trade_type)
-        
-        # Format the research prompt
-        from research_subjects import format_subject_prompt
-        research_prompt = format_subject_prompt(subject, ticker, trade_type, context)
+        # Get specialized instructions (inject focus hint into system prompt)
+        instructions = self.get_specialized_instructions(
+            subject, ticker, trade_type, focus_hint
+        )
+
+        # Build the research prompt
+        research_prompt = self._build_research_prompt(
+            subject, ticker, trade_type, focus_hint
+        )
         
         # Create agent with specialized instructions
         agent = Agent(
@@ -268,9 +309,10 @@ Begin your research now."""
                 "research_output": research_output,
                 "sources": sources,
                 "ticker": ticker,
-                "trade_type": trade_type
+                "trade_type": trade_type,
+                "focus_hint": focus_hint,
             }
-            
+
         except Exception as e:
             error_msg = f"Error in specialized research for {subject.name}: {str(e)}"
             print(error_msg)
@@ -281,7 +323,8 @@ Begin your research now."""
                 "sources": [],
                 "ticker": ticker,
                 "trade_type": trade_type,
-                "error": str(e)
+                "focus_hint": focus_hint,
+                "error": str(e),
             }
 
 

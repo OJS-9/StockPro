@@ -1,5 +1,9 @@
 """
-Synthesis agent that consolidates research outputs into a final business model report.
+Synthesis agent that consolidates research outputs into a final report.
+
+The report structure is now adaptive: sections are built from the subjects
+that were actually researched, ordered by plan priority, and framed
+according to trade type.
 """
 
 import os
@@ -9,256 +13,293 @@ from dotenv import load_dotenv
 
 from agents import Agent, Runner, trace, ModelSettings
 
+from research_plan import ResearchPlan
+from research_subjects import get_research_subject_by_id
+
 load_dotenv()
 
 # Maximum output tokens for synthesis agent (configurable via env)
-# Higher limit needed since synthesis agent integrates multiple specialized research outputs
 SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS = int(
     os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000")
 )
 
+# Trade-type framing labels used to instruct the synthesis agent
+_TRADE_TYPE_FRAMING = {
+    "Day Trade": "an actionable intraday/short-term briefing",
+    "Swing Trade": "a focused 1–14 day swing trade thesis",
+    "Investment": "a comprehensive long-term equity research report",
+}
+
 
 class SynthesisAgent:
     """Agent that synthesizes multiple research outputs into a comprehensive report."""
-    
+
     def __init__(self, api_key: str = None):
         """
         Initialize the synthesis agent.
-        
+
         Args:
             api_key: OpenAI API key (optional)
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable.")
-    
+            raise ValueError(
+                "OpenAI API key is required. Set OPENAI_API_KEY environment variable."
+            )
+
+    # ─── Public API ──────────────────────────────────────────────────────────
+
     def synthesize_report(
         self,
         ticker: str,
         trade_type: str,
         research_outputs: Dict[str, Dict[str, Any]],
-        context: str = ""
+        plan: ResearchPlan,
     ) -> str:
         """
-        Synthesize all research outputs into a final business model report.
-        
+        Synthesize all research outputs into a final report.
+
         Args:
             ticker: Stock ticker symbol
             trade_type: Type of trade
-            research_outputs: Dictionary mapping subject_id -> research results
-            context: Additional context from followup questions
-        
+            research_outputs: Mapping of subject_id → research result dict
+            plan: ResearchPlan used to run this research session
+
         Returns:
             Complete synthesized report text
         """
-        # Build synthesis prompt
         synthesis_prompt = self._build_synthesis_prompt(
-            ticker,
-            trade_type,
-            research_outputs,
-            context
+            ticker, trade_type, research_outputs, plan
         )
-        
-        # Create synthesis agent
+
         agent = Agent(
             name="Synthesis Agent",
-            instructions=self._get_synthesis_instructions(ticker, trade_type),
+            instructions=self._get_synthesis_instructions(ticker, trade_type, plan),
             model="gpt-4o",
-            tools=[],  # Synthesis agent doesn't need tools, it works with provided data
+            tools=[],
             model_settings=ModelSettings(
                 temperature=0.7,
-                max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS
-            )
+                max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
+            ),
         )
-        
-        # Execute synthesis
+
         try:
-            with trace("Report Synthesis", metadata={
-                "ticker": ticker,
-                "trade_type": trade_type,
-                "subjects_count": str(len(research_outputs))  # Fixed: cast to string for tracing API
-            }):
-                # Run in a thread to avoid event loop conflicts (similar to specialized agents)
-                # This ensures Runner.run_sync() works even when called from a context with an active event loop
-                def _run_synthesis_in_thread():
+            with trace(
+                "Report Synthesis",
+                metadata={
+                    "ticker": ticker,
+                    "trade_type": trade_type,
+                    "subjects_count": str(len(research_outputs)),
+                },
+            ):
+                def _run():
                     return Runner.run_sync(agent, synthesis_prompt, max_turns=10)
-                
+
                 with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_run_synthesis_in_thread)
-                    result = future.result()
-            
-            # Extract output
-            if hasattr(result, 'final_output'):
-                report = result.final_output
-            elif hasattr(result, 'output'):
-                report = result.output
+                    result = executor.submit(_run).result()
+
+            if hasattr(result, "final_output"):
+                return result.final_output
+            elif hasattr(result, "output"):
+                return result.output
             elif isinstance(result, str):
-                report = result
-            else:
-                report = str(result)
-            
-            return report
-            
+                return result
+            return str(result)
+
         except Exception as e:
             error_msg = f"Error synthesizing report: {str(e)}"
             print(error_msg)
             return error_msg
-    
-    def _get_synthesis_instructions(self, ticker: str, trade_type: str) -> str:
-        """
-        Get system instructions for the synthesis agent.
-        
-        Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade
-        
-        Returns:
-            System instructions string
-        """
+
+    # ─── Instructions ────────────────────────────────────────────────────────
+
+    def _get_synthesis_instructions(
+        self, ticker: str, trade_type: str, plan: ResearchPlan
+    ) -> str:
         from src.date_utils import get_datetime_context_string
-        
-        # Get current date/time context
+
         datetime_context = get_datetime_context_string()
-        
-        return f"""You are a senior equity research analyst synthesizing specialized research findings into a comprehensive business model report for {ticker}.
+        framing = _TRADE_TYPE_FRAMING.get(trade_type, "a research report")
+        trade_context_block = (
+            f"\n**User's stated goals / context:**\n{plan.trade_context}\n"
+            if plan.trade_context
+            else ""
+        )
+
+        return f"""You are a senior equity research analyst synthesizing specialized research findings into {framing} for {ticker}.
 
 {datetime_context}
-
+{trade_context_block}
 **Your Task:**
-Integrate and structure research findings from multiple specialized research agents into a comprehensive, detailed business model report. Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize or condense it.
+Integrate research findings from multiple specialized agents into a structured, detailed report.
+Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize or condense it.
 
 **CRITICAL: Detail Preservation Requirements**
-- **PRESERVE ALL SPECIFIC DATA**: Include all metrics, numbers, percentages, dollar amounts, and quantitative data points from the research outputs
-- **PRESERVE ALL FACTS**: Include all specific facts, findings, and qualitative insights from specialized agents
-- **PRESERVE ALL EXAMPLES**: Include specific examples, case studies, and concrete details provided by research agents
-- **INTEGRATE, DON'T SUMMARIZE**: Your job is to integrate information into a structured format, not to condense or summarize away details
-- **MINIMUM DETAIL REQUIREMENTS**: Each major section should include at least 3-5 specific data points, metrics, or detailed facts from the research outputs
-- **INCLUDE DIRECT QUOTES**: When key metrics or critical findings are provided, include them directly with their exact values/statements
-- **CROSS-REFERENCE INFORMATION**: Where information from different research subjects relates to each other, make those connections explicit
+- **PRESERVE ALL SPECIFIC DATA**: Include all metrics, numbers, percentages, dollar amounts, and quantitative data points
+- **PRESERVE ALL FACTS**: Include all specific facts, findings, and qualitative insights
+- **INTEGRATE, DON'T SUMMARIZE**: Integrate information into a structured format without losing depth
+- **MINIMUM DETAIL**: Each major section should include at least 3–5 specific data points or facts
+- **CROSS-REFERENCE**: Where information from different subjects relates, make those connections explicit
 
-**Report Structure:**
-1. **Executive Summary** - Comprehensive overview including key metrics and main findings
-2. **Products and Services** - Detailed description of all products/services with specific features, capabilities, and details
-3. **Revenue Breakdown** - Detailed revenue analysis with specific numbers, percentages, trends, and segment breakdowns
-4. **Value Propositions and Key Clients** - Detailed value propositions with specific examples, major clients, and customer relationship details
-5. **Buying Process** - Comprehensive description of the buying process with specific details about decision-makers, sales cycles, and procurement processes
-6. **Seasonality** - Detailed seasonal patterns with specific quarterly data, trends, and cyclical factors
-7. **Margin Structure** - Detailed margin analysis with specific percentages, trends, and segment-level profitability data
-8. **Business Model Overview** - Integrated view connecting all aspects with specific details and metrics
-9. **Sources and Citations** - All sources cited from the research with proper attribution
-
-**Trade Type Context:** {trade_type}
-- Adjust report depth and focus based on trade type
-- For Day Trade: Emphasize immediate, actionable insights while preserving all relevant details
-- For Swing Trade: Emphasize near-term factors while maintaining comprehensive detail
-- For Investment: Provide comprehensive, long-term analysis with full detail preservation
+**Trade Type Framing:** {trade_type} — frame this as {framing}.
+- Day Trade: Emphasize immediacy, catalysts, price action, and actionability.
+- Swing Trade: Emphasize near-term thesis, earnings, sector dynamics.
+- Investment: Provide full depth — valuation, moat, management, long-term growth.
 
 **Guidelines:**
-- **INTEGRATION OVER SUMMARIZATION**: Integrate all research findings seamlessly while preserving their depth and detail
-- **DATA POINT PRESERVATION**: Include specific numbers, percentages, dollar amounts, dates, and quantitative metrics from research outputs
-- **FACT PRESERVATION**: Include all specific facts, findings, examples, and qualitative insights
-- **STRUCTURE WITHOUT REDUCTION**: Organize information into the report structure without losing detail or condensing content
-- **CONNECTIONS AND CONTEXT**: Draw connections between different research subjects where relevant, using the detailed information provided
-- Maintain consistency across sections while preserving all unique details
-- Cite all sources from the research outputs with proper attribution
-- Use clear, professional language while maintaining comprehensive detail
-- Structure the report for easy reading and reference without sacrificing information density
-
-**Important:**
-- Only use information provided in the research outputs
+- Only use information from the provided research outputs
 - Do not add information not present in the research findings
-- **DO NOT summarize away details** - preserve all specific metrics, numbers, and facts
-- Clearly cite sources for all claims
+- Cite all sources from the research outputs
 - If information is missing for a section, note it clearly
-- **Ensure the report is comprehensive, detailed, and fully utilizes all research findings**"""
-    
+- Ensure the report is comprehensive and fully utilizes all research findings"""
+
+    # ─── Section Builder ─────────────────────────────────────────────────────
+
+    def _build_report_sections(
+        self, trade_type: str, subject_ids_run: List[str]
+    ) -> str:
+        """
+        Build a dynamic ordered section list for the report.
+
+        Always opens with Executive Summary and closes with Risk Factors
+        (if researched) and Sources.
+
+        Args:
+            trade_type: Type of trade
+            subject_ids_run: Ordered list of subject IDs that were researched
+
+        Returns:
+            Numbered section list as a string for injection into the prompt
+        """
+        # Build subject name map for labelling
+        subject_names: Dict[str, str] = {}
+        subject_descriptions: Dict[str, str] = {}
+        for sid in subject_ids_run:
+            try:
+                s = get_research_subject_by_id(sid)
+                subject_names[sid] = s.name
+                subject_descriptions[sid] = s.description
+            except ValueError:
+                subject_names[sid] = sid
+                subject_descriptions[sid] = ""
+
+        sections = ["1. **Executive Summary** — Key findings, recommendation, and top metrics"]
+
+        section_num = 2
+        for sid in subject_ids_run:
+            if sid == "risk_factors":
+                # Risk Factors goes near the end; skip here and add below
+                continue
+            name = subject_names.get(sid, sid)
+            desc = subject_descriptions.get(sid, "")
+            sections.append(
+                f"{section_num}. **{name}**"
+                + (f" — {desc}" if desc else "")
+            )
+            section_num += 1
+
+        # Risk Factors near the end if it was researched
+        if "risk_factors" in subject_ids_run:
+            sections.append(
+                f"{section_num}. **Risk Factors** — Key risks: operational, financial, regulatory, and macro"
+            )
+            section_num += 1
+
+        sections.append(
+            f"{section_num}. **Key Takeaways** — 5–7 bullets, each with a specific metric or fact; "
+            "cover growth, margin, competitive position, near-term catalyst, and primary risk"
+        )
+        section_num += 1
+        sections.append(f"{section_num}. **Sources and Citations** — All sources with proper attribution")
+
+        return "\n".join(sections)
+
+    # ─── Prompt Builder ──────────────────────────────────────────────────────
+
     def _build_synthesis_prompt(
         self,
         ticker: str,
         trade_type: str,
         research_outputs: Dict[str, Dict[str, Any]],
-        context: str
+        plan: ResearchPlan,
     ) -> str:
-        """
-        Build the synthesis prompt with all research outputs.
-        
-        Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade
-            research_outputs: Dictionary of research results
-            context: Additional context
-        
-        Returns:
-            Formatted synthesis prompt
-        """
         from src.date_utils import get_datetime_context_string
-        
-        # Get current date/time context
+
         datetime_context = get_datetime_context_string()
-        
+        framing = _TRADE_TYPE_FRAMING.get(trade_type, "a research report")
+
+        # Use plan subject order for output ordering; fall back to dict order
+        ordered_ids = [
+            sid for sid in plan.selected_subject_ids if sid in research_outputs
+        ]
+        # Include any subject not in the plan order (safety net)
+        for sid in research_outputs:
+            if sid not in ordered_ids:
+                ordered_ids.append(sid)
+
+        sections_text = self._build_report_sections(trade_type, ordered_ids)
+
         prompt_parts = [
-            f"**TASK: Synthesize specialized research findings into a comprehensive business model report for {ticker} ({trade_type})**",
+            f"**TASK: Synthesize research into {framing} for {ticker} ({trade_type})**",
             "",
             datetime_context,
             "",
-            "**CRITICAL INSTRUCTIONS - READ CAREFULLY:**",
+        ]
+
+        if plan.trade_context:
+            prompt_parts += [
+                "**User's stated goals / context (frame the report around this):**",
+                plan.trade_context,
+                "",
+            ]
+
+        prompt_parts += [
+            "**CRITICAL INSTRUCTIONS:**",
             "",
-            f"The specialized research agents below have conducted detailed, in-depth research on different aspects of {ticker}'s business model. Each agent has provided comprehensive findings with specific data points, metrics, numbers, facts, and detailed analysis.",
+            f"Specialized agents have researched {len(ordered_ids)} subjects on {ticker}.",
+            "PRESERVE ALL DETAILS — do not summarize away specific numbers, facts, or examples.",
             "",
-            "**YOUR RESPONSIBILITY:**",
-            "- **PRESERVE ALL DETAILS**: Include ALL specific metrics, numbers, percentages, dollar amounts, dates, and quantitative data from each research output",
-            "- **PRESERVE ALL FACTS**: Include ALL specific facts, findings, examples, and qualitative insights from each research output",
-            "- **INTEGRATE, DON'T SUMMARIZE**: Your job is to integrate this detailed information into a well-structured report, NOT to condense or summarize away the details",
-            "- **USE ALL INFORMATION**: Fully utilize all the detailed research findings - specialized agents have done comprehensive work that should be preserved in the final report",
-            "- **MAINTAIN DEPTH**: Maintain the depth and specificity of analysis provided by the specialized research agents",
-            "- **INCLUDE SPECIFIC DATA**: Each section of your report should include specific data points, metrics, and detailed information - avoid high-level summaries",
-            "- **CROSS-REFERENCE**: Where information from different research subjects connects, make those relationships explicit using the detailed data provided",
-            "",
-            "The specialized agents have invested significant effort in gathering detailed information. Your synthesis should reflect and preserve this comprehensive research, not reduce it to bullet points or high-level summaries.",
+            "**Report Structure to follow (in this order):**",
+            sections_text,
             "",
             "**Research Findings from Specialized Agents:**",
-            ""
+            "",
         ]
-        
-        # Add each research output
-        for subject_id, result in research_outputs.items():
-            subject_name = result.get("subject_name", subject_id)
+
+        for sid in ordered_ids:
+            result = research_outputs[sid]
+            subject_name = result.get("subject_name", sid)
             research_output = result.get("research_output", "No research output available")
+            focus_hint = result.get("focus_hint", "")
             sources = result.get("sources", [])
-            
-            prompt_parts.append(f"### {subject_name} - Detailed Research Output")
+
+            prompt_parts.append(f"### {subject_name}")
+            if focus_hint:
+                prompt_parts.append(f"*User focus for this section: {focus_hint}*")
             prompt_parts.append("")
-            prompt_parts.append("**Comprehensive Research Findings (preserve all details from this output):**")
             prompt_parts.append(research_output)
-            
+
             if sources:
                 prompt_parts.append("")
-                prompt_parts.append("**Sources Used by This Research Agent:**")
+                prompt_parts.append("**Sources:**")
                 for i, source in enumerate(sources, 1):
                     prompt_parts.append(f"{i}. {source}")
-            
-            prompt_parts.append("")
-            prompt_parts.append("---")
-            prompt_parts.append("")
-        
-        if context:
-            prompt_parts.append("")
-            prompt_parts.append("**Additional Context from User:**")
-            prompt_parts.append(context)
-            prompt_parts.append("")
-        
-        prompt_parts.append("")
-        prompt_parts.append("**FINAL INSTRUCTIONS:**")
-        prompt_parts.append("")
-        prompt_parts.append("Now create a comprehensive, detailed business model report that:")
-        prompt_parts.append("1. Integrates all the detailed research findings above into a well-structured format")
-        prompt_parts.append("2. Preserves ALL specific metrics, numbers, facts, and detailed information from each research output")
-        prompt_parts.append("3. Includes specific data points (percentages, dollar amounts, dates, quantities) throughout the report")
-        prompt_parts.append("4. Maintains the depth and comprehensiveness of the specialized research")
-        prompt_parts.append("5. Clearly cites all sources from the research outputs")
-        prompt_parts.append("6. Draws connections between different research subjects where relevant")
-        prompt_parts.append("")
-        prompt_parts.append("Remember: The goal is comprehensive integration of detailed information, NOT summarization or condensation. Use all the detailed findings provided by the specialized research agents.")
-        
-        return "\n".join(prompt_parts)
 
+            prompt_parts += ["", "---", ""]
+
+        prompt_parts += [
+            "",
+            "**FINAL INSTRUCTIONS:**",
+            "",
+            f"Write the {framing} now following the section structure above.",
+            "- Preserve ALL specific metrics, numbers, facts, and details from the research outputs.",
+            "- Maintain section order exactly as specified.",
+            "- Cite all sources.",
+            "- Draw connections between sections where relevant.",
+            "- The **Key Takeaways** section is REQUIRED. Write 5–7 bullet points.",
+            "  Each bullet must contain a specific metric or fact (no vague conclusions).",
+            "  Cover at minimum: one growth finding, one margin finding, one competitive finding,",
+            "  one near-term catalyst, and one primary risk.",
+        ]
+
+        return "\n".join(prompt_parts)
