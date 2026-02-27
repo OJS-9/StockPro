@@ -6,6 +6,7 @@ import os
 import json
 import re
 import time
+import uuid
 from typing import Optional, Dict, Any, List, Any as AnyType
 from dotenv import load_dotenv
 
@@ -114,11 +115,11 @@ class StockResearchAgent:
                 # Generate report (this is synchronous but called from async function - OK)
                 report_text = self.generate_report(context=context_str)
                 report_id = self.current_report_id
-                
-                # Store report text for Flask session access
-                self.last_report_text = report_text
 
-                return f"Report generated successfully! Report ID: {report_id[:8] if report_id else 'N/A'}...\n\nThe comprehensive research report has been created. You can inform the user that the report is ready."
+                return (
+                    f"Report generated successfully! Report ID: {report_id[:8]}...\n\n"
+                    "The comprehensive research report has been created and is ready to view."
+                )
             except Exception as e:
                 return f"Error generating report: {str(e)}"
         
@@ -369,6 +370,10 @@ class StockResearchAgent:
                 plan=plan,
             )
 
+            # Set display-facing state immediately so the report renders even if storage fails
+            self.last_report_text = report_text
+            self.current_report_id = str(uuid.uuid4())  # temp ID — guarantees display works
+
             # Step 4: Store report with chunks and embeddings
             print(f"\n{'='*60}")
             print("Storing report with chunking and embeddings...")
@@ -380,20 +385,23 @@ class StockResearchAgent:
                 "trade_context": plan.trade_context,
                 "planner_reasoning": plan.planner_reasoning,
             }
-            
-            report_id = self.report_storage.store_report(
-                ticker=ticker,
-                trade_type=trade_type,
-                report_text=report_text,
-                metadata=metadata,
-            )
-            
-            self.current_report_id = report_id
-            
-            print(f"\n{'='*60}")
-            print(f"✓ Report generated and stored: {report_id}")
-            print(f"{'='*60}\n")
-            
+
+            try:
+                report_id = self.report_storage.store_report(
+                    ticker=ticker,
+                    trade_type=trade_type,
+                    report_text=report_text,
+                    metadata=metadata,
+                )
+                self.current_report_id = report_id  # overwrite temp ID with real DB ID
+                print(f"\n{'='*60}")
+                print(f"✓ Report generated and stored: {report_id}")
+                print(f"{'='*60}\n")
+            except Exception as storage_err:
+                print(
+                    f"⚠ Report storage failed (display will still work, RAG chat disabled): {storage_err}"
+                )
+
             return report_text
         
         except Exception as e:
