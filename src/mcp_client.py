@@ -110,8 +110,16 @@ class MCPClient:
                 })
                 
                 if "result" in response and "tools" in response["result"]:
-                    self.tools_cache = response["result"]["tools"]
-                    return self.tools_cache
+                    returned_tools = response["result"]["tools"]
+                    # The server may only return meta-tools (TOOL_LIST, TOOL_GET, TOOL_CALL).
+                    # If so, fall through to the hardcoded fallback so agents get the real
+                    # Alpha Vantage tool definitions.
+                    _meta_tool_names = {"TOOL_LIST", "TOOL_GET", "TOOL_CALL"}
+                    actual_tools = [t for t in returned_tools if t.get("name", "") not in _meta_tool_names]
+                    if actual_tools:
+                        self.tools_cache = actual_tools
+                        return self.tools_cache
+                    # Only meta-tools returned — fall through to hardcoded fallback
             except Exception:
                 pass
             
