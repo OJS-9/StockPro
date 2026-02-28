@@ -80,7 +80,7 @@
                             <span class="text-xs text-stone-500">10:02 AM</span>
                         </div>
                         <div class="bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl">
-                            <div class="text-white text-sm leading-relaxed markdown-content">{{ message.content | markdown | safe }}</div>
+                            <div class="text-white text-sm leading-relaxed markdown-content" data-markdown="{{ message.content | e }}"></div>
                         </div>
                     </div>
                 </div>
@@ -92,6 +92,7 @@
     <!-- Input Field -->
     <div class="sticky bottom-0 bg-background-dark pt-4 pb-2">
         <form method="POST" action="{{ url_for('continue_conversation') }}" class="flex items-center gap-2 bg-surface-dark rounded-2xl p-2 border border-border-dark">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="button" class="flex-shrink-0 size-10 flex items-center justify-center text-stone-400 hover:text-white transition-colors">
                 <span class="material-symbols-outlined text-2xl">add</span>
             </button>
@@ -117,8 +118,17 @@
 </main>
 
 <script>
-    // Auto-scroll to bottom on page load
+    // Render server-side markdown content safely on page load
     window.addEventListener('load', function() {
+        document.querySelectorAll('[data-markdown]').forEach(function(el) {
+            const raw = el.getAttribute('data-markdown');
+            if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                el.innerHTML = DOMPurify.sanitize(marked.parse(raw));
+            } else {
+                el.textContent = raw;
+            }
+        });
+
         const chatMessages = document.getElementById('chat-messages');
         if (chatMessages) {
             chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -213,7 +223,8 @@
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest' // Identify as AJAX request
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRFToken': document.querySelector('[name=csrf_token]').value
                         }
                     });
                     
@@ -319,8 +330,10 @@
         div.className = 'flex items-start gap-3';
         const timeString = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        // Render markdown instead of escaping HTML
-        const markdownContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content);
+        // Render and sanitize markdown
+        const markdownContent = typeof marked !== 'undefined'
+            ? DOMPurify.sanitize(marked.parse(content))
+            : escapeHtml(content);
         
         div.innerHTML = `
             <div class="flex-shrink-0 size-8 rounded-full bg-surface-dark flex items-center justify-center">

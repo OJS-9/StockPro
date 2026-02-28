@@ -10,6 +10,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask_wtf.csrf import CSRFProtect
 import os
 from dotenv import load_dotenv
 import uuid
@@ -32,6 +33,7 @@ app = Flask(__name__,
             template_folder=str(project_root / 'templates'), 
             static_folder=str(project_root / 'static'))
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
+csrf = CSRFProtect(app)
 
 # Register markdown filter for Jinja2 templates
 app.jinja_env.filters['markdown'] = markdown.markdown
@@ -610,6 +612,12 @@ def delete_transaction(transaction_id: str):
 
         holding = portfolio_service.get_holding_by_id(txn['holding_id'])
         symbol = holding['symbol'] if holding else None
+
+        if holding:
+            portfolio = portfolio_service.get_portfolio(holding['portfolio_id'])
+            if not portfolio or portfolio.get('user_id') != session['user_id']:
+                session['status_message'] = '❌ Not authorized'
+                return redirect(url_for('portfolio'))
 
         if portfolio_service.delete_transaction(transaction_id):
             session['status_message'] = '✅ Transaction deleted'

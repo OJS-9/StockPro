@@ -138,6 +138,7 @@
                                 </td>
                                 <td class="px-5 py-4 text-center">
                                     <form method="POST" action="{{ url_for('delete_transaction', transaction_id=txn.transaction_id) }}" class="inline" onsubmit="return confirm('Are you sure you want to delete this transaction?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="text-stone-400 hover:text-accent-down transition-colors" title="Delete transaction">
                                             <span class="material-symbols-outlined text-xl">delete</span>
                                         </button>

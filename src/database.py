@@ -477,7 +477,7 @@ class DatabaseManager:
             cursor = connection.cursor(dictionary=True)
 
             cursor.execute("""
-                SELECT portfolio_id, name, description, created_at, updated_at
+                SELECT portfolio_id, name, description, user_id, created_at, updated_at
                 FROM portfolios
                 WHERE portfolio_id = %s
             """, (portfolio_id,))
