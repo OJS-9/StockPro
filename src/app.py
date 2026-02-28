@@ -10,7 +10,6 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
-from authlib.integrations.flask_client import OAuth
 import os
 import re
 from functools import wraps
@@ -38,14 +37,15 @@ app = Flask(__name__,
             static_folder=str(project_root / 'static'))
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
 
-oauth = OAuth(app)
-oauth.register(
-    name='google',
-    client_id=os.getenv('GOOGLE_CLIENT_ID'),
-    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'},
-)
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            session['next_url'] = request.url
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
 
 
 @app.context_processor
@@ -140,8 +140,6 @@ def login():
         return redirect(url_for('index'))
 
     error = None
-    if request.method == 'GET' and request.args.get('error', '').startswith('google_'):
-        error = 'Google sign-in was cancelled or failed. Try again or sign in with your password.'
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -153,7 +151,7 @@ def login():
             db = get_database_manager()
             user = db.get_user_by_username(username)
 
-            if user and user.get('password_hash') and check_password_hash(user['password_hash'], password):
+            if user and check_password_hash(user['password_hash'], password):
                 next_url = session.get('next_url')
                 session.clear()
                 session['user_id'] = user['user_id']
@@ -214,65 +212,6 @@ def logout():
     """Log out and redirect to login."""
     session.clear()
     return redirect(url_for('login'))
-
-
-@app.route('/login/google')
-def google_login():
-    """Initiate Google OAuth flow."""
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-    redirect_uri = url_for('google_callback', _external=True)
-    return oauth.google.authorize_redirect(redirect_uri)
-
-
-@app.route('/login/google/callback')
-def google_callback():
-    """Handle Google OAuth callback: find or create user, set session, redirect."""
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-    try:
-        token = oauth.google.authorize_access_token()
-    except Exception:
-        return redirect(url_for('login') + '?error=google_denied')
-    user_info = token.get('userinfo')
-    if not user_info:
-        return redirect(url_for('login') + '?error=google_no_userinfo')
-    google_id = user_info.get('sub')
-    email = (user_info.get('email') or '').strip().lower()
-    name = (user_info.get('name') or '').strip() or email
-    if not google_id or not email:
-        return redirect(url_for('login') + '?error=google_missing_data')
-
-    from database import get_database_manager
-    db = get_database_manager()
-
-    user = db.get_user_by_google_id(google_id)
-    if user:
-        pass
-    else:
-        user = db.get_user_by_email(email)
-        if user:
-            db.update_user_google_id(user['user_id'], google_id)
-        else:
-            base_username = re.sub(r'[^a-z0-9._-]', '', name.lower().replace(' ', '.'))[:50] or 'user'
-            username = base_username
-            suffix = 0
-            while db.get_user_by_username(username):
-                suffix += 1
-                username = f"{base_username}{suffix}"
-            user_id = str(uuid.uuid4())
-            db.create_user(user_id=user_id, username=username, email=email, google_id=google_id)
-            user = db.get_user_by_id(user_id)
-
-    if not user:
-        return redirect(url_for('login') + '?error=google_failed')
-
-    next_url = session.get('next_url')
-    session.clear()
-    session['user_id'] = user['user_id']
-    session['username'] = user['username']
-    get_or_create_session_id()
-    return redirect(next_url or url_for('index'))
 
 
 @app.route('/')

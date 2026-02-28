@@ -183,7 +183,7 @@ Tool outputs are truncated (max 5 series items, max 5 news items) before passing
 
 **Research domain:** `reports` (metadata + full text), `report_chunks` (chunks + embeddings as JSON)
 
-**Portfolio domain:** `users` (auth: username, email, password_hash nullable, google_id for OAuth), `portfolios` (per-user), `holdings` (aggregated positions), `transactions` (buy/sell records), `csv_imports` (audit log)
+**Portfolio domain:** `users` (auth), `portfolios` (per-user), `holdings` (aggregated positions), `transactions` (buy/sell records), `csv_imports` (audit log)
 
 Relationships: `users 1→N portfolios 1→N holdings 1→N transactions`, `reports 1→N report_chunks`. All child tables use CASCADE deletes.
 
@@ -226,14 +226,8 @@ FLASK_SECRET_KEY=           # REQUIRED in production — random key per restart 
 Optional:
 ```
 RESEARCH_MAX_WORKERS=3      # ThreadPoolExecutor concurrency
-PLANNER_MAX_SUBJECTS=8     # Max subjects shown to PlannerAgent
-GOOGLE_CLIENT_ID=          # Google OAuth (Authlib). Redirect URI: .../login/google/callback
-GOOGLE_CLIENT_SECRET=      # From Google Cloud Console OAuth 2.0 credentials
+PLANNER_MAX_SUBJECTS=8      # Max subjects shown to PlannerAgent
 ```
-
-## Auth
-
-Session-based auth. Routes: `/login` (GET/POST), `/register` (GET/POST), `/logout`, `/login/google` (redirect to Google), `/login/google/callback` (OAuth callback). Username/password and Google OAuth coexist; existing email accounts are linked when signing in with Google.
 
 ## MCP Configuration
 
@@ -365,7 +359,6 @@ Research depth scales with trade horizon:
 | File | Purpose |
 |---|---|
 | `OVERVIEW.md` | Full product and architecture reference |
-| `DEPLOYMENT.md` | Deployment steps, env vars, Google OAuth redirect URIs (local and production) |
 | `CODE_REVIEW.md` | 33-issue code review with severity and recommendations |
 | `AGENTS.md` | Cursor rules for AI-assisted development |
 | `TOOL_SELECTION.md` | Alpha Vantage MCP tool documentation |
