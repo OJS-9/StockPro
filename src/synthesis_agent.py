@@ -1,29 +1,22 @@
 """
 Synthesis agent that consolidates research outputs into a final report.
-
-The report structure is now adaptive: sections are built from the subjects
-that were actually researched, ordered by plan priority, and framed
-according to trade type.
 """
 
 import os
 from typing import Dict, Any, List
-from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
-from agents import Agent, Runner, trace, ModelSettings
+from google.genai import types
 
-from research_plan import ResearchPlan
-from research_subjects import get_research_subject_by_id
+from src.gemini_runner import run_agent
+from src.research_plan import ResearchPlan
+from src.research_subjects import get_research_subject_by_id
 
 load_dotenv()
 
-# Maximum output tokens for synthesis agent (configurable via env)
-SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS = int(
-    os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000")
-)
+SYNTHESIS_AGENT_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-3.1-pro-preview")
+SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS = int(os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000"))
 
-# Trade-type framing labels used to instruct the synthesis agent
 _TRADE_TYPE_FRAMING = {
     "Day Trade": "an actionable intraday/short-term briefing",
     "Swing Trade": "a focused 1–14 day swing trade thesis",
@@ -35,19 +28,8 @@ class SynthesisAgent:
     """Agent that synthesizes multiple research outputs into a comprehensive report."""
 
     def __init__(self, api_key: str = None):
-        """
-        Initialize the synthesis agent.
-
-        Args:
-            api_key: OpenAI API key (optional)
-        """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "OpenAI API key is required. Set OPENAI_API_KEY environment variable."
-            )
-
-    # ─── Public API ──────────────────────────────────────────────────────────
+        # api_key kept for interface compatibility; Gemini key comes from env
+        pass
 
     def synthesize_report(
         self,
@@ -56,66 +38,32 @@ class SynthesisAgent:
         research_outputs: Dict[str, Dict[str, Any]],
         plan: ResearchPlan,
     ) -> str:
-        """
-        Synthesize all research outputs into a final report.
-
-        Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade
-            research_outputs: Mapping of subject_id → research result dict
-            plan: ResearchPlan used to run this research session
-
-        Returns:
-            Complete synthesized report text
-        """
-        synthesis_prompt = self._build_synthesis_prompt(
-            ticker, trade_type, research_outputs, plan
-        )
-
-        agent = Agent(
-            name="Synthesis Agent",
-            instructions=self._get_synthesis_instructions(ticker, trade_type, plan),
-            model="gpt-4o",
-            tools=[],
-            model_settings=ModelSettings(
-                temperature=0.7,
-                max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
-            ),
-        )
+        """Synthesize all research outputs into a final report."""
+        synthesis_prompt = self._build_synthesis_prompt(ticker, trade_type, research_outputs, plan)
+        system_instructions = self._get_synthesis_instructions(ticker, trade_type, plan)
 
         try:
-            with trace(
-                "Report Synthesis",
-                metadata={
-                    "ticker": ticker,
-                    "trade_type": trade_type,
-                    "subjects_count": str(len(research_outputs)),
-                },
-            ):
-                def _run():
-                    return Runner.run_sync(agent, synthesis_prompt, max_turns=10)
-
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    result = executor.submit(_run).result()
-
-            if hasattr(result, "final_output"):
-                return result.final_output
-            elif hasattr(result, "output"):
-                return result.output
-            elif isinstance(result, str):
-                return result
-            return str(result)
-
+            return run_agent(
+                model=SYNTHESIS_AGENT_MODEL,
+                system_instruction=system_instructions,
+                tools=[],
+                tool_handlers={},
+                messages=[
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=synthesis_prompt)],
+                    )
+                ],
+                max_turns=3,
+                temperature=0.7,
+                max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
+            )
         except Exception as e:
-            error_msg = f"Error synthesizing report: {str(e)}"
+            error_msg = f"Error synthesizing report: {e}"
             print(error_msg)
             return error_msg
 
-    # ─── Instructions ────────────────────────────────────────────────────────
-
-    def _get_synthesis_instructions(
-        self, ticker: str, trade_type: str, plan: ResearchPlan
-    ) -> str:
+    def _get_synthesis_instructions(self, ticker: str, trade_type: str, plan: ResearchPlan) -> str:
         from src.date_utils import get_datetime_context_string
 
         datetime_context = get_datetime_context_string()
@@ -153,25 +101,7 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
 - If information is missing for a section, note it clearly
 - Ensure the report is comprehensive and fully utilizes all research findings"""
 
-    # ─── Section Builder ─────────────────────────────────────────────────────
-
-    def _build_report_sections(
-        self, trade_type: str, subject_ids_run: List[str]
-    ) -> str:
-        """
-        Build a dynamic ordered section list for the report.
-
-        Always opens with Executive Summary and closes with Risk Factors
-        (if researched) and Sources.
-
-        Args:
-            trade_type: Type of trade
-            subject_ids_run: Ordered list of subject IDs that were researched
-
-        Returns:
-            Numbered section list as a string for injection into the prompt
-        """
-        # Build subject name map for labelling
+    def _build_report_sections(self, trade_type: str, subject_ids_run: List[str]) -> str:
         subject_names: Dict[str, str] = {}
         subject_descriptions: Dict[str, str] = {}
         for sid in subject_ids_run:
@@ -184,21 +114,15 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
                 subject_descriptions[sid] = ""
 
         sections = ["1. **Executive Summary** — Key findings, recommendation, and top metrics"]
-
         section_num = 2
         for sid in subject_ids_run:
             if sid == "risk_factors":
-                # Risk Factors goes near the end; skip here and add below
                 continue
             name = subject_names.get(sid, sid)
             desc = subject_descriptions.get(sid, "")
-            sections.append(
-                f"{section_num}. **{name}**"
-                + (f" — {desc}" if desc else "")
-            )
+            sections.append(f"{section_num}. **{name}**" + (f" — {desc}" if desc else ""))
             section_num += 1
 
-        # Risk Factors near the end if it was researched
         if "risk_factors" in subject_ids_run:
             sections.append(
                 f"{section_num}. **Risk Factors** — Key risks: operational, financial, regulatory, and macro"
@@ -214,8 +138,6 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
 
         return "\n".join(sections)
 
-    # ─── Prompt Builder ──────────────────────────────────────────────────────
-
     def _build_synthesis_prompt(
         self,
         ticker: str,
@@ -228,11 +150,7 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
         datetime_context = get_datetime_context_string()
         framing = _TRADE_TYPE_FRAMING.get(trade_type, "a research report")
 
-        # Use plan subject order for output ordering; fall back to dict order
-        ordered_ids = [
-            sid for sid in plan.selected_subject_ids if sid in research_outputs
-        ]
-        # Include any subject not in the plan order (safety net)
+        ordered_ids = [sid for sid in plan.selected_subject_ids if sid in research_outputs]
         for sid in research_outputs:
             if sid not in ordered_ids:
                 ordered_ids.append(sid)

@@ -1,6 +1,6 @@
 # StockIntel — Project Overview
 
-> AI-powered multi-agent stock research platform that orchestrates specialized research agents, integrates financial data APIs with real-time web research, and provides an interactive chat interface for exploring investment opportunities.
+StockIntel is an AI-powered multi-agent stock research platform that orchestrates specialized research agents, integrates financial data APIs with real-time web research, and provides an interactive chat interface for exploring investment opportunities. It also includes a portfolio tracker supporting both equities and crypto assets.
 
 ---
 

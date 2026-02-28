@@ -24,9 +24,9 @@ class ResearchOrchestrator:
         Initialize the research orchestrator.
 
         Args:
-            api_key: OpenAI API key (optional)
+            api_key: Kept for interface compatibility; not used (Gemini key comes from env).
         """
-        self.api_key = api_key
+        pass
 
     def run_parallel_research(
         self,
@@ -72,7 +72,7 @@ class ResearchOrchestrator:
                     continue
 
                 focus_hint = plan.subject_focus.get(subject_id, "")
-                agent = SpecializedResearchAgent(api_key=self.api_key)
+                agent = SpecializedResearchAgent()
                 future = executor.submit(
                     agent.research_subject,
                     ticker,
