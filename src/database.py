@@ -97,12 +97,30 @@ class DatabaseManager:
                     user_id VARCHAR(36) PRIMARY KEY,
                     username VARCHAR(80) NOT NULL UNIQUE,
                     email VARCHAR(120) NOT NULL UNIQUE,
-                    password_hash VARCHAR(255) NOT NULL,
+                    password_hash VARCHAR(255) NULL,
+                    google_id VARCHAR(255) NULL UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_username (username),
-                    INDEX idx_email (email)
+                    INDEX idx_email (email),
+                    INDEX idx_google_id (google_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
+
+            # Migration: add google_id and make password_hash nullable if table already existed
+            cursor.execute("""
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'users'
+                  AND COLUMN_NAME = 'google_id'
+            """)
+            (google_id_exists,) = cursor.fetchone()
+            if not google_id_exists:
+                cursor.execute("""
+                    ALTER TABLE users
+                    MODIFY COLUMN password_hash VARCHAR(255) NULL,
+                    ADD COLUMN google_id VARCHAR(255) NULL UNIQUE,
+                    ADD INDEX idx_google_id (google_id)
+                """)
 
             # Create portfolios table
             cursor.execute("""
@@ -523,17 +541,24 @@ class DatabaseManager:
 
     # ==================== User Methods ====================
 
-    def create_user(self, user_id: str, username: str, email: str, password_hash: str):
-        """Create a new user."""
+    def create_user(
+        self,
+        user_id: str,
+        username: str,
+        email: str,
+        password_hash: Optional[str] = None,
+        google_id: Optional[str] = None,
+    ):
+        """Create a new user. password_hash and google_id are optional (e.g. Google-only users)."""
         connection = None
         try:
             connection = self.get_connection()
             cursor = connection.cursor()
 
             cursor.execute("""
-                INSERT INTO users (user_id, username, email, password_hash)
-                VALUES (%s, %s, %s, %s)
-            """, (user_id, username, email, password_hash))
+                INSERT INTO users (user_id, username, email, password_hash, google_id)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, username, email, password_hash, google_id))
 
             connection.commit()
 
@@ -554,7 +579,7 @@ class DatabaseManager:
             cursor = connection.cursor(dictionary=True)
 
             cursor.execute("""
-                SELECT user_id, username, email, password_hash, created_at
+                SELECT user_id, username, email, password_hash, google_id, created_at
                 FROM users
                 WHERE username = %s
             """, (username,))
@@ -576,7 +601,7 @@ class DatabaseManager:
             cursor = connection.cursor(dictionary=True)
 
             cursor.execute("""
-                SELECT user_id, username, email, password_hash, created_at
+                SELECT user_id, username, email, password_hash, google_id, created_at
                 FROM users
                 WHERE user_id = %s
             """, (user_id,))
@@ -585,6 +610,72 @@ class DatabaseManager:
 
         except Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Get a user by email."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT user_id, username, email, password_hash, google_id, created_at
+                FROM users
+                WHERE email = %s
+            """, (email,))
+
+            return cursor.fetchone()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def get_user_by_google_id(self, google_id: str) -> Optional[Dict[str, Any]]:
+        """Get a user by Google OAuth sub (google_id)."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT user_id, username, email, password_hash, google_id, created_at
+                FROM users
+                WHERE google_id = %s
+            """, (google_id,))
+
+            return cursor.fetchone()
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def update_user_google_id(self, user_id: str, google_id: str):
+        """Link a Google account to an existing user."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                UPDATE users SET google_id = %s WHERE user_id = %s
+            """, (google_id, user_id))
+
+            connection.commit()
+
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to update user: {e}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()
