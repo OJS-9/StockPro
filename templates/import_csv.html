@@ -63,6 +63,7 @@
 
             <!-- Upload Form -->
             <form method="POST" action="{{ url_for('import_csv') }}" enctype="multipart/form-data" class="bg-surface-dark rounded-xl border border-border-dark">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="p-6">
                     <label for="csv_file" class="block">
                         <div class="border-2 border-dashed border-border-dark rounded-xl p-12 text-center hover:border-primary transition-colors cursor-pointer" id="dropzone">
