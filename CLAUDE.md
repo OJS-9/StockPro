@@ -15,15 +15,15 @@ An AI-powered multi-agent stock research platform that orchestrates specialized 
 | Layer | Technology |
 |---|---|
 | Backend | Flask (Python 3.10+) |
-| AI / LLM | OpenAI Agents SDK (`openai-agents`), GPT-4o |
-| Embeddings | OpenAI `text-embedding-3-small` (1536d) |
+| AI / LLM | Google GenAI SDK (`google-genai`), Gemini 3.1 Pro / 3 Flash |
+| Embeddings | Gemini `gemini-embedding-001` (3072d) |
 | Financial data | Alpha Vantage MCP (HTTP, JSON-RPC) |
 | Web research | Perplexity Sonar API |
 | Crypto prices | CoinGecko API |
 | Database | MySQL (connection pool, pool_size=5) |
 | Vector search | NumPy cosine similarity (brute-force) |
 | Frontend | Jinja2 templates, Tailwind CSS (CDN), Marked.js |
-| Async compat | `nest_asyncio` for Flask, `AsyncOpenAI` for API calls |
+| Async compat | `nest_asyncio` for Flask |
 
 ## Project Structure
 
@@ -102,7 +102,7 @@ PlannerAgent
     ▼
 ResearchOrchestrator
     │  ── ThreadPoolExecutor (3 workers, configurable via RESEARCH_MAX_WORKERS)
-    │  ── each worker creates its own asyncio event loop via Runner.run_sync
+    │  ── each worker calls gemini_runner.run_agent() synchronously
     │
     ├──▶ SpecializedAgent: subject A ──┐
     ├──▶ SpecializedAgent: subject B ──┤
@@ -122,7 +122,7 @@ SynthesisAgent
 ReportStorage Pipeline
     │  ── ReportChunker → EmbeddingService → DatabaseManager
     │  ── 600-token chunks, 100-token overlap, section-aware splitting
-    │  ── text-embedding-3-small (1536d), stored as JSON in MySQL
+    │  ── text-embedding-004 (768d), stored as JSON in MySQL
     │
     ▼
 ReportChatAgent (RAG-lite follow-up Q&A)
@@ -132,14 +132,14 @@ ReportChatAgent (RAG-lite follow-up Q&A)
 
 ### Agent Inventory
 
-| Agent | File | Role | Tools | Output Tokens |
-|---|---|---|---|---|
-| StockResearchAgent | `agent.py` | Orchestrate conversation, trigger report | `generate_report` | 600 |
-| PlannerAgent | `planner_agent.py` | Select & prioritize research subjects | None (JSON response) | 1,200 |
-| SpecializedResearchAgent | `specialized_agent.py` | Deep-dive one subject | 6 MCP + Perplexity | 1,500 |
-| SynthesisAgent | `synthesis_agent.py` | Merge outputs into cohesive report | None (synthesis) | 8,000 |
-| ReportChatAgent | `report_chat_agent.py` | RAG Q&A on report chunks | None (prompt injection) | — |
-| ConversationHandlerAgent | `conversation_handler_agent.py` | Enhanced Q&A with raw research outputs | None (prompt injection) | — |
+| Agent | File | Model | Role | Tools | Output Tokens |
+|---|---|---|---|---|---|
+| StockResearchAgent | `agent.py` | gemini-3-flash-preview | Orchestrate conversation, trigger report | `generate_report` | 600 |
+| PlannerAgent | `planner_agent.py` | gemini-3-flash-preview | Select & prioritize research subjects | None (JSON response) | 1,200 |
+| SpecializedResearchAgent | `specialized_agent.py` | gemini-3.1-pro-preview | Deep-dive one subject | 6 MCP + Perplexity | 1,500 |
+| SynthesisAgent | `synthesis_agent.py` | gemini-3.1-pro-preview | Merge outputs into cohesive report | None (synthesis) | 8,000 |
+| ReportChatAgent | `report_chat_agent.py` | gemini-3-flash-preview | RAG Q&A on report chunks | None (prompt injection) | — |
+| ConversationHandlerAgent | `conversation_handler_agent.py` | gemini-3-flash-preview | Enhanced Q&A with raw research outputs | None (prompt injection) | — |
 
 ### Research Subjects (12 total)
 
@@ -207,7 +207,7 @@ python -m pytest test_*.py
 
 Required in `.env`:
 ```
-OPENAI_API_KEY=
+GEMINI_API_KEY=
 PERPLEXITY_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 MYSQL_HOST=localhost

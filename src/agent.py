@@ -1,5 +1,6 @@
 """
-OpenAI Agents SDK agent setup with MCP integration.
+Stock Research Agent — orchestrates conversation, clarifying questions,
+and triggers report generation via the Gemini runner.
 """
 
 import os
@@ -7,336 +8,174 @@ import json
 import re
 import time
 import uuid
-from typing import Optional, Dict, Any, List, Any as AnyType
+from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
-from agents import Agent, Runner, Tool, trace, ModelSettings
-from agents.tool import FunctionTool
+from google import genai
+from google.genai import types
 
-from research_prompt import get_orchestration_instructions, get_followup_question_prompt
+from research_prompt import get_orchestration_instructions
 from research_orchestrator import ResearchOrchestrator
 from synthesis_agent import SynthesisAgent
 from report_storage import ReportStorage
 from report_chat_agent import ReportChatAgent
 from planner_agent import PlannerAgent
 from research_plan import ResearchPlan
+from gemini_runner import run_agent, _get_client
 
-# Load environment variables
 load_dotenv()
 
-# Orchestrator configuration (token & turn limits, history controls)
-ORCHESTRATOR_MAX_OUTPUT_TOKENS = int(
-    os.getenv("ORCHESTRATOR_MAX_OUTPUT_TOKENS", "600")
-)
-ORCHESTRATOR_MAX_TURNS = int(
-    os.getenv("ORCHESTRATOR_MAX_TURNS", "6")
-)
-ORCHESTRATOR_MAX_HISTORY_MESSAGES = int(
-    os.getenv("ORCHESTRATOR_MAX_HISTORY_MESSAGES", "4")
-)
-ORCHESTRATOR_MAX_MESSAGE_CHARS = int(
-    os.getenv("ORCHESTRATOR_MAX_MESSAGE_CHARS", "1000")
-)
-ORCHESTRATOR_DEBUG_TOKEN_LOG = os.getenv(
-    "ORCHESTRATOR_DEBUG_TOKEN_LOG", "false"
-).lower() == "true"
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-3-flash-preview")
+ORCHESTRATOR_MAX_OUTPUT_TOKENS = int(os.getenv("ORCHESTRATOR_MAX_OUTPUT_TOKENS", "600"))
+ORCHESTRATOR_MAX_TURNS = int(os.getenv("ORCHESTRATOR_MAX_TURNS", "6"))
+ORCHESTRATOR_MAX_HISTORY_MESSAGES = int(os.getenv("ORCHESTRATOR_MAX_HISTORY_MESSAGES", "4"))
+ORCHESTRATOR_MAX_MESSAGE_CHARS = int(os.getenv("ORCHESTRATOR_MAX_MESSAGE_CHARS", "1000"))
+ORCHESTRATOR_DEBUG_TOKEN_LOG = os.getenv("ORCHESTRATOR_DEBUG_TOKEN_LOG", "false").lower() == "true"
 
 
 class StockResearchAgent:
-    """Stock research agent using OpenAI Agents SDK with Alpha Vantage MCP."""
-    
+    """Stock research agent using Google Gemini with tool-based orchestration."""
+
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the stock research agent.
-        
-        Args:
-            api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var.
-        """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable.")
-        
-        self.agent = None
+        # api_key kept for interface compatibility; Gemini key comes from env
         self.conversation_history: List[Dict[str, str]] = []
-        self.use_fallback = False
         self.current_ticker: Optional[str] = None
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
         self.current_plan: Optional[ResearchPlan] = None
-        self.research_orchestrator = ResearchOrchestrator(api_key=self.api_key)
-        self.synthesis_agent = SynthesisAgent(api_key=self.api_key)
-        self.planner_agent = PlannerAgent(api_key=self.api_key)
-        self.report_storage = ReportStorage()
-        self.chat_agent = ReportChatAgent(api_key=self.api_key)
-        
-        # Initialize the agent
-        self._initialize_agent()
-    
-    def _initialize_agent(self):
-        """Initialize the orchestration agent with report generation tool."""
-        # Create tool for triggering report generation
-        generate_report_tool = self._create_generate_report_tool()
-        
-        # Create Agent instance with Agents SDK
-        # Main agent has one orchestration tool: generate_report
-        # Instructions will be set per-run via system message
-        self.agent = Agent(
-            name="Stock Research Orchestrator",
-            instructions="You are a stock research orchestrator. Your role is to guide conversations, ask clarifying questions, and coordinate research. You do not perform research yourself - specialized agents handle that.",
-            model="gpt-4o",
-            tools=[generate_report_tool],  # Only orchestration tool: generate_report
-            model_settings=ModelSettings(
-                temperature=0.7,
-                max_output_tokens=ORCHESTRATOR_MAX_OUTPUT_TOKENS,
-            ),
-        )
-    
-    def _create_generate_report_tool(self) -> FunctionTool:
-        """Create a tool that allows the orchestrator to trigger report generation."""
-        async def generate_report_tool_function(context, tool_input: Dict[str, Any]) -> str:
-            """
-            Trigger report generation when orchestrator has enough information.
-            
-            Args:
-                context: Tool context (provided by SDK)
-                tool_input: Tool input (can be empty dict, context is extracted from conversation)
-            
-            Returns:
-                Status message about report generation
-            """
-            try:
-                # Extract context from conversation history
-                context_str = ""
-                for msg in self.conversation_history:
-                    if msg.get('role') == 'user':
-                        context_str += f"User: {msg.get('content', '')}\n"
-                
-                # Generate report (this is synchronous but called from async function - OK)
-                report_text = self.generate_report(context=context_str)
-                report_id = self.current_report_id
 
-                return (
-                    f"Report generated successfully! Report ID: {report_id[:8]}...\n\n"
-                    "The comprehensive research report has been created and is ready to view."
-                )
-            except Exception as e:
-                return f"Error generating report: {str(e)}"
-        
-        # Create tool schema
-        tool_schema = {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-        
-        return FunctionTool(
+        self.research_orchestrator = ResearchOrchestrator()
+        self.synthesis_agent = SynthesisAgent()
+        self.planner_agent = PlannerAgent()
+        self.report_storage = ReportStorage()
+        self.chat_agent = ReportChatAgent()
+
+        # Build the generate_report tool declaration and handler
+        self._generate_report_tool = self._make_generate_report_tool()
+        self._tool_handlers = {"generate_report": self._generate_report_handler}
+
+    def _make_generate_report_tool(self) -> types.Tool:
+        declaration = types.FunctionDeclaration(
             name="generate_report",
             description=(
                 "Trigger report generation when you have gathered enough information from the user. "
                 "Use this tool when you have asked 1-2 relevant questions and the user has provided sufficient context. "
                 "This will activate specialized research agents to perform comprehensive analysis and generate the final report. "
-                "Only call this tool when you are ready to proceed - don't call it immediately after asking questions."
+                "Only call this tool when you are ready to proceed — don't call it immediately after asking questions."
             ),
-            params_json_schema=tool_schema,
-            on_invoke_tool=generate_report_tool_function,
+            parameters=types.Schema(type=types.Type.OBJECT, properties={}, required=[]),
         )
-    
+        return types.Tool(function_declarations=[declaration])
+
+    def _generate_report_handler(self, args: Dict[str, Any]) -> str:
+        """Handler called when the orchestrator invokes the generate_report tool."""
+        try:
+            context_str = "\n".join(
+                f"User: {msg['content']}"
+                for msg in self.conversation_history
+                if msg.get("role") == "user"
+            )
+            self.generate_report(context=context_str)
+            report_id = self.current_report_id or ""
+            return (
+                f"Report generated successfully! Report ID: {report_id[:8]}...\n\n"
+                "The comprehensive research report has been created and is ready to view."
+            )
+        except Exception as e:
+            return f"Error generating report: {e}"
+
     def start_research(self, ticker: str, trade_type: str) -> str:
-        """
-        Start a research session for a given ticker and trade type.
-        
-        Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade (Day Trade, Swing Trade, or Investment)
-        
-        Returns:
-            Initial response from the agent (may include follow-up questions)
-        """
+        """Start a research session for a given ticker and trade type."""
         self.current_ticker = ticker.upper()
         self.current_trade_type = trade_type
-        
-        # Get orchestration instructions
+
         system_instructions = get_orchestration_instructions(ticker, trade_type)
-        
-        # Create initial user message
         user_message = f"I want to research {ticker} for a {trade_type} strategy. Please help me create a fundamental research report."
-        
-        # Store in conversation history
+
         self.conversation_history = [
             {"role": "system", "content": system_instructions},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_message},
         ]
-        
-        # Get agent response (may ask followup questions)
-        response = self._get_agent_response(user_message, system_instructions)
-        
-        return response
-    
+
+        return self._get_agent_response(user_message, system_instructions)
+
     def continue_conversation(self, user_response: str) -> str:
-        """
-        Continue the conversation with a user response.
-        
-        Args:
-            user_response: User's response to agent's question or instruction
-        
-        Returns:
-            Agent's response
-        """
-        # Add user message to history
+        """Continue the conversation with a user response."""
         self.conversation_history.append({"role": "user", "content": user_response})
-        
-        # Get system instructions from history
+
         system_instructions = next(
             (msg["content"] for msg in self.conversation_history if msg["role"] == "system"),
-            ""
+            "",
         )
-        
-        # Get agent response
-        response = self._get_agent_response(user_response, system_instructions)
-        
-        return response
-    
+
+        return self._get_agent_response(user_response, system_instructions)
+
     def _get_agent_response(self, user_message: str, system_instructions: str) -> str:
-        """
-        Get agent response (orchestration agent - no tools needed).
-        
-        Args:
-            user_message: Current user message
-            system_instructions: System instructions
-        
-        Returns:
-            Agent's response
-        """
-        if not self.agent:
-            return "Error: Agent not initialized. Please check your configuration."
-        
+        """Run the orchestration agent for one conversational turn."""
         try:
-            # Build messages for Runner
-            messages: List[Dict[str, Any]] = []
+            # Build contents from recent conversation history (exclude system messages)
+            recent = self.conversation_history[-ORCHESTRATOR_MAX_HISTORY_MESSAGES:]
+            contents: List[types.Content] = []
 
-            # Add recent conversation history (excluding system messages; we'll set instructions separately)
-            recent_history = self.conversation_history[-ORCHESTRATOR_MAX_HISTORY_MESSAGES:]
-            for msg in recent_history:
-                if msg["role"] != "system":
-                    content = msg["content"]
-                    if isinstance(content, str) and len(content) > ORCHESTRATOR_MAX_MESSAGE_CHARS:
-                        content = content[:ORCHESTRATOR_MAX_MESSAGE_CHARS] + "... [truncated]"
-                    messages.append({
-                        "role": msg["role"],
-                        "content": content,
-                    })
+            for msg in recent:
+                if msg["role"] == "system":
+                    continue
+                content = msg["content"]
+                if isinstance(content, str) and len(content) > ORCHESTRATOR_MAX_MESSAGE_CHARS:
+                    content = content[:ORCHESTRATOR_MAX_MESSAGE_CHARS] + "... [truncated]"
+                role = "model" if msg["role"] == "assistant" else "user"
+                contents.append(
+                    types.Content(role=role, parts=[types.Part.from_text(text=content)])
+                )
 
-            # Add current user message (also truncated defensively)
+            # Ensure current user message is the last entry
             current_content = user_message
             if isinstance(current_content, str) and len(current_content) > ORCHESTRATOR_MAX_MESSAGE_CHARS:
                 current_content = current_content[:ORCHESTRATOR_MAX_MESSAGE_CHARS] + "... [truncated]"
-            messages.append({
-                "role": "user",
-                "content": current_content,
-            })
+            if not contents or contents[-1].role != "user":
+                contents.append(
+                    types.Content(role="user", parts=[types.Part.from_text(text=current_content)])
+                )
 
-            # Create agent with updated instructions (include generate_report tool)
-            agent_with_instructions = Agent(
-                name=self.agent.name,
-                instructions=system_instructions,
-                model=self.agent.model,
-                tools=self.agent.tools,  # Include generate_report tool
-                model_settings=self.agent.model_settings
+            if ORCHESTRATOR_DEBUG_TOKEN_LOG:
+                print(f"[Orchestrator] Approx input chars: {len(str(contents))}, history_messages={len(recent)}")
+
+            assistant_message = _run_agent_with_retry(
+                model=ORCHESTRATOR_MODEL,
+                system_instruction=system_instructions,
+                tools=[self._generate_report_tool],
+                tool_handlers=self._tool_handlers,
+                contents=contents,
+                max_turns=ORCHESTRATOR_MAX_TURNS,
+                temperature=0.7,
+                max_output_tokens=ORCHESTRATOR_MAX_OUTPUT_TOKENS,
             )
 
-            # Optional debug logging for approximate token usage
             if ORCHESTRATOR_DEBUG_TOKEN_LOG:
-                approx_input_chars = len(str(messages))
-                print(
-                    f"[Orchestrator] Approx input chars: {approx_input_chars}, "
-                    f"history_messages={len(recent_history)}"
-                )
+                print(f"[Orchestrator] Approx output chars: {len(str(assistant_message))}")
 
-            # Wrap execution with trace for monitoring
-            with trace("Stock Research Agent Run", metadata={
-                "ticker": self._extract_ticker_from_history(),
-                "trade_type": self._extract_trade_type_from_history()
-            }):
-                # Run agent with Runner using a small retry/backoff on rate limits
-                result = _run_agent_with_retry(
-                    agent_with_instructions,
-                    messages if len(messages) > 1 else current_content,
-                    max_turns=ORCHESTRATOR_MAX_TURNS,
-                )
-            
-            # Extract final output from result
-            if hasattr(result, 'final_output'):
-                assistant_message = result.final_output
-            elif hasattr(result, 'output'):
-                assistant_message = result.output
-            elif isinstance(result, str):
-                assistant_message = result
-            else:
-                assistant_message = str(result)
-
-            # Optional debug logging for approximate output size
-            if ORCHESTRATOR_DEBUG_TOKEN_LOG:
-                approx_output_chars = len(str(assistant_message))
-                print(f"[Orchestrator] Approx output chars: {approx_output_chars}")
-
-            # Update conversation history
             self.conversation_history.append({"role": "assistant", "content": assistant_message})
-
             return assistant_message
-            
+
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
+            error_msg = f"Error generating response: {e}"
             print(f"Agent execution error: {e}")
             return error_msg
-    
-    def _extract_ticker_from_history(self) -> str:
-        """Extract ticker from conversation history if available."""
-        for msg in self.conversation_history:
-            if msg["role"] == "system" and "ticker" in msg.get("content", "").lower():
-                # Try to extract ticker from system message
-                content = msg.get("content", "")
-                # Simple extraction - look for patterns like "AAPL" or "ticker: AAPL"
-                match = re.search(r"\b([A-Z]{1,5})\b", content)
-                if match:
-                    return match.group(1)
-        return "unknown"
-    
-    def _extract_trade_type_from_history(self) -> str:
-        """Extract trade type from conversation history if available."""
-        for msg in self.conversation_history:
-            if msg["role"] == "system":
-                content = msg.get("content", "").lower()
-                if "day trade" in content:
-                    return "Day Trade"
-                elif "swing trade" in content:
-                    return "Swing Trade"
-                elif "investment" in content:
-                    return "Investment"
-        return "unknown"
-    
+
     def generate_report(self, context: str = "") -> str:
-        """
-        Generate a research report using parallel agents after followup questions are answered.
-        
-        Args:
-            context: Additional context from followup questions
-        
-        Returns:
-            Generated report text and report_id
-        """
+        """Generate a research report using parallel agents."""
         if not self.current_ticker or not self.current_trade_type:
             return "Error: No active research session. Please start research first."
-        
+
         ticker = self.current_ticker
         trade_type = self.current_trade_type
-        
+
         print(f"\n{'='*60}")
         print(f"Starting parallel research for {ticker} ({trade_type})")
         print(f"{'='*60}\n")
 
         try:
-            # Step 1: Build research plan
             print(f"{'='*60}")
             print("Building research plan with PlannerAgent...")
             print(f"{'='*60}\n")
@@ -353,12 +192,8 @@ class StockResearchAgent:
                 + ", ".join(plan.selected_subject_ids)
             )
 
-            # Step 2: Run parallel research
-            research_outputs = self.research_orchestrator.run_parallel_research(
-                plan=plan,
-            )
+            research_outputs = self.research_orchestrator.run_parallel_research(plan=plan)
 
-            # Step 3: Synthesize report
             print(f"\n{'='*60}")
             print("Synthesizing research findings into final report...")
             print(f"{'='*60}\n")
@@ -370,11 +205,9 @@ class StockResearchAgent:
                 plan=plan,
             )
 
-            # Set display-facing state immediately so the report renders even if storage fails
             self.last_report_text = report_text
-            self.current_report_id = str(uuid.uuid4())  # temp ID — guarantees display works
+            self.current_report_id = str(uuid.uuid4())
 
-            # Step 4: Store report with chunks and embeddings
             print(f"\n{'='*60}")
             print("Storing report with chunking and embeddings...")
             print(f"{'='*60}\n")
@@ -393,40 +226,29 @@ class StockResearchAgent:
                     report_text=report_text,
                     metadata=metadata,
                 )
-                self.current_report_id = report_id  # overwrite temp ID with real DB ID
+                self.current_report_id = report_id
                 print(f"\n{'='*60}")
-                print(f"✓ Report generated and stored: {report_id}")
+                print(f"Report generated and stored: {report_id}")
                 print(f"{'='*60}\n")
             except Exception as storage_err:
-                print(
-                    f"⚠ Report storage failed (display will still work, RAG chat disabled): {storage_err}"
-                )
+                print(f"Report storage failed (display will still work, RAG chat disabled): {storage_err}")
 
             return report_text
-        
+
         except Exception as e:
-            error_msg = f"Error generating report: {str(e)}"
+            error_msg = f"Error generating report: {e}"
             print(error_msg)
             return error_msg
-    
+
     def chat_with_report(self, question: str) -> str:
-        """
-        Chat with the current report using RAG-lite.
-        
-        Args:
-            question: User's question about the report
-        
-        Returns:
-            Agent's answer based on report content
-        """
+        """Chat with the current report using RAG-lite."""
         if not self.current_report_id:
             return "Error: No report available. Please generate a report first."
-        
         return self.chat_agent.chat_with_report(
             report_id=self.current_report_id,
             question=question,
         )
-    
+
     def reset_conversation(self):
         """Reset the conversation history."""
         self.conversation_history = []
@@ -438,61 +260,56 @@ class StockResearchAgent:
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
-    """Heuristic check for OpenAI-style rate limit errors (429 / rate_limit)."""
-    status = getattr(exc, "status_code", None)
+    """Heuristic check for Gemini rate limit errors."""
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
     if status == 429:
         return True
     message = str(exc).lower()
-    return "rate limit" in message or "429" in message
+    return "resource exhausted" in message or "rate limit" in message or "429" in message
 
 
 def _run_agent_with_retry(
-    agent: Agent,
-    messages_or_prompt: AnyType,
+    model: str,
+    system_instruction: str,
+    tools: list,
+    tool_handlers: dict,
+    contents: list,
     max_turns: int,
-) -> AnyType:
-    """
-    Run an agent with a small retry/backoff loop for rate limit errors.
-    
-    This keeps the logic localized and avoids leaking retries into callers.
-    """
+    temperature: float,
+    max_output_tokens: int,
+) -> str:
     max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
     base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
     last_exc: Optional[Exception] = None
 
     for attempt in range(max_retries):
         try:
-            return Runner.run_sync(agent, messages_or_prompt, max_turns=max_turns)
-        except Exception as exc:  # noqa: BLE001
+            return run_agent(
+                model=model,
+                system_instruction=system_instruction,
+                tools=tools,
+                tool_handlers=tool_handlers,
+                messages=contents,
+                max_turns=max_turns,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+                thinking_budget=0,
+            )
+        except Exception as exc:
             last_exc = exc
-            is_rate_limit = _is_rate_limit_error(exc)
-            is_last_attempt = attempt == max_retries - 1
-            if not is_rate_limit or is_last_attempt:
+            if not _is_rate_limit_error(exc) or attempt == max_retries - 1:
                 raise
-            delay = base_delay * (2**attempt)
+            delay = base_delay * (2 ** attempt)
             print(
                 f"[Orchestrator] Rate limit encountered, retrying in {delay:.1f}s "
                 f"(attempt {attempt + 1}/{max_retries})"
             )
             time.sleep(delay)
 
-    # Should not reach here, but raise the last exception if we do
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("Unknown error in _run_agent_with_retry")
 
 
 def create_agent(api_key: Optional[str] = None) -> StockResearchAgent:
-    """
-    Create a new stock research agent instance.
-    
-    This is also a key point for debugging how the agent is constructed.
-    
-    Args:
-        api_key: OpenAI API key (optional, will use env var if not provided)
-    
-    Returns:
-        StockResearchAgent instance
-    """
     return StockResearchAgent(api_key=api_key)
-
