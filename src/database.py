@@ -1044,7 +1044,8 @@ class DatabaseManager:
             raise RuntimeError(f"Failed to log CSV import: {e}")
         finally:
             if connection and connection.is_connected():
-                cursor.close()                connection.close()
+                cursor.close()                
+                connection.close()
 
 
 # Global instance
