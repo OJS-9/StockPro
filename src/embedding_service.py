@@ -31,6 +31,8 @@ class EmbeddingService:
                 model=self.model,
                 contents=text,
             )
+            if not result.embeddings:
+                raise RuntimeError("Embedding API returned no embeddings")
             return result.embeddings[0].values
         except Exception as e:
             raise RuntimeError(f"Failed to create embedding: {e}")

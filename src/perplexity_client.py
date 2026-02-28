@@ -64,7 +64,12 @@ class PerplexityClient:
                     },
                 )
                 resp.raise_for_status()
-                return resp.json()["choices"][0]["message"]["content"] or ""
+                data = resp.json()
+                choices = data.get("choices") or []
+                if not choices:
+                    return ""
+                msg = choices[0].get("message") or {}
+                return msg.get("content") or ""
         except httpx.TimeoutException as e:
             return (
                 f"[Perplexity timeout] Research request exceeded "

@@ -14,14 +14,14 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from research_prompt import get_orchestration_instructions
-from research_orchestrator import ResearchOrchestrator
-from synthesis_agent import SynthesisAgent
-from report_storage import ReportStorage
-from report_chat_agent import ReportChatAgent
-from planner_agent import PlannerAgent
-from research_plan import ResearchPlan
-from gemini_runner import run_agent, _get_client
+from src.research_prompt import get_orchestration_instructions
+from src.research_orchestrator import ResearchOrchestrator
+from src.synthesis_agent import SynthesisAgent
+from src.report_storage import ReportStorage
+from src.report_chat_agent import ReportChatAgent
+from src.planner_agent import PlannerAgent
+from src.research_plan import ResearchPlan
+from src.gemini_runner import run_agent, _get_client
 
 load_dotenv()
 
@@ -130,11 +130,17 @@ class StockResearchAgent:
                     types.Content(role=role, parts=[types.Part.from_text(text=content)])
                 )
 
-            # Ensure current user message is the last entry
+            # Ensure current user message is the last entry (append if missing or different)
             current_content = user_message
             if isinstance(current_content, str) and len(current_content) > ORCHESTRATOR_MAX_MESSAGE_CHARS:
                 current_content = current_content[:ORCHESTRATOR_MAX_MESSAGE_CHARS] + "... [truncated]"
-            if not contents or contents[-1].role != "user":
+            last_is_current_user = (
+                contents
+                and contents[-1].role == "user"
+                and contents[-1].parts
+                and getattr(contents[-1].parts[0], "text", None) == current_content
+            )
+            if not last_is_current_user:
                 contents.append(
                     types.Content(role="user", parts=[types.Part.from_text(text=current_content)])
                 )

@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 
 from google.genai import types
 
-from gemini_runner import run_agent
-from research_plan import ResearchPlan
-from research_subjects import get_research_subject_by_id
+from src.gemini_runner import run_agent
+from src.research_plan import ResearchPlan
+from src.research_subjects import get_research_subject_by_id
 
 load_dotenv()
 

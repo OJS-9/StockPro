@@ -77,6 +77,11 @@ def run_agent(
             config=config,
         )
 
+        if not response.candidates:
+            # Empty or blocked response — return last text or fallback
+            fallback = getattr(response, "text", None) or ""
+            return fallback if fallback else last_response_text or "[No response from model]"
+
         candidate = response.candidates[0]
         contents.append(candidate.content)
 
@@ -86,7 +91,7 @@ def run_agent(
         if not fn_calls:
             # No tool calls — extract text and return
             text_parts = [p.text for p in candidate.content.parts if hasattr(p, "text") and p.text]
-            return "\n".join(text_parts) if text_parts else (response.text or "")
+            return "\n".join(text_parts) if text_parts else (getattr(response, "text", None) or "")
 
         # Execute each tool and collect responses
         fn_response_parts = []

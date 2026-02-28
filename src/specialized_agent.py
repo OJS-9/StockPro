@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 
 from google.genai import types
 
-from gemini_runner import run_agent
-from mcp_manager import MCPManager
-from agent_tools import create_all_tools
-from research_subjects import ResearchSubject
+from src.gemini_runner import run_agent
+from src.mcp_manager import MCPManager
+from src.agent_tools import create_all_tools
+from src.research_subjects import ResearchSubject
 
 load_dotenv()
 
