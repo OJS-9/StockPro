@@ -44,10 +44,10 @@ class StockResearchAgent:
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
         self.current_plan: Optional[ResearchPlan] = None
-
-        self.research_orchestrator = ResearchOrchestrator()
-        self.synthesis_agent = SynthesisAgent()
-        self.planner_agent = PlannerAgent()
+        self.user_id = None
+        self.research_orchestrator = ResearchOrchestrator(api_key=self.api_key)
+        self.synthesis_agent = SynthesisAgent(api_key=self.api_key)
+        self.planner_agent = PlannerAgent(api_key=self.api_key)
         self.report_storage = ReportStorage()
         self.chat_agent = ReportChatAgent()
 
@@ -225,6 +225,7 @@ class StockResearchAgent:
                     trade_type=trade_type,
                     report_text=report_text,
                     metadata=metadata,
+                    user_id=self.user_id,
                 )
                 self.current_report_id = report_id
                 print(f"\n{'='*60}")
@@ -232,6 +233,7 @@ class StockResearchAgent:
                 print(f"{'='*60}\n")
             except Exception as storage_err:
                 print(f"Report storage failed (display will still work, RAG chat disabled): {storage_err}")
+
 
             return report_text
 

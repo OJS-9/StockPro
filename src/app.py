@@ -9,19 +9,23 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 import os
+import re
+from functools import wraps
 from dotenv import load_dotenv
 import uuid
-import markdown
+import markdown as md_lib
+from markupsafe import Markup
 from decimal import Decimal
 from datetime import datetime
-from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from agent import create_agent, StockResearchAgent
 from portfolio.portfolio_service import get_portfolio_service
 from data_providers import DataProviderFactory
+from report_storage import ReportStorage
+from pdf_generator import get_pdf_generator
 
 # Load environment variables
 load_dotenv()
@@ -33,8 +37,15 @@ app = Flask(__name__,
             static_folder=str(project_root / 'static'))
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
 
-# Register markdown filter for Jinja2 templates
-app.jinja_env.filters['markdown'] = markdown.markdown
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            session['next_url'] = request.url
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
 
 
 @app.context_processor
@@ -44,6 +55,42 @@ def inject_user():
         'user_id': session.get('user_id'),
         'username': session.get('username'),
     }}
+
+
+
+@app.template_filter('markdown')
+def markdown_filter(text):
+    return Markup(md_lib.markdown(
+        text or '',
+        extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists']
+    ))
+
+
+@app.template_filter('markdown_preview')
+def markdown_preview_filter(text, length=250):
+    if not text:
+        return ''
+    text = re.sub(r'#{1,6}\s+', '', text)
+    text = re.sub(r'\*{1,2}([^*\n]+)\*{1,2}', r'\1', text)
+    text = re.sub(r'_([^_\n]+)_', r'\1', text)
+    text = re.sub(r'`[^`\n]+`', '', text)
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    text = re.sub(r'^[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = ' '.join(text.split())
+    return text[:length] + ('...' if len(text) > length else '')
+
+
+def _page_range(current, total, delta=2):
+    pages = sorted({1, total} | set(range(max(1, current - delta), min(total, current + delta) + 1)))
+    result, prev = [], None
+    for p in pages:
+        if prev and p - prev > 1:
+            result.append(None)  # None = ellipsis
+        result.append(p)
+        prev = p
+    return result
+
+
 
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
@@ -254,7 +301,7 @@ def continue_conversation():
     """Handle form submission to continue conversation."""
     user_input = request.form.get('user_response', '').strip()
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    
+
     # Validate input
     if not user_input:
         if is_ajax:
@@ -265,10 +312,11 @@ def continue_conversation():
     try:
         session_id = get_or_create_session_id()
         agent = initialize_session(session_id)
-        
+        agent.user_id = session.get('user_id')
+
         # Store previous report_id to detect if a new report was generated
         previous_report_id = session.get('current_report_id')
-        
+
         # Get agent response
         response = agent.continue_conversation(user_input)
         
@@ -626,6 +674,207 @@ def delete_transaction(transaction_id: str):
     return redirect(url_for('portfolio'))
 
 
+# ============================================================================
+# Report History & Export Routes
+# ============================================================================
+@app.route('/reports')
+@login_required
+def report_history():
+    """Render the report history page with filters."""
+    get_or_create_session_id()
+
+    # Get filter parameters from query string
+    ticker = request.args.get('ticker', '').strip().upper() or None
+    trade_type = request.args.get('trade_type', '').strip() or None
+    sort_order = request.args.get('sort', 'DESC').upper()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 12
+
+    # Calculate offset
+    offset = (page - 1) * per_page
+
+    try:
+        storage = ReportStorage()
+        user_id = session.get('user_id')
+        reports, total_count = storage.get_all_reports(
+            ticker=ticker,
+            trade_type=trade_type,
+            sort_order=sort_order,
+            limit=per_page,
+            offset=offset,
+            user_id=user_id
+        )
+
+        # Calculate pagination info
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+
+        return render_template(
+            'reports.html',
+            reports=reports,
+            total_count=total_count,
+            current_page=page,
+            total_pages=total_pages,
+            per_page=per_page,
+            filter_ticker=ticker or '',
+            filter_trade_type=trade_type or '',
+            sort_order=sort_order,
+            page_range=_page_range(page, total_pages)
+        )
+    except Exception as e:
+        return render_template(
+            'reports.html',
+            reports=[],
+            total_count=0,
+            current_page=1,
+            total_pages=1,
+            per_page=per_page,
+            filter_ticker='',
+            filter_trade_type='',
+            sort_order='DESC',
+            page_range=[1],
+            error=str(e)
+        )
+
+
+@app.route('/api/reports')
+@login_required
+def api_reports():
+    """AJAX endpoint for filtered reports (returns JSON)."""
+    ticker = request.args.get('ticker', '').strip().upper() or None
+    trade_type = request.args.get('trade_type', '').strip() or None
+    sort_order = request.args.get('sort', 'DESC').upper()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 12
+
+    offset = (page - 1) * per_page
+
+    try:
+        storage = ReportStorage()
+        user_id = session.get('user_id')
+        reports, total_count = storage.get_all_reports(
+            ticker=ticker,
+            trade_type=trade_type,
+            sort_order=sort_order,
+            limit=per_page,
+            offset=offset,
+            user_id=user_id
+        )
+
+        # Convert datetime objects to ISO strings for JSON
+        for report in reports:
+            if report.get('created_at'):
+                report['created_at'] = report['created_at'].isoformat()
+
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+
+        return jsonify({
+            'success': True,
+            'reports': reports,
+            'total_count': total_count,
+            'current_page': page,
+            'total_pages': total_pages
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/report/<report_id>')
+@login_required
+def view_report(report_id):
+    """View a single report."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id, user_id=session.get('user_id'))
+
+        if not report:
+            abort(404)
+
+        return render_template(
+            'report_view.html',
+            report=report
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading report {report_id}: {e}")
+        abort(500)
+
+
+@app.route('/report/<report_id>/pdf')
+@login_required
+def download_report_pdf(report_id):
+    """Download report as PDF."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id, user_id=session.get('user_id'))
+
+        if not report:
+            abort(404)
+
+        # Generate PDF
+        pdf_generator = get_pdf_generator()
+        pdf_bytes = pdf_generator.generate_pdf(
+            ticker=report['ticker'],
+            trade_type=report['trade_type'],
+            report_text=report['report_text'],
+            created_at=report.get('created_at')
+        )
+
+        # Create filename
+        filename = f"{report['ticker']}_report_{report_id[:8]}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': len(pdf_bytes)
+            }
+        )
+    except Exception as e:
+        app.logger.error(f"Error generating PDF for report {report_id}: {e}")
+        abort(500)
+
+
+@app.route('/report/<report_id>/chat')
+@login_required
+def chat_with_report(report_id):
+    """Open chat interface with report context pre-loaded."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id, user_id=session.get('user_id'))
+
+        if not report:
+            abort(404)
+
+        # Store report context in session for chat
+        session['current_report_id'] = report_id
+        session['current_ticker'] = report['ticker']
+        session['current_trade_type'] = report['trade_type']
+
+        # Initialize conversation with report context
+        session['conversation_history'] = [
+            {
+                "role": "assistant",
+                "content": f"I've loaded the research report for **{report['ticker']}** ({report['trade_type']}). "
+                           f"Feel free to ask me any questions about this analysis!"
+            }
+        ]
+        session['status_message'] = f'Report loaded: {report["ticker"]}'
+
+        return redirect(url_for('chat'))
+    except Exception as e:
+        session['status_message'] = f'Error loading report: {str(e)}'
+        return redirect(url_for('report_history'))
+
+
 def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
@@ -635,7 +884,7 @@ def main():
     
     app.run(
         host='127.0.0.1',
-        port=5000,
+        port=int(os.getenv('PORT', 5000)),
         debug=True
     )
 

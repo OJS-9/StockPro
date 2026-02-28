@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Report History - StockIntel{% endblock %}
+
+{% block content %}
+{% include '_nav.html' %}
+
+<main class="flex-1 flex flex-col w-full max-w-[1280px] mx-auto px-4 md:px-10 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-display font-extrabold text-stone-900 dark:text-white">Research Reports</h1>
+        <p class="text-stone-500 mt-2 font-body">Browse and export your generated stock analysis reports.</p>
+    </div>
+
+    <!-- Filter Bar -->
+    <form method="GET" action="{{ url_for('report_history') }}" class="flex flex-wrap items-center gap-4 mb-8 p-4 bg-white dark:bg-surface-dark rounded-2xl border border-stone-200 dark:border-border-dark">
+        <div class="flex-1 min-w-[200px]">
+            <label for="ticker-filter" class="sr-only">Filter by ticker</label>
+            <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-stone-400 text-xl">search</span>
+                <input
+                    type="text"
+                    id="ticker-filter"
+                    name="ticker"
+                    value="{{ filter_ticker }}"
+                    placeholder="Search by ticker..."
+                    class="w-full pl-10 pr-4 py-2.5 bg-stone-100 dark:bg-background-dark border border-stone-200 dark:border-border-dark rounded-xl text-stone-900 dark:text-white placeholder:text-stone-400 focus:ring-2 focus:ring-primary/50 focus:outline-none text-sm"
+                />
+            </div>
+        </div>
+
+        <div class="min-w-[160px]">
+            <label for="trade-type-filter" class="sr-only">Filter by trade type</label>
+            <select
+                id="trade-type-filter"
+                name="trade_type"
+                class="w-full px-4 py-2.5 bg-stone-100 dark:bg-background-dark border border-stone-200 dark:border-border-dark rounded-xl text-stone-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:outline-none text-sm"
+            >
+                <option value="">All Types</option>
+                <option value="Investment" {% if filter_trade_type == 'Investment' %}selected{% endif %}>Investment</option>
+                <option value="Day Trade" {% if filter_trade_type == 'Day Trade' %}selected{% endif %}>Day Trade</option>
+                <option value="Swing Trade" {% if filter_trade_type == 'Swing Trade' %}selected{% endif %}>Swing Trade</option>
+            </select>
+        </div>
+
+        <div class="min-w-[140px]">
+            <label for="sort-filter" class="sr-only">Sort order</label>
+            <select
+                id="sort-filter"
+                name="sort"
+                class="w-full px-4 py-2.5 bg-stone-100 dark:bg-background-dark border border-stone-200 dark:border-border-dark rounded-xl text-stone-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:outline-none text-sm"
+            >
+                <option value="DESC" {% if sort_order == 'DESC' %}selected{% endif %}>Newest First</option>
+                <option value="ASC" {% if sort_order == 'ASC' %}selected{% endif %}>Oldest First</option>
+            </select>
+        </div>
+
+        <button type="submit" class="px-6 py-2.5 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all text-sm flex items-center gap-2">
+            <span class="material-symbols-outlined text-lg">filter_list</span>
+            Filter
+        </button>
+
+        {% if filter_ticker or filter_trade_type %}
+        <a href="{{ url_for('report_history') }}" class="px-4 py-2.5 text-stone-500 hover:text-white transition-colors text-sm flex items-center gap-1">
+            <span class="material-symbols-outlined text-lg">close</span>
+            Clear
+        </a>
+        {% endif %}
+    </form>
+
+    <!-- Results Count -->
+    <div class="flex items-center justify-between mb-6">
+        <p class="text-stone-500 text-sm">
+            {% if total_count > 0 %}
+                Showing {{ (current_page - 1) * per_page + 1 }}-{{ [current_page * per_page, total_count]|min }} of {{ total_count }} reports
+            {% else %}
+                No reports found
+            {% endif %}
+        </p>
+    </div>
+
+    {% if error %}
+    <div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+        <span class="material-symbols-outlined align-middle mr-2">error</span>
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if reports and reports|length > 0 %}
+    <!-- Report Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {% for report in reports %}
+        <article class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-primary/50 transition-all hover:shadow-2xl hover:-translate-y-1">
+            <a href="{{ url_for('view_report', report_id=report.report_id) }}" class="flex flex-col h-full">
+                <!-- Card Header -->
+                <div class="p-6 pb-4 border-b border-stone-200 dark:border-border-dark">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="size-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <span class="text-primary font-display font-bold text-lg">{{ report.ticker[:3] }}</span>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-display font-bold text-stone-900 dark:text-white group-hover:text-primary transition-colors">{{ report.ticker }}</h3>
+                                <span class="text-xs font-mono text-stone-500">{{ report.trade_type }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-stone-500">
+                        <span class="material-symbols-outlined text-sm">schedule</span>
+                        <time datetime="{{ report.created_at.isoformat() if report.created_at else '' }}">
+                            {{ report.created_at.strftime('%b %d, %Y at %I:%M %p') if report.created_at else 'Unknown date' }}
+                        </time>
+                    </div>
+                </div>
+
+                <!-- Card Body - Report Preview -->
+                <div class="p-6 flex-1">
+                    <p class="text-stone-600 dark:text-stone-400 text-sm leading-relaxed line-clamp-4">
+                        {{ report.report_text | markdown_preview }}
+                    </p>
+                </div>
+
+                <!-- Card Footer -->
+                <div class="px-6 pb-6 pt-2 flex items-center justify-between">
+                    <span class="text-primary text-sm font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        View Report <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-1 bg-stone-100 dark:bg-background-dark text-stone-500 text-xs rounded-lg font-mono">
+                            {{ report.report_id[:8] }}
+                        </span>
+                    </div>
+                </div>
+            </a>
+        </article>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <nav class="flex items-center justify-center gap-2">
+        {% if current_page > 1 %}
+        <a href="{{ url_for('report_history', page=current_page-1, ticker=filter_ticker, trade_type=filter_trade_type, sort=sort_order) }}"
+           class="flex items-center justify-center size-10 rounded-xl bg-surface-dark border border-border-dark text-white hover:bg-primary hover:text-background-dark transition-all">
+            <span class="material-symbols-outlined">chevron_left</span>
+        </a>
+        {% endif %}
+
+        {% for p in page_range %}
+            {% if p is none %}
+            <span class="text-stone-500 px-2">...</span>
+            {% elif p == current_page %}
+            <span class="flex items-center justify-center size-10 rounded-xl bg-primary text-background-dark font-bold">{{ p }}</span>
+            {% else %}
+            <a href="{{ url_for('report_history', page=p, ticker=filter_ticker, trade_type=filter_trade_type, sort=sort_order) }}"
+               class="flex items-center justify-center size-10 rounded-xl bg-surface-dark border border-border-dark text-white hover:bg-primary hover:text-background-dark transition-all">
+                {{ p }}
+            </a>
+            {% endif %}
+        {% endfor %}
+
+        {% if current_page < total_pages %}
+        <a href="{{ url_for('report_history', page=current_page+1, ticker=filter_ticker, trade_type=filter_trade_type, sort=sort_order) }}"
+           class="flex items-center justify-center size-10 rounded-xl bg-surface-dark border border-border-dark text-white hover:bg-primary hover:text-background-dark transition-all">
+            <span class="material-symbols-outlined">chevron_right</span>
+        </a>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="flex flex-col items-center justify-center py-20 text-center">
+        <div class="size-24 rounded-full bg-surface-dark flex items-center justify-center mb-6">
+            <span class="material-symbols-outlined text-5xl text-stone-500">description</span>
+        </div>
+        <h2 class="text-xl font-display font-bold text-white mb-2">No Reports Found</h2>
+        <p class="text-stone-500 mb-6 max-w-md">
+            {% if filter_ticker or filter_trade_type %}
+                No reports match your current filters. Try adjusting your search criteria.
+            {% else %}
+                You haven't generated any research reports yet. Start by analyzing a stock!
+            {% endif %}
+        </p>
+        <a href="{{ url_for('index') }}" class="px-6 py-3 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all flex items-center gap-2">
+            <span class="material-symbols-outlined">search</span>
+            Analyze a Stock
+        </a>
+    </div>
+    {% endif %}
+</main>
+
+{% include '_footer.html' %}
+{% endblock %}

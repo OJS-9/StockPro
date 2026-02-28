@@ -1,4 +1,4 @@
-# StockIntel — Stock Portfolio Agent
+# StockIntel
 
 An AI-powered multi-agent stock research platform that orchestrates specialized research agents, integrates financial data APIs with real-time web research, and provides an interactive chat interface for exploring investment opportunities. Includes a portfolio tracker for equities and crypto.
 
@@ -196,11 +196,17 @@ python src/app.py
 # Initialize database
 python init_db.py
 
-# Recreate database schema
+# Recreate database schema (creates DB if missing)
 python recreate_schema.py
 
-# Run tests
+# Run all tests
 python -m pytest test_*.py
+
+# Run specific test suites
+python -m pytest test_cost_basis.py
+python -m pytest test_csv_importer.py
+python -m pytest test_mcp.py
+python -m pytest test_nvda_research.py
 ```
 
 ## Environment Variables
@@ -290,6 +296,12 @@ Additional colors used directly via Tailwind utilities:
 - **Icons**: Material Symbols Outlined loaded from Google Fonts CDN. Used for all UI icons (`search`, `arrow_forward`, `smart_toy`, `person`, `menu`, `add`, `trending_up`, etc.).
 
 ## Development Guidelines
+
+### General Guidelines
+- keep everything simple, do not over-engineer things
+- in case there's new feature / major behaviral change of the app - update CLAUDE.md 
+- if you see something in the code while reviewing files that can be better - suggest at in your final response.
+
 
 ### Agent Patterns
 - All agents use the **OpenAI Agents SDK** (`openai-agents`) — use `Runner.run()` with turn limits

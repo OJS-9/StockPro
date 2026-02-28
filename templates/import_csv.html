@@ -3,20 +3,17 @@
 {% block title %}Import CSV - StockIntel{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-surface-dark border-b border-border-dark px-6 py-4">
-        <div class="max-w-3xl mx-auto flex items-center gap-4">
-            <a href="{{ url_for('portfolio') }}" class="flex items-center gap-2 text-primary hover:text-white transition-colors">
-                <span class="material-symbols-outlined">arrow_back</span>
-            </a>
-            <h1 class="font-display font-semibold text-lg">Import CSV</h1>
-        </div>
-    </header>
+{% include '_nav.html' %}
 
     <!-- Main Content -->
     <main class="flex-1 px-6 py-8">
         <div class="max-w-3xl mx-auto">
+            <div class="flex items-center gap-3 mb-6">
+                <a href="{{ url_for('portfolio') }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </a>
+                <h1 class="text-2xl font-display font-bold">Import CSV</h1>
+            </div>
             <!-- Status Message -->
             {% if status_message %}
             <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
@@ -110,7 +107,8 @@
             </div>
         </div>
     </main>
-</div>
+
+{% include '_footer.html' %}
 
 <script>
     const fileInput = document.getElementById('csv_file');

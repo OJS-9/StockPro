@@ -1,42 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-stone-200 dark:border-b-border-dark bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md px-4 sm:px-10 py-3">
-    <div class="flex items-center gap-4 text-stone-900 dark:text-white">
-        <div class="size-8 text-primary">
-            <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
-            </svg>
-        </div>
-        <h2 class="text-stone-900 dark:text-white text-xl font-bold leading-tight tracking-[-0.015em] font-display">StockIntel</h2>
-    </div>
-    <div class="hidden md:flex flex-1 justify-end gap-8">
-        <div class="flex items-center gap-9">
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('index') }}">Markets</a>
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">News</a>
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Screener</a>
-            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('portfolio') }}">Portfolio</a>
-        </div>
-        <div class="flex gap-2 items-center">
-            {% if current_user.is_authenticated %}
-              <span class="text-stone-400 text-sm font-medium">{{ current_user.username }}</span>
-              <a href="{{ url_for('logout') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
-                <span class="truncate">Log Out</span>
-              </a>
-            {% else %}
-              <a href="{{ url_for('register') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-primary text-[#0c0a09] text-sm font-bold leading-normal tracking-[0.015em] hover:brightness-110 transition-all">
-                <span class="truncate">Sign Up</span>
-              </a>
-              <a href="{{ url_for('login') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
-                <span class="truncate">Login</span>
-              </a>
-            {% endif %}
-        </div>
-    </div>
-    <div class="md:hidden text-white">
-        <span class="material-symbols-outlined cursor-pointer">menu</span>
-    </div>
-</header>
+{% include '_nav.html' %}
 
 <main class="flex-1 flex flex-col items-center w-full">
     <div class="w-full max-w-[1280px] px-4 md:px-10 py-5">
@@ -311,24 +276,5 @@
     </section>
 </main>
 
-<footer class="w-full border-t border-border-dark bg-background-dark py-10 px-4 md:px-10">
-    <div class="max-w-[1280px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-        <div class="flex items-center gap-2 text-white">
-            <div class="size-6 text-primary">
-                <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
-                </svg>
-            </div>
-            <span class="text-lg font-bold font-display">StockIntel</span>
-        </div>
-        <div class="text-stone-500 text-sm font-body">
-            © 2024 StockIntel Inc. All market data delayed by 15 minutes.
-        </div>
-        <div class="flex gap-6">
-            <a class="text-stone-500 hover:text-white transition-colors font-body" href="#">Privacy</a>
-            <a class="text-stone-500 hover:text-white transition-colors font-body" href="#">Terms</a>
-            <a class="text-stone-500 hover:text-white transition-colors font-body" href="#">Contact</a>
-        </div>
-    </div>
-</footer>
+{% include '_footer.html' %}
 {% endblock %}

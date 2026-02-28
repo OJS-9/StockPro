@@ -3,34 +3,32 @@
 {% block title %}{{ holding.symbol }} - Portfolio - StockIntel{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-surface-dark border-b border-border-dark px-6 py-4">
-        <div class="max-w-5xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <a href="{{ url_for('portfolio') }}" class="flex items-center gap-2 text-primary hover:text-white transition-colors">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                </a>
-                <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-full flex items-center justify-center {% if holding.asset_type == 'crypto' %}bg-orange-500/20 text-orange-400{% else %}bg-blue-500/20 text-blue-400{% endif %}">
-                        <span class="material-symbols-outlined text-2xl">{% if holding.asset_type == 'crypto' %}currency_bitcoin{% else %}trending_up{% endif %}</span>
-                    </div>
-                    <div>
-                        <h1 class="font-display font-bold text-xl">{{ holding.symbol }}</h1>
-                        <p class="text-sm text-stone-400 capitalize">{{ holding.asset_type }}</p>
-                    </div>
-                </div>
-            </div>
-            <a href="{{ url_for('add_transaction') }}?symbol={{ holding.symbol }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
-                <span class="material-symbols-outlined text-xl">add</span>
-                Add Transaction
-            </a>
-        </div>
-    </header>
+{% include '_nav.html' %}
 
     <!-- Main Content -->
     <main class="flex-1 px-6 py-8">
         <div class="max-w-5xl mx-auto">
+            <!-- Page Header -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-4">
+                    <a href="{{ url_for('portfolio') }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
+                        <span class="material-symbols-outlined">arrow_back</span>
+                    </a>
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center {% if holding.asset_type == 'crypto' %}bg-orange-500/20 text-orange-400{% else %}bg-blue-500/20 text-blue-400{% endif %}">
+                            <span class="material-symbols-outlined text-2xl">{% if holding.asset_type == 'crypto' %}currency_bitcoin{% else %}trending_up{% endif %}</span>
+                        </div>
+                        <div>
+                            <h1 class="font-display font-bold text-xl">{{ holding.symbol }}</h1>
+                            <p class="text-sm text-stone-400 capitalize">{{ holding.asset_type }}</p>
+                        </div>
+                    </div>
+                </div>
+                <a href="{{ url_for('add_transaction') }}?symbol={{ holding.symbol }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                    <span class="material-symbols-outlined text-xl">add</span>
+                    Add Transaction
+                </a>
+            </div>
             <!-- Status Message -->
             {% if status_message %}
             <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
@@ -157,5 +155,6 @@
             </div>
         </div>
     </main>
-</div>
+
+{% include '_footer.html' %}
 {% endblock %}
