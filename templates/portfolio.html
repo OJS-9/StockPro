@@ -3,34 +3,25 @@
 {% block title %}Portfolio - StockIntel{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-surface-dark border-b border-border-dark px-6 py-4">
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <a href="{{ url_for('index') }}" class="flex items-center gap-2 text-primary hover:text-white transition-colors">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                    <span class="font-display font-bold text-xl">StockIntel</span>
-                </a>
-                <span class="text-stone-500">/</span>
-                <h1 class="font-display font-semibold text-lg">Portfolio</h1>
-            </div>
-            <div class="flex items-center gap-3">
-                <a href="{{ url_for('add_transaction') }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
-                    <span class="material-symbols-outlined text-xl">add</span>
-                    Add Transaction
-                </a>
-                <a href="{{ url_for('import_csv') }}" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
-                    <span class="material-symbols-outlined text-xl">upload_file</span>
-                    Import CSV
-                </a>
-            </div>
-        </div>
-    </header>
+{% include '_nav.html' %}
 
     <!-- Main Content -->
     <main class="flex-1 px-6 py-8">
         <div class="max-w-7xl mx-auto">
+            <!-- Page Actions -->
+            <div class="flex items-center justify-between mb-6">
+                <h1 class="text-2xl font-display font-bold">Portfolio</h1>
+                <div class="flex items-center gap-3">
+                    <a href="{{ url_for('add_transaction') }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                        <span class="material-symbols-outlined text-xl">add</span>
+                        Add Transaction
+                    </a>
+                    <a href="{{ url_for('import_csv') }}" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
+                        <span class="material-symbols-outlined text-xl">upload_file</span>
+                        Import CSV
+                    </a>
+                </div>
+            </div>
             <!-- Status Message -->
             {% if status_message %}
             <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
@@ -190,5 +181,6 @@
             {% endif %}
         </div>
     </main>
-</div>
+
+{% include '_footer.html' %}
 {% endblock %}
