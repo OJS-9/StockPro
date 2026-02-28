@@ -38,6 +38,7 @@ class StockResearchAgent:
 
     def __init__(self, api_key: Optional[str] = None):
         # api_key kept for interface compatibility; Gemini key comes from env
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.conversation_history: List[Dict[str, str]] = []
         self.current_ticker: Optional[str] = None
         self.current_trade_type: Optional[str] = None
