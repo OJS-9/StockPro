@@ -64,6 +64,7 @@ class StockResearchAgent:
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
         self.current_plan: Optional[ResearchPlan] = None
+        self.user_id = None
         self.research_orchestrator = ResearchOrchestrator(api_key=self.api_key)
         self.synthesis_agent = SynthesisAgent(api_key=self.api_key)
         self.planner_agent = PlannerAgent(api_key=self.api_key)
@@ -392,6 +393,7 @@ class StockResearchAgent:
                     trade_type=trade_type,
                     report_text=report_text,
                     metadata=metadata,
+                    user_id=self.user_id,
                 )
                 self.current_report_id = report_id  # overwrite temp ID with real DB ID
                 print(f"\n{'='*60}")
@@ -401,6 +403,7 @@ class StockResearchAgent:
                 print(
                     f"⚠ Report storage failed (display will still work, RAG chat disabled): {storage_err}"
                 )
+
 
             return report_text
         

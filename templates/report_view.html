@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}{{ report.ticker }} Report - StockIntel{% endblock %}
+
+{% block extra_head %}
+<style>
+    .markdown-content h1 {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #292524;
+    }
+    .markdown-content h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-top: 1.75rem;
+        margin-bottom: 0.75rem;
+    }
+    .markdown-content h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .markdown-content p {
+        margin-bottom: 1rem;
+        line-height: 1.75;
+    }
+    .markdown-content ul, .markdown-content ol {
+        margin-bottom: 1rem;
+        padding-left: 1.5rem;
+    }
+    .markdown-content li {
+        margin-bottom: 0.5rem;
+    }
+    .markdown-content strong {
+        font-weight: 600;
+        color: #d6d3d1;
+    }
+    .markdown-content blockquote {
+        border-left: 3px solid #d6d3d1;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #a8a29e;
+        font-style: italic;
+    }
+    .markdown-content code {
+        background: #1c1917;
+        padding: 0.2em 0.4em;
+        border-radius: 0.25rem;
+        font-size: 0.875em;
+        font-family: ui-monospace, monospace;
+    }
+    .markdown-content pre {
+        background: #1c1917;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        margin: 1rem 0;
+    }
+    .markdown-content pre code {
+        background: none;
+        padding: 0;
+    }
+    .markdown-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+    }
+    .markdown-content th, .markdown-content td {
+        border: 1px solid #292524;
+        padding: 0.75rem;
+        text-align: left;
+    }
+    .markdown-content th {
+        background: #1c1917;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-stone-200 dark:border-b-border-dark bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md px-4 sm:px-10 py-3">
+    <div class="flex items-center gap-4 text-stone-900 dark:text-white">
+        <a href="{{ url_for('index') }}" class="flex items-center gap-4">
+            <div class="size-8 text-primary">
+                <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
+                </svg>
+            </div>
+            <h2 class="text-stone-900 dark:text-white text-xl font-bold leading-tight tracking-[-0.015em] font-display">StockIntel</h2>
+        </a>
+    </div>
+    <div class="hidden md:flex flex-1 justify-end gap-8">
+        <div class="flex items-center gap-9">
+            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('index') }}">Markets</a>
+            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('report_history') }}">Reports</a>
+            <a class="text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium leading-normal" href="{{ url_for('chat') }}">AI Agent</a>
+        </div>
+        <div class="flex gap-2">
+            {% if current_user.is_authenticated %}
+            <span class="flex items-center text-stone-900 dark:text-stone-300 text-sm font-medium px-3">{{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
+                <span class="truncate">Logout</span>
+            </a>
+            {% else %}
+            <a href="{{ url_for('register') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-primary text-[#0c0a09] text-sm font-bold leading-normal tracking-[0.015em] hover:brightness-110 transition-all">
+                <span class="truncate">Sign Up</span>
+            </a>
+            <a href="{{ url_for('login') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
+                <span class="truncate">Login</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="md:hidden text-white">
+        <span class="material-symbols-outlined cursor-pointer">menu</span>
+    </div>
+</header>
+
+<main class="flex-1 flex flex-col w-full max-w-4xl mx-auto px-4 md:px-10 py-8 pb-32">
+    <!-- Back Link -->
+    <a href="{{ url_for('report_history') }}" class="inline-flex items-center gap-2 text-stone-500 hover:text-primary transition-colors text-sm mb-6">
+        <span class="material-symbols-outlined text-lg">arrow_back</span>
+        Back to Reports
+    </a>
+
+    <!-- Report Header -->
+    <div class="bg-white dark:bg-surface-dark rounded-3xl p-8 border border-stone-200 dark:border-border-dark mb-8">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+            <div class="flex items-start gap-4">
+                <div class="size-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span class="text-primary font-display font-bold text-2xl">{{ report.ticker[:3] }}</span>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-display font-extrabold text-stone-900 dark:text-white mb-2">{{ report.ticker }}</h1>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span class="px-3 py-1 bg-primary/10 text-primary rounded-lg text-sm font-bold">{{ report.trade_type }}</span>
+                        <span class="text-stone-500 text-sm flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">schedule</span>
+                            {{ report.created_at.strftime('%B %d, %Y at %I:%M %p') if report.created_at else 'Unknown date' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-stone-500 font-mono">
+                <span class="px-3 py-1.5 bg-stone-100 dark:bg-background-dark rounded-lg">
+                    ID: {{ report.report_id[:8] }}...
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Content -->
+    <article class="bg-white dark:bg-surface-dark rounded-3xl p-8 md:p-10 border border-stone-200 dark:border-border-dark">
+        <div class="markdown-content text-stone-300">{{ report.report_text | markdown }}</div>
+    </article>
+</main>
+
+<!-- Sticky Action Bar -->
+<div class="fixed bottom-0 left-0 right-0 bg-background-dark/95 backdrop-blur-md border-t border-border-dark py-4 px-4 md:px-10 z-40">
+    <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-3">
+        <a href="{{ url_for('download_report_pdf', report_id=report.report_id) }}"
+           class="flex items-center gap-2 px-6 py-3 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all">
+            <span class="material-symbols-outlined">download</span>
+            Download PDF
+        </a>
+
+        <button onclick="copyShareLink()" id="copy-link-btn"
+                class="flex items-center gap-2 px-6 py-3 bg-surface-dark border border-border-dark text-white font-bold rounded-xl hover:border-primary/50 transition-all">
+            <span class="material-symbols-outlined" id="copy-icon">link</span>
+            <span id="copy-text">Copy Link</span>
+        </button>
+
+        <a href="{{ url_for('chat_with_report', report_id=report.report_id) }}"
+           class="flex items-center gap-2 px-6 py-3 bg-surface-dark border border-border-dark text-white font-bold rounded-xl hover:border-primary/50 transition-all">
+            <span class="material-symbols-outlined">chat</span>
+            Ask Questions
+        </a>
+    </div>
+</div>
+
+<script>
+    function copyShareLink() {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            const btn = document.getElementById('copy-link-btn');
+            const icon = document.getElementById('copy-icon');
+            const text = document.getElementById('copy-text');
+
+            // Show success state
+            icon.textContent = 'check';
+            text.textContent = 'Copied!';
+            btn.classList.add('border-accent-up');
+
+            // Reset after 2 seconds
+            setTimeout(() => {
+                icon.textContent = 'link';
+                text.textContent = 'Copy Link';
+                btn.classList.remove('border-accent-up');
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            alert('Failed to copy link. Please copy the URL manually.');
+        });
+    }
+</script>
+{% endblock %}

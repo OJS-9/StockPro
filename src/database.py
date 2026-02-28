@@ -60,20 +60,51 @@ class DatabaseManager:
         try:
             connection = self.get_connection()
             cursor = connection.cursor()
-            
+
+            # Create users table (must exist before reports due to FK)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id VARCHAR(36) PRIMARY KEY,
+                    username VARCHAR(80) NOT NULL UNIQUE,
+                    email VARCHAR(120) NOT NULL UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_username (username),
+                    INDEX idx_email (email)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             # Create reports table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS reports (
                     report_id VARCHAR(36) PRIMARY KEY,
+                    user_id VARCHAR(36) NULL,
                     ticker VARCHAR(10) NOT NULL,
                     trade_type VARCHAR(50) NOT NULL,
                     report_text TEXT NOT NULL,
                     metadata JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_ticker (ticker),
-                    INDEX idx_created_at (created_at)
+                    INDEX idx_created_at (created_at),
+                    INDEX idx_user_id (user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
+
+            # Inline migration: add user_id column if it doesn't exist yet
+            cursor.execute("""
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'reports'
+                  AND COLUMN_NAME = 'user_id'
+            """)
+            (col_exists,) = cursor.fetchone()
+            if not col_exists:
+                cursor.execute("""
+                    ALTER TABLE reports
+                    ADD COLUMN user_id VARCHAR(36) NULL AFTER report_id,
+                    ADD INDEX idx_user_id (user_id)
+                """)
             
             # Create report_chunks table
             cursor.execute("""
@@ -204,33 +235,35 @@ class DatabaseManager:
         ticker: str,
         trade_type: str,
         report_text: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None
     ) -> str:
         """
         Save a report to the database.
-        
+
         Args:
             ticker: Stock ticker symbol
             trade_type: Type of trade
             report_text: Full report text
             metadata: Optional metadata dictionary
-        
+            user_id: Optional user ID for ownership
+
         Returns:
             report_id: Generated report ID
         """
         report_id = str(uuid.uuid4())
         connection = None
-        
+
         try:
             connection = self.get_connection()
             cursor = connection.cursor()
-            
+
             metadata_json = json.dumps(metadata) if metadata else None
-            
+
             cursor.execute("""
-                INSERT INTO reports (report_id, ticker, trade_type, report_text, metadata)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (report_id, ticker.upper(), trade_type, report_text, metadata_json))
+                INSERT INTO reports (report_id, user_id, ticker, trade_type, report_text, metadata)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (report_id, user_id, ticker.upper(), trade_type, report_text, metadata_json))
             
             connection.commit()
             return report_id
@@ -244,48 +277,58 @@ class DatabaseManager:
                 cursor.close()
                 connection.close()
     
-    def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+    def get_report(self, report_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a report by ID.
-        
+        Retrieve a report by ID, optionally verifying ownership.
+
         Args:
             report_id: Report ID
-        
+            user_id: If provided, only return the report if it belongs to this user
+
         Returns:
-            Report dictionary or None if not found
+            Report dictionary or None if not found / not owned by user
         """
         connection = None
+        cursor = None
         try:
             connection = self.get_connection()
             cursor = connection.cursor(dictionary=True)
-            
-            cursor.execute("""
-                SELECT report_id, ticker, trade_type, report_text, metadata, created_at
-                FROM reports
-                WHERE report_id = %s
-            """, (report_id,))
-            
+
+            if user_id:
+                cursor.execute("""
+                    SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
+                    FROM reports
+                    WHERE report_id = %s AND user_id = %s
+                """, (report_id, user_id))
+            else:
+                cursor.execute("""
+                    SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
+                    FROM reports
+                    WHERE report_id = %s
+                """, (report_id,))
+
             result = cursor.fetchone()
             if result and result.get('metadata'):
                 result['metadata'] = json.loads(result['metadata'])
-            
+
             return result
-            
+
         except Error as e:
             raise RuntimeError(f"Failed to get report: {e}")
         finally:
-            if connection and connection.is_connected():
+            if cursor:
                 cursor.close()
+            if connection and connection.is_connected():
                 connection.close()
     
     def get_reports_by_ticker(self, ticker: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get recent reports for a ticker.
-        
+
         Args:
             ticker: Stock ticker symbol
             limit: Maximum number of reports to return
-        
+
         Returns:
             List of report dictionaries
         """
@@ -293,7 +336,7 @@ class DatabaseManager:
         try:
             connection = self.get_connection()
             cursor = connection.cursor(dictionary=True)
-            
+
             cursor.execute("""
                 SELECT report_id, ticker, trade_type, report_text, metadata, created_at
                 FROM reports
@@ -301,19 +344,101 @@ class DatabaseManager:
                 ORDER BY created_at DESC
                 LIMIT %s
             """, (ticker.upper(), limit))
-            
+
             results = cursor.fetchall()
             for result in results:
                 if result.get('metadata'):
                     result['metadata'] = json.loads(result['metadata'])
-            
+
             return results
-            
+
         except Error as e:
             raise RuntimeError(f"Failed to get reports by ticker: {e}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()
+                connection.close()
+
+    def get_all_reports(
+        self,
+        ticker: Optional[str] = None,
+        trade_type: Optional[str] = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0,
+        user_id: Optional[str] = None
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get paginated reports with optional filtering.
+
+        Args:
+            ticker: Optional ticker filter
+            trade_type: Optional trade type filter
+            sort_order: Sort order for created_at (ASC or DESC)
+            limit: Maximum number of reports to return
+            offset: Number of reports to skip
+            user_id: If provided, only return reports belonging to this user
+
+        Returns:
+            Tuple of (reports list, total count)
+        """
+        connection = None
+        cursor = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            # Build WHERE clause dynamically
+            where_clauses = []
+            params = []
+
+            if user_id:
+                where_clauses.append("user_id = %s")
+                params.append(user_id)
+
+            if ticker:
+                where_clauses.append("ticker = %s")
+                params.append(ticker.upper())
+
+            if trade_type:
+                where_clauses.append("trade_type = %s")
+                params.append(trade_type)
+
+            where_sql = ""
+            if where_clauses:
+                where_sql = "WHERE " + " AND ".join(where_clauses)
+
+            # Validate sort order
+            sort_order = "DESC" if sort_order.upper() not in ("ASC", "DESC") else sort_order.upper()
+
+            # Get total count
+            count_sql = f"SELECT COUNT(*) as total FROM reports {where_sql}"
+            cursor.execute(count_sql, params)
+            total_count = cursor.fetchone()['total']
+
+            # Get paginated results
+            query_sql = f"""
+                SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
+                FROM reports
+                {where_sql}
+                ORDER BY created_at {sort_order}
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(query_sql, params + [limit, offset])
+
+            results = cursor.fetchall()
+            for result in results:
+                if result.get('metadata'):
+                    result['metadata'] = json.loads(result['metadata'])
+
+            return results, total_count
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get all reports: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection and connection.is_connected():
                 connection.close()
     
     def save_chunks(
@@ -529,14 +654,12 @@ class DatabaseManager:
         try:
             connection = self.get_connection()
             cursor = connection.cursor()
-
             cursor.execute("""
                 INSERT INTO users (user_id, username, email, password_hash)
                 VALUES (%s, %s, %s, %s)
             """, (user_id, username, email, password_hash))
 
             connection.commit()
-
         except Error as e:
             if connection:
                 connection.rollback()
@@ -921,8 +1044,7 @@ class DatabaseManager:
             raise RuntimeError(f"Failed to log CSV import: {e}")
         finally:
             if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+                cursor.close()                connection.close()
 
 
 # Global instance
