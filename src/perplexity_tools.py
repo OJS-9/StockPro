@@ -2,14 +2,9 @@
 Perplexity research tool execution.
 """
 
-import os
 from typing import Dict, Any
 
 from perplexity_client import PerplexityClient
-
-PERPLEXITY_TOOL_TIMEOUT_SECONDS = float(
-    os.getenv("PERPLEXITY_TOOL_TIMEOUT_SECONDS", "10.0")
-)
 
 _FOCUS_PREFIXES = {
     "news": "Recent news and events: ",
