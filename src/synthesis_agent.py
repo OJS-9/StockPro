@@ -14,7 +14,7 @@ from src.research_subjects import get_research_subject_by_id
 
 load_dotenv()
 
-SYNTHESIS_AGENT_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-3.1-pro-preview")
+SYNTHESIS_AGENT_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-2.5-pro")
 SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS = int(os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000"))
 
 _TRADE_TYPE_FRAMING = {
@@ -59,7 +59,6 @@ class SynthesisAgent:
                 max_turns=3,
                 temperature=0.7,
                 max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
-                thinking_budget=2048,
                 check_end_marker=True,
                 trace_context=trace_context,
                 parent_span=parent_span,

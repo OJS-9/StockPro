@@ -16,7 +16,7 @@ from src.research_subjects import ResearchSubject
 
 load_dotenv()
 
-SPECIALIZED_AGENT_MODEL = os.getenv("SPECIALIZED_AGENT_MODEL", "gemini-3.1-pro-preview")
+SPECIALIZED_AGENT_MODEL = os.getenv("SPECIALIZED_AGENT_MODEL", "gemini-2.5-pro")
 SPECIALIZED_AGENT_MAX_TURNS = int(os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8"))
 SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS = int(os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000"))
 SPECIALIZED_AGENT_DEBUG_TOKEN_LOG = os.getenv("SPECIALIZED_AGENT_DEBUG_TOKEN_LOG", "false").lower() == "true"
