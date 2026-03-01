@@ -81,7 +81,7 @@ class DatabaseManager:
                     user_id VARCHAR(36) NULL,
                     ticker VARCHAR(10) NOT NULL,
                     trade_type VARCHAR(50) NOT NULL,
-                    report_text TEXT NOT NULL,
+                    report_text MEDIUMTEXT NOT NULL,
                     metadata JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_ticker (ticker),
@@ -105,6 +105,19 @@ class DatabaseManager:
                     ADD COLUMN user_id VARCHAR(36) NULL AFTER report_id,
                     ADD INDEX idx_user_id (user_id)
                 """)
+
+            # Inline migration: upgrade report_text from TEXT to MEDIUMTEXT if needed
+            cursor.execute("""
+                SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'reports'
+                  AND COLUMN_NAME = 'report_text'
+            """)
+            row = cursor.fetchone()
+            if row and row[0] == 'text':
+                cursor.execute("""
+                    ALTER TABLE reports MODIFY COLUMN report_text MEDIUMTEXT NOT NULL
+                """)
             
             # Create report_chunks table
             cursor.execute("""
@@ -112,7 +125,7 @@ class DatabaseManager:
                     chunk_id VARCHAR(36) PRIMARY KEY,
                     report_id VARCHAR(36) NOT NULL,
                     chunk_text TEXT NOT NULL,
-                    section VARCHAR(100),
+                    section VARCHAR(500),
                     chunk_index INT NOT NULL,
                     embedding JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -121,6 +134,19 @@ class DatabaseManager:
                     INDEX idx_section (section)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
+
+            # Inline migration: widen section column if it was created as VARCHAR(100) or VARCHAR(255)
+            cursor.execute("""
+                SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'report_chunks'
+                  AND COLUMN_NAME = 'section'
+            """)
+            row = cursor.fetchone()
+            if row and row[0] in (100, 255):
+                cursor.execute("""
+                    ALTER TABLE report_chunks MODIFY COLUMN section VARCHAR(500)
+                """)
 
             # Create users table (must come before portfolios for FK)
             cursor.execute("""
