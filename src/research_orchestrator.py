@@ -3,7 +3,7 @@ Research orchestrator for coordinating parallel specialized research agents.
 """
 
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
@@ -32,6 +32,7 @@ class ResearchOrchestrator:
         self,
         plan: ResearchPlan,
         max_workers: int = DEFAULT_MAX_WORKERS,
+        trace_context=None,
     ) -> Dict[str, Dict[str, Any]]:
         """
         Execute parallel research using specialized agents driven by a ResearchPlan.
@@ -79,6 +80,7 @@ class ResearchOrchestrator:
                     subject,
                     trade_type,
                     focus_hint,
+                    trace_context,
                 )
                 future_to_id[future] = subject_id
 
@@ -91,10 +93,13 @@ class ResearchOrchestrator:
                     result = future.result()
                     results[subject_id] = result
                     completed += 1
+                    subject_name = result.get('subject_name', subject_id)
                     print(
-                        f"✓ Completed research for: {result.get('subject_name', subject_id)} "
+                        f"✓ Completed research for: {subject_name} "
                         f"({completed}/{total})"
                     )
+                    if trace_context:
+                        trace_context.emit_step(f"Completed: {subject_name}")
                 except Exception as e:
                     print(f"✗ Error researching {subject_id}: {e}")
                     results[subject_id] = {

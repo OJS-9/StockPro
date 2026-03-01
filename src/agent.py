@@ -187,7 +187,6 @@ class StockResearchAgent:
         print(f"{'='*60}\n")
 
         tc = self._trace_context
-        print(f"[TRACE DEBUG] _trace_context={tc}, _root_span={getattr(tc, '_root_span', 'N/A')}, _lf={getattr(tc, '_lf', 'N/A')}")
 
         try:
             print(f"{'='*60}")
@@ -277,10 +276,8 @@ class StockResearchAgent:
             print(error_msg)
             return error_msg
         finally:
-            print(f"[TRACE DEBUG] finally block reached, tc={tc}")
             if tc:
                 tc.finish(output=f"Report {self.current_report_id or 'unknown'}")
-                print(f"[TRACE DEBUG] tc.finish() called")
 
     def chat_with_report(self, question: str) -> str:
         """Chat with the current report using RAG-lite."""

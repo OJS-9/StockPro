@@ -26,18 +26,13 @@ def _get_langfuse():
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
     host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
-    print(f"[TRACE DEBUG] _get_langfuse: public_key={'SET' if public_key else 'MISSING'}, secret_key={'SET' if secret_key else 'MISSING'}")
-
     if not public_key or not secret_key:
         return None
 
     try:
         from langfuse import Langfuse
-        lf = Langfuse(public_key=public_key, secret_key=secret_key, host=host)
-        print(f"[TRACE DEBUG] Langfuse client created OK")
-        return lf
-    except Exception as e:
-        print(f"[TRACE DEBUG] Langfuse init failed: {e}")
+        return Langfuse(public_key=public_key, secret_key=secret_key, host=host)
+    except Exception:
         return None
 
 
