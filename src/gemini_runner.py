@@ -57,6 +57,7 @@ def run_agent(
     temperature: float,
     max_output_tokens: int,
     thinking_budget: Optional[int] = None,
+    check_end_marker: bool = False,
     trace_context=None,
     parent_span=None,
 ) -> str:
@@ -137,7 +138,7 @@ def run_agent(
             final_text = "\n".join(text_parts) if text_parts else (getattr(response, "text", None) or "")
             if finish_reason and getattr(finish_reason, "value", finish_reason) == "MAX_TOKENS":
                 print(f"[Gemini] WARNING: response truncated by MAX_TOKENS limit ({max_output_tokens})")
-            elif final_text and "END_OF_REPORT" not in final_text and output_tokens > 1000:
+            elif check_end_marker and final_text and "END_OF_REPORT" not in final_text and output_tokens > 1000:
                 print(f"[Gemini] WARNING: END_OF_REPORT marker missing — model may have stopped early (output_tokens={output_tokens})")
             if trace_context and gen:
                 trace_context.end_generation(

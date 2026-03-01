@@ -13,7 +13,7 @@ from specialized_agent import SpecializedResearchAgent
 
 # Default maximum worker count – controls how many specialized agents
 # run concurrently.  Spreads token usage over time.
-DEFAULT_MAX_WORKERS = int(os.getenv("RESEARCH_MAX_WORKERS", "3"))
+DEFAULT_MAX_WORKERS = int(os.getenv("RESEARCH_MAX_WORKERS", "10"))
 
 
 class ResearchOrchestrator:

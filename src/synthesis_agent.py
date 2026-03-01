@@ -59,6 +59,8 @@ class SynthesisAgent:
                 max_turns=3,
                 temperature=0.7,
                 max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
+                thinking_budget=2048,
+                check_end_marker=True,
                 trace_context=trace_context,
                 parent_span=parent_span,
             )
