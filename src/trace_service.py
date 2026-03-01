@@ -78,6 +78,16 @@ class TraceContext:
         except Exception:
             pass
 
+    def start_child_span(self, name: str, input: Any = None, parent_span: Any = None) -> Any:
+        """Start a child span under parent_span (or root if None). Returns span or None."""
+        parent = parent_span if parent_span is not None else self._root_span
+        if parent is None:
+            return None
+        try:
+            return parent.start_span(name=name, input=input)
+        except Exception:
+            return None
+
     def start_generation(self, name: str, model: str, input: Any = None, parent_span: Any = None) -> Any:
         """Start a LangFuse generation span (for LLM calls). Returns generation or None."""
         parent = parent_span if parent_span is not None else self._root_span

@@ -144,6 +144,13 @@ def run_agent(
         fn_response_parts = []
         for part in fn_calls:
             fc = part.function_call
+            tool_span = None
+            if trace_context:
+                tool_span = trace_context.start_child_span(
+                    name=f"tool:{fc.name}",
+                    input={"tool": fc.name, "args": dict(fc.args)},
+                    parent_span=parent_span,
+                )
             handler = tool_handlers.get(fc.name)
             if handler:
                 try:
@@ -152,6 +159,9 @@ def run_agent(
                     result = f"Tool execution error: {e}"
             else:
                 result = f"Unknown tool: {fc.name}"
+
+            if trace_context:
+                trace_context.end_span(tool_span, output=result)
 
             fn_response_parts.append(
                 types.Part.from_function_response(
