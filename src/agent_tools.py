@@ -88,13 +88,16 @@ def _make_perplexity_handler(perplexity_client: PerplexityClient):
         focus = str(args.get("focus", "general"))
         if not query:
             return json.dumps({"error": "query parameter is required", "status": "error"})
-        result = execute_perplexity_research(perplexity_client, query=query, focus=focus)
-        if isinstance(result, dict):
-            for key in ("results", "answers", "citations", "items"):
-                if key in result and isinstance(result[key], list) and len(result[key]) > MAX_RESEARCH_ITEMS:
-                    result[key] = result[key][:MAX_RESEARCH_ITEMS]
-            return json.dumps(result, indent=2, default=str)
-        return json.dumps({"research": str(result), "status": "success"})
+        try:
+            result = execute_perplexity_research(perplexity_client, query=query, focus=focus)
+            if isinstance(result, dict):
+                for key in ("results", "answers", "citations", "items"):
+                    if key in result and isinstance(result[key], list) and len(result[key]) > MAX_RESEARCH_ITEMS:
+                        result[key] = result[key][:MAX_RESEARCH_ITEMS]
+                return json.dumps(result, indent=2, default=str)
+            return json.dumps({"research": str(result), "status": "success"})
+        except Exception as e:
+            return json.dumps({"error": f"Perplexity failed: {e}"})
     return handler
 
 

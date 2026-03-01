@@ -134,6 +134,7 @@ Begin your research now."""
         subject: ResearchSubject,
         trade_type: str,
         focus_hint: str = "",
+        trace_context=None,
     ) -> Dict[str, Any]:
         """Research a specific subject for a ticker."""
         instructions = self.get_specialized_instructions(subject, ticker, trade_type, focus_hint)
@@ -142,6 +143,10 @@ Begin your research now."""
         if SPECIALIZED_AGENT_DEBUG_TOKEN_LOG:
             print(f"[SpecializedAgent:{subject.id}] Approx input chars: {len(research_prompt)}")
 
+        span = trace_context.start_span(
+            f"specialized:{subject.id}",
+            input={"ticker": ticker, "system_instruction": instructions},
+        ) if trace_context else None
         try:
             research_output = _run_specialized_agent_with_retry(
                 model=SPECIALIZED_AGENT_MODEL,
@@ -150,11 +155,15 @@ Begin your research now."""
                 tool_handlers=self.tool_handlers,
                 research_prompt=research_prompt,
                 max_turns=SPECIALIZED_AGENT_MAX_TURNS,
+                trace_context=trace_context,
+                parent_span=span,
             )
 
             if SPECIALIZED_AGENT_DEBUG_TOKEN_LOG:
                 print(f"[SpecializedAgent:{subject.id}] Approx output chars: {len(str(research_output))}")
 
+            if trace_context:
+                trace_context.end_span(span, output=f"{len(str(research_output))} chars")
             return {
                 "subject_id": subject.id,
                 "subject_name": subject.name,
@@ -168,6 +177,8 @@ Begin your research now."""
         except Exception as e:
             error_msg = f"Error in specialized research for {subject.name}: {e}"
             print(error_msg)
+            if trace_context:
+                trace_context.end_span(span, error=str(e))
             return {
                 "subject_id": subject.id,
                 "subject_name": subject.name,
@@ -196,6 +207,8 @@ def _run_specialized_agent_with_retry(
     tool_handlers: dict,
     research_prompt: str,
     max_turns: int,
+    trace_context=None,
+    parent_span=None,
 ) -> str:
     max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
     base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
@@ -219,6 +232,8 @@ def _run_specialized_agent_with_retry(
                 max_turns=max_turns,
                 temperature=0.7,
                 max_output_tokens=SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS,
+                trace_context=trace_context,
+                parent_span=parent_span,
             )
         except Exception as exc:
             last_exc = exc

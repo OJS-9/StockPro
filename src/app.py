@@ -12,6 +12,10 @@ sys.path.insert(0, str(project_root))
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 import os
 import re
+import threading
+import queue
+import json
+import time
 from functools import wraps
 from dotenv import load_dotenv
 import uuid
@@ -26,6 +30,7 @@ from portfolio.portfolio_service import get_portfolio_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
+from trace_service import create_trace, create_chat_trace
 
 # Load environment variables
 load_dotenv()
@@ -94,6 +99,9 @@ def _page_range(current, total, delta=2):
 
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
+
+# SSE step queues — keyed by session_id; cleaned up after stream completes
+_sse_queues: dict = {}
 
 
 def initialize_session(session_id: str) -> StockResearchAgent:
@@ -298,75 +306,118 @@ def start_research():
 @app.route('/continue', methods=['POST'])
 @login_required
 def continue_conversation():
-    """Handle form submission to continue conversation."""
+    """Start a conversation turn in a background thread; return SSE session info."""
     user_input = request.form.get('user_response', '').strip()
-    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-    # Validate input
     if not user_input:
-        if is_ajax:
-            return jsonify({'success': False, 'error': '⚠️ Please enter a response.'}), 400
-        session['status_message'] = '⚠️ Please enter a response.'
-        return redirect(url_for('chat'))
-    
-    try:
-        session_id = get_or_create_session_id()
-        agent = initialize_session(session_id)
-        agent.user_id = session.get('user_id')
+        return jsonify({'success': False, 'error': '⚠️ Please enter a response.'}), 400
 
-        # Store previous report_id to detect if a new report was generated
-        previous_report_id = session.get('current_report_id')
+    session_id = get_or_create_session_id()
+    agent = initialize_session(session_id)
+    agent.user_id = session.get('user_id')
 
-        # Get agent response
-        response = agent.continue_conversation(user_input)
-        
-        # Get current conversation history
-        conversation_history = session.get('conversation_history', [])
-        
-        # Append user message and agent response
-        conversation_history.append({"role": "user", "content": user_input})
-        conversation_history.append({"role": "assistant", "content": response})
-        
-        # Check if a report was generated during this conversation turn
-        current_report_id = agent.current_report_id
-        report_generated = False
-        report_preview = None
-        
-        if current_report_id and current_report_id != previous_report_id:
-            # A new report was generated - get full report text from agent and add to conversation
-            report_text = getattr(agent, 'last_report_text', None) or session.get('report_text', '')
-            if report_text:
-                # Display the full report text in the chat
-                report_preview = f"# Research Report\n\n{report_text}"
-                conversation_history.append({
-                    "role": "assistant",
-                    "content": report_preview
-                })
-                session['current_report_id'] = current_report_id
-                session['report_text'] = report_text
-                report_generated = True
-        
-        # Update session
-        session['conversation_history'] = conversation_history
-        session['status_message'] = '✅ Response received'
-        
-        # If AJAX request, return JSON
-        if is_ajax:
-            return jsonify({
-                'success': True,
-                'user_message': user_input,
-                'assistant_message': response,
-                'conversation_history': conversation_history,
-                'report_generated': report_generated,
-                'report_preview': report_preview
+    # Snapshot mutable session state so the background thread can read it safely
+    previous_report_id = session.get('current_report_id')
+    conversation_history_snapshot = list(session.get('conversation_history', []))
+    ticker = session.get('current_ticker', '')
+    trade_type = session.get('current_trade_type', 'Investment')
+
+    # Create SSE queue and trace context
+    step_q: queue.Queue = queue.Queue()
+    _sse_queues[session_id] = step_q
+    tc = create_trace(ticker=ticker, trade_type=trade_type, session_id=session_id, step_queue=step_q)
+    agent.set_trace_context(tc)
+
+    def run_in_background():
+        try:
+            response = agent.continue_conversation(user_input)
+
+            new_history = list(conversation_history_snapshot)
+            new_history.append({"role": "user", "content": user_input})
+            new_history.append({"role": "assistant", "content": response})
+
+            current_report_id = agent.current_report_id
+            report_generated = False
+            report_preview = None
+
+            if current_report_id and current_report_id != previous_report_id:
+                report_text = getattr(agent, 'last_report_text', None) or ''
+                if report_text:
+                    report_preview = f"# Research Report\n\n{report_text}"
+                    new_history.append({"role": "assistant", "content": report_preview})
+                    report_generated = True
+
+            step_q.put({
+                "type": "done",
+                "user_message": user_input,
+                "assistant_message": response,
+                "conversation_history": new_history,
+                "report_generated": report_generated,
+                "report_preview": report_preview,
+                "current_report_id": current_report_id,
+                "report_text": getattr(agent, 'last_report_text', None) or '',
             })
-        
-    except Exception as e:
-        if is_ajax:
-            return jsonify({'success': False, 'error': f'❌ Error: {str(e)}'}), 500
-        session['status_message'] = f'❌ Error: {str(e)}'
-    
-    return redirect(url_for('chat'))
+        except Exception as e:
+            step_q.put({"type": "error", "message": str(e)})
+        finally:
+            agent.set_trace_context(None)
+
+    t = threading.Thread(target=run_in_background, daemon=True)
+    t.start()
+
+    return jsonify({'success': True, 'streaming': True, 'session_id': session_id})
+
+
+@app.route('/stream/<session_id>')
+@login_required
+def stream_steps(session_id: str):
+    """SSE endpoint — streams step messages until 'done' or 'error'."""
+    if session.get('session_id') != session_id:
+        abort(403)
+
+    step_q = _sse_queues.get(session_id)
+    if step_q is None:
+        # No active stream — send immediate done with empty payload
+        def empty():
+            yield "data: {\"type\": \"done\"}\n\n"
+        return Response(empty(), mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    def event_stream():
+        try:
+            while True:
+                try:
+                    event = step_q.get(timeout=120)
+                except queue.Empty:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Request timed out'})}\n\n"
+                    return
+
+                yield f"data: {json.dumps(event)}\n\n"
+
+                if event.get("type") in ("done", "error"):
+                    return
+        finally:
+            _sse_queues.pop(session_id, None)
+
+    return Response(
+        event_stream(),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+@app.route('/commit_session', methods=['POST'])
+@login_required
+def commit_session():
+    """Persist state from SSE 'done' payload back into the Flask session."""
+    data = request.get_json(force=True) or {}
+    if 'conversation_history' in data:
+        session['conversation_history'] = data['conversation_history']
+    if 'current_report_id' in data and data['current_report_id']:
+        session['current_report_id'] = data['current_report_id']
+    if 'report_text' in data and data['report_text']:
+        session['report_text'] = data['report_text']
+    return jsonify({'success': True})
 
 
 @app.route('/generate_report', methods=['POST'])
