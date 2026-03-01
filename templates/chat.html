@@ -120,148 +120,132 @@
         });
     }
 
-    // Handle form submission via AJAX
+    // Handle form submission via SSE streaming
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.querySelector('form[action="{{ url_for('continue_conversation') }}"]');
         const input = document.getElementById('user_response');
         const chatMessages = document.getElementById('chat-messages');
-        
-        if (form && input && chatMessages) {
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault(); // Prevent default form submission
-                
-                const userMessage = input.value.trim();
-                
-                if (!userMessage) return;
-                
-                // Create FormData BEFORE disabling input (disabled fields are excluded from FormData)
-                const formData = new FormData(form);
-                // Manually append userMessage to ensure it's included (disabled fields may not be captured)
-                formData.set('user_response', userMessage);
-                
-                // Disable form while processing
-                const submitButton = form.querySelector('button[type="submit"]');
-                const originalButtonContent = submitButton.innerHTML;
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<span class="material-symbols-outlined text-xl animate-spin">sync</span>';
-                input.disabled = true;
-                
-                // Add user message to chat immediately
-                const userMessageDiv = createUserMessage(userMessage);
-                chatMessages.appendChild(userMessageDiv);
-                scrollToBottom();
-                
-                // Clear input (now safe to clear since FormData is already created)
-                input.value = '';
-                
-                // Detect if this might trigger report generation
-                const reportKeywords = ['generate', 'report', 'create report', 'synthesize', 'final report', 'business model'];
-                const lowerMessage = userMessage.toLowerCase();
-                const isLikelyReportGeneration = reportKeywords.some(keyword => lowerMessage.includes(keyword));
-                
-                // Add loading indicator for AI response
-                // Start with regular thinking, switch to synthesis messages if it takes longer
-                const loadingDiv = createLoadingMessage(false);
-                chatMessages.appendChild(loadingDiv);
-                scrollToBottom();
-                
-                // If likely report generation, switch to synthesis messages after 2 seconds
-                // Also switch if loading takes longer than 5 seconds (indicating report generation)
-                let synthesisCheckTimeout = null;
-                let longLoadingTimeout = null;
-                
-                const switchToSynthesisMessages = () => {
-                    const loadingText = loadingDiv.querySelector('#loading-message-text');
-                    if (loadingText && document.body.contains(loadingText)) {
-                        loadingText.textContent = synthesisMessages[0];
-                        synthesisMessageIndex = 0;
-                        startSynthesisMessageRotation(loadingDiv);
+
+        if (!form || !input || !chatMessages) return;
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const userMessage = input.value.trim();
+            if (!userMessage) return;
+
+            const formData = new FormData(form);
+            formData.set('user_response', userMessage);
+
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalButtonContent = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="material-symbols-outlined text-xl animate-spin">sync</span>';
+            input.disabled = true;
+            input.value = '';
+
+            // Show user message immediately
+            chatMessages.appendChild(createUserMessage(userMessage));
+            scrollToBottom();
+
+            // Show working bubble
+            const workingDiv = createWorkingBubble('Thinking...');
+            chatMessages.appendChild(workingDiv);
+            scrollToBottom();
+
+            let es = null;
+
+            const restoreForm = () => {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonContent;
+                input.disabled = false;
+                input.focus();
+            };
+
+            try {
+                // POST /continue — kicks off background thread, returns {streaming, session_id}
+                const resp = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!resp.ok) {
+                    workingDiv.remove();
+                    chatMessages.appendChild(createErrorMessage(`Server error ${resp.status}`));
+                    scrollToBottom();
+                    restoreForm();
+                    return;
+                }
+
+                const initData = await resp.json();
+                if (!initData.success) {
+                    workingDiv.remove();
+                    chatMessages.appendChild(createErrorMessage(initData.error || 'Failed to start request.'));
+                    scrollToBottom();
+                    restoreForm();
+                    return;
+                }
+
+                // Open SSE stream
+                es = new EventSource(`/stream/${initData.session_id}`);
+
+                es.onmessage = async function(event) {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'step') {
+                        updateWorkingBubble(workingDiv, data.message);
+                        scrollToBottom();
+
+                    } else if (data.type === 'done') {
+                        es.close();
+                        workingDiv.remove();
+
+                        chatMessages.appendChild(createAssistantMessage(data.assistant_message));
+
+                        if (data.report_generated && data.report_preview) {
+                            chatMessages.appendChild(createAssistantMessage(data.report_preview));
+                        }
+
+                        scrollToBottom();
+
+                        // Persist state to Flask session
+                        await fetch('/commit_session', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                conversation_history: data.conversation_history,
+                                current_report_id: data.current_report_id,
+                                report_text: data.report_text,
+                            }),
+                        });
+
+                        restoreForm();
+
+                    } else if (data.type === 'error') {
+                        es.close();
+                        workingDiv.remove();
+                        chatMessages.appendChild(createErrorMessage(data.message || 'An error occurred.'));
+                        scrollToBottom();
+                        restoreForm();
                     }
                 };
-                
-                if (isLikelyReportGeneration) {
-                    synthesisCheckTimeout = setTimeout(switchToSynthesisMessages, 2000);
-                }
-                
-                // Always check after 5 seconds - if still loading, probably synthesis
-                longLoadingTimeout = setTimeout(() => {
-                    const loadingText = loadingDiv.querySelector('#loading-message-text');
-                    if (loadingText && loadingText.textContent === 'Thinking...') {
-                        switchToSynthesisMessages();
-                    }
-                }, 5000);
-                
-                try {
-                    // Send request via fetch (FormData already created with correct value)
-                    
-                    const response = await fetch(form.action, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'X-CSRFToken': document.querySelector('[name=csrf_token]').value
-                        }
-                    });
-                    
-                    // Stop synthesis message rotation and remove loading indicator
-                    stopSynthesisMessageRotation();
-                    if (synthesisCheckTimeout) {
-                        clearTimeout(synthesisCheckTimeout);
-                    }
-                    if (longLoadingTimeout) {
-                        clearTimeout(longLoadingTimeout);
-                    }
-                    loadingDiv.remove();
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.success) {
-                            // Add assistant message
-                            const assistantDiv = createAssistantMessage(data.assistant_message);
-                            chatMessages.appendChild(assistantDiv);
-                            
-                            // If a report was generated, add it as well
-                            if (data.report_generated && data.report_preview) {
-                                const reportDiv = createAssistantMessage(data.report_preview);
-                                chatMessages.appendChild(reportDiv);
-                            }
-                            
-                            scrollToBottom();
-                        } else {
-                            // Server returned error
-                            const errorDiv = createErrorMessage(data.error || 'Failed to send message. Please try again.');
-                            chatMessages.appendChild(errorDiv);
-                            scrollToBottom();
-                        }
-                    } else {
-                        // HTTP error status
-                        const errorData = await response.json().catch(() => ({ error: 'Server error occurred' }));
-                        const errorDiv = createErrorMessage(errorData.error || `Error ${response.status}: ${response.statusText}`);
-                        chatMessages.appendChild(errorDiv);
-                        scrollToBottom();
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                    stopSynthesisMessageRotation();
-                    if (synthesisCheckTimeout) {
-                        clearTimeout(synthesisCheckTimeout);
-                    }
-                    if (longLoadingTimeout) {
-                        clearTimeout(longLoadingTimeout);
-                    }
-                    loadingDiv.remove();
-                    const errorDiv = createErrorMessage('Network error: Failed to send message. Please check your connection and try again.');
-                    chatMessages.appendChild(errorDiv);
+
+                es.onerror = function() {
+                    es.close();
+                    workingDiv.remove();
+                    chatMessages.appendChild(createErrorMessage('Connection lost. Please try again.'));
                     scrollToBottom();
-                } finally {
-                    // Re-enable form
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = originalButtonContent;
-                    input.disabled = false;
-                    input.focus();
-                }
-            });
-        }
+                    restoreForm();
+                };
+
+            } catch (error) {
+                console.error('Error:', error);
+                workingDiv.remove();
+                chatMessages.appendChild(createErrorMessage('Network error. Please check your connection and try again.'));
+                scrollToBottom();
+                restoreForm();
+            }
+        });
     });
     
     // Helper function to scroll to bottom
@@ -327,34 +311,12 @@
         return div;
     }
     
-    // Synthesis status messages for report generation
-    const synthesisMessages = [
-        "Synthesizing research findings into comprehensive report...",
-        "Combining insights from all research areas...",
-        "Organizing analysis into structured format...",
-        "Integrating financial data and market research...",
-        "Crafting investment thesis and recommendations...",
-        "Writing executive summary and key conclusions...",
-        "Formatting final report sections..."
-    ];
-    
-    let synthesisMessageIndex = 0;
-    let synthesisMessageInterval = null;
-    
-    // Create loading message element
-    function createLoadingMessage(isSynthesisPhase = false) {
+    // Create working bubble with spinner — updated in real time via SSE steps
+    function createWorkingBubble(initialMessage) {
         const div = document.createElement('div');
         div.className = 'flex items-start gap-3';
-        div.id = 'loading-message';
+        div.id = 'working-bubble';
         const timeString = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        // Determine initial message
-        let initialMessage = "Thinking...";
-        if (isSynthesisPhase && synthesisMessages.length > 0) {
-            initialMessage = synthesisMessages[0];
-            synthesisMessageIndex = 0;
-        }
-        
         div.innerHTML = `
             <div class="flex-shrink-0 size-8 rounded-full bg-surface-dark flex items-center justify-center">
                 <span class="material-symbols-outlined text-white text-xl">smart_toy</span>
@@ -366,50 +328,18 @@
                 </div>
                 <div class="bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl">
                     <div class="flex items-center gap-2">
-                        <div class="animate-pulse text-stone-400 text-sm" id="loading-message-text">${initialMessage}</div>
+                        <span class="material-symbols-outlined text-stone-400 text-base animate-spin">autorenew</span>
+                        <span class="animate-pulse text-stone-400 text-sm" id="working-step-text">${escapeHtml(initialMessage)}</span>
                     </div>
                 </div>
             </div>
         `;
-        
-        // Start rotating messages if in synthesis phase
-        if (isSynthesisPhase) {
-            startSynthesisMessageRotation(div);
-        }
-        
         return div;
     }
-    
-    // Rotate synthesis messages every 10 seconds
-    function startSynthesisMessageRotation(loadingDiv) {
-        // Clear any existing interval
-        if (synthesisMessageInterval) {
-            clearInterval(synthesisMessageInterval);
-        }
-        
-        const messageElement = loadingDiv.querySelector('#loading-message-text');
-        if (!messageElement || synthesisMessages.length === 0) return;
-        
-        synthesisMessageIndex = 0;
-        
-        synthesisMessageInterval = setInterval(() => {
-            if (messageElement && document.body.contains(messageElement)) {
-                synthesisMessageIndex = (synthesisMessageIndex + 1) % synthesisMessages.length;
-                messageElement.textContent = synthesisMessages[synthesisMessageIndex];
-            } else {
-                // Element removed, stop rotation
-                clearInterval(synthesisMessageInterval);
-                synthesisMessageInterval = null;
-            }
-        }, 10000); // Change message every 10 seconds
-    }
-    
-    // Stop synthesis message rotation
-    function stopSynthesisMessageRotation() {
-        if (synthesisMessageInterval) {
-            clearInterval(synthesisMessageInterval);
-            synthesisMessageInterval = null;
-        }
+
+    function updateWorkingBubble(div, message) {
+        const el = div.querySelector('#working-step-text');
+        if (el) el.textContent = message;
     }
     
     // Create error message element

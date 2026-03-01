@@ -7,7 +7,7 @@ Uses a single structured JSON call (no tool use) for speed and determinism.
 
 import json
 import os
-from typing import List
+from typing import List, Optional
 
 from google import genai
 from google.genai import types
@@ -39,6 +39,7 @@ class PlannerAgent:
         ticker: str,
         trade_type: str,
         conversation_context: str,
+        trace_context=None,
     ) -> ResearchPlan:
         """
         Build a ResearchPlan for the given ticker/trade type/context.
@@ -50,6 +51,15 @@ class PlannerAgent:
         system_prompt = self._build_system_prompt(ticker, trade_type, eligible)
         user_prompt = self._build_user_prompt(ticker, trade_type, conversation_context, eligible)
 
+        span = trace_context.start_span("planner", input=ticker) if trace_context else None
+        gen = None
+        if trace_context:
+            gen = trace_context.start_generation(
+                name=f"llm:{PLANNER_MODEL}",
+                model=PLANNER_MODEL,
+                input={"system": system_prompt, "messages": [{"role": "user", "content": user_prompt}]},
+                parent_span=span,
+            )
         try:
             response = self._client.models.generate_content(
                 model=PLANNER_MODEL,
@@ -63,10 +73,19 @@ class PlannerAgent:
                 ),
             )
             raw_json = response.text
-            return self._parse_response(raw_json, ticker, trade_type, eligible)
+            if trace_context and gen:
+                trace_context.end_generation(gen, output=raw_json, usage=getattr(response, "usage_metadata", None))
+            plan = self._parse_response(raw_json, ticker, trade_type, eligible)
+            if trace_context:
+                trace_context.end_span(span, output=plan.selected_subject_ids)
+            return plan
 
         except Exception as exc:
             print(f"[PlannerAgent] LLM call failed ({exc}); using full eligible subject list.")
+            if trace_context and gen:
+                trace_context.end_generation(gen)
+            if trace_context:
+                trace_context.end_span(span, error=str(exc))
             return self._fallback_plan(ticker, trade_type, eligible)
 
     def _build_system_prompt(self, ticker: str, trade_type: str, eligible: List[ResearchSubject]) -> str:

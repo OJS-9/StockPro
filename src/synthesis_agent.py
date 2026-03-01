@@ -37,6 +37,8 @@ class SynthesisAgent:
         trade_type: str,
         research_outputs: Dict[str, Dict[str, Any]],
         plan: ResearchPlan,
+        trace_context=None,
+        parent_span=None,
     ) -> str:
         """Synthesize all research outputs into a final report."""
         synthesis_prompt = self._build_synthesis_prompt(ticker, trade_type, research_outputs, plan)
@@ -57,6 +59,8 @@ class SynthesisAgent:
                 max_turns=3,
                 temperature=0.7,
                 max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
+                trace_context=trace_context,
+                parent_span=parent_span,
             )
         except Exception as e:
             error_msg = f"Error synthesizing report: {e}"
