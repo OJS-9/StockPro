@@ -63,9 +63,10 @@ def _json_schema_to_genai_schema(schema: Dict[str, Any]) -> types.Schema:
     return types.Schema(**kwargs)
 
 
-def _make_mcp_handler(mcp_client: MCPClient, mcp_tool_name: str):
+def _make_mcp_handler(mcp_client: MCPClient, mcp_tool_name: str, trace_context=None):
     """Return a sync handler callable for an MCP tool."""
     def handler(args: Dict[str, Any]) -> str:
+        span = trace_context.start_span(f"tool:{mcp_tool_name}", input=args) if trace_context else None
         try:
             result = execute_tool_by_name(mcp_client, mcp_tool_name, args)
             if isinstance(result, dict):
@@ -74,31 +75,51 @@ def _make_mcp_handler(mcp_client: MCPClient, mcp_tool_name: str):
                         result[key] = result[key][:MAX_SERIES_ITEMS]
                 if "feed" in result and isinstance(result["feed"], list) and len(result["feed"]) > MAX_NEWS_ITEMS:
                     result["feed"] = result["feed"][:MAX_NEWS_ITEMS]
-                return json.dumps(result, indent=2, default=str)
-            return str(result)
+                output = json.dumps(result, indent=2, default=str)
+                if trace_context:
+                    trace_context.end_span(span, output=output)
+                return output
+            out = str(result)
+            if trace_context:
+                trace_context.end_span(span, output=out)
+            return out
         except Exception as e:
+            if trace_context:
+                trace_context.end_span(span, error=str(e))
             return json.dumps({"error": f"Tool execution failed: {e}", "tool": mcp_tool_name}, indent=2)
     return handler
 
 
-def _make_perplexity_handler(perplexity_client: PerplexityClient):
+def _make_perplexity_handler(perplexity_client: PerplexityClient, trace_context=None):
     """Return a sync handler callable for the Perplexity research tool."""
     def handler(args: Dict[str, Any]) -> str:
         query = str(args.get("query", ""))
         focus = str(args.get("focus", "general"))
         if not query:
             return json.dumps({"error": "query parameter is required", "status": "error"})
-        result = execute_perplexity_research(perplexity_client, query=query, focus=focus)
-        if isinstance(result, dict):
-            for key in ("results", "answers", "citations", "items"):
-                if key in result and isinstance(result[key], list) and len(result[key]) > MAX_RESEARCH_ITEMS:
-                    result[key] = result[key][:MAX_RESEARCH_ITEMS]
-            return json.dumps(result, indent=2, default=str)
-        return json.dumps({"research": str(result), "status": "success"})
+        span = trace_context.start_span("tool:perplexity_research", input={"query": query, "focus": focus}) if trace_context else None
+        try:
+            result = execute_perplexity_research(perplexity_client, query=query, focus=focus)
+            if isinstance(result, dict):
+                for key in ("results", "answers", "citations", "items"):
+                    if key in result and isinstance(result[key], list) and len(result[key]) > MAX_RESEARCH_ITEMS:
+                        result[key] = result[key][:MAX_RESEARCH_ITEMS]
+                output = json.dumps(result, indent=2, default=str)
+                if trace_context:
+                    trace_context.end_span(span, output=output)
+                return output
+            out = json.dumps({"research": str(result), "status": "success"})
+            if trace_context:
+                trace_context.end_span(span, output=out)
+            return out
+        except Exception as e:
+            if trace_context:
+                trace_context.end_span(span, error=str(e))
+            return json.dumps({"error": f"Perplexity failed: {e}"})
     return handler
 
 
-def create_mcp_tools(mcp_client: MCPClient) -> Tuple[List[types.Tool], Dict[str, Any]]:
+def create_mcp_tools(mcp_client: MCPClient, trace_context=None) -> Tuple[List[types.Tool], Dict[str, Any]]:
     """Create Gemini Tool objects and handlers for the 6 essential MCP tools."""
     if not mcp_client:
         return [], {}
@@ -123,14 +144,14 @@ def create_mcp_tools(mcp_client: MCPClient) -> Tuple[List[types.Tool], Dict[str,
                 parameters=_json_schema_to_genai_schema(input_schema),
             )
             tools_list.append(types.Tool(function_declarations=[declaration]))
-            handlers[normalized_name] = _make_mcp_handler(mcp_client, mcp_tool_name)
+            handlers[normalized_name] = _make_mcp_handler(mcp_client, mcp_tool_name, trace_context)
         except Exception as e:
             print(f"Warning: Could not create tool for {mcp_tool_name}: {e}")
 
     return tools_list, handlers
 
 
-def create_perplexity_tool(perplexity_client: PerplexityClient) -> Tuple[Optional[types.Tool], Dict[str, Any]]:
+def create_perplexity_tool(perplexity_client: PerplexityClient, trace_context=None) -> Tuple[Optional[types.Tool], Dict[str, Any]]:
     """Create Gemini Tool object and handler for Perplexity research."""
     if not perplexity_client:
         return None, {}
@@ -171,13 +192,14 @@ def create_perplexity_tool(perplexity_client: PerplexityClient) -> Tuple[Optiona
     )
 
     tool = types.Tool(function_declarations=[declaration])
-    handler = _make_perplexity_handler(perplexity_client)
+    handler = _make_perplexity_handler(perplexity_client, trace_context)
     return tool, {"perplexity_research": handler}
 
 
 def create_all_tools(
     mcp_client: Optional[MCPClient],
     perplexity_client: Optional[PerplexityClient],
+    trace_context=None,
 ) -> Tuple[List[types.Tool], Dict[str, Any]]:
     """
     Create all tools for use with gemini_runner.
@@ -190,12 +212,12 @@ def create_all_tools(
     handlers: Dict[str, Any] = {}
 
     if mcp_client:
-        mcp_tools, mcp_handlers = create_mcp_tools(mcp_client)
+        mcp_tools, mcp_handlers = create_mcp_tools(mcp_client, trace_context)
         tools_list.extend(mcp_tools)
         handlers.update(mcp_handlers)
 
     if perplexity_client:
-        perp_tool, perp_handlers = create_perplexity_tool(perplexity_client)
+        perp_tool, perp_handlers = create_perplexity_tool(perplexity_client, trace_context)
         if perp_tool:
             tools_list.append(perp_tool)
             handlers.update(perp_handlers)

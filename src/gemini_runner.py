@@ -26,6 +26,27 @@ def _get_client() -> genai.Client:
     return _client
 
 
+def _contents_to_log(contents: list) -> list:
+    """Serialize types.Content objects to a JSON-safe list for LangFuse."""
+    result = []
+    for c in contents:
+        parts_text = []
+        for p in (c.parts or []):
+            text = getattr(p, "text", None)
+            if text:
+                parts_text.append(text)
+            else:
+                fc = getattr(p, "function_call", None)
+                if fc:
+                    parts_text.append(f"[tool_call: {fc.name}({dict(fc.args)})]")
+                else:
+                    fr = getattr(p, "function_response", None)
+                    if fr:
+                        parts_text.append(f"[tool_result: {fr.name}]")
+        result.append({"role": c.role, "content": "\n".join(parts_text)})
+    return result
+
+
 def run_agent(
     model: str,
     system_instruction: str,
@@ -36,6 +57,8 @@ def run_agent(
     temperature: float,
     max_output_tokens: int,
     thinking_budget: Optional[int] = None,
+    trace_context=None,
+    parent_span=None,
 ) -> str:
     """
     Run a synchronous multi-turn agent loop with optional tool calling.
@@ -70,7 +93,16 @@ def run_agent(
         thinking_config=thinking_cfg,
     )
 
-    for _ in range(max_turns):
+    for turn in range(max_turns):
+        gen = None
+        if trace_context:
+            gen = trace_context.start_generation(
+                name=f"llm:turn-{turn + 1}",
+                model=model,
+                input={"system": system_instruction, "messages": _contents_to_log(contents)},
+                parent_span=parent_span,
+            )
+
         response = client.models.generate_content(
             model=model,
             contents=contents,
@@ -91,7 +123,22 @@ def run_agent(
         if not fn_calls:
             # No tool calls — extract text and return
             text_parts = [p.text for p in candidate.content.parts if hasattr(p, "text") and p.text]
-            return "\n".join(text_parts) if text_parts else (getattr(response, "text", None) or "")
+            final_text = "\n".join(text_parts) if text_parts else (getattr(response, "text", None) or "")
+            if trace_context and gen:
+                trace_context.end_generation(
+                    gen, output=final_text, usage=getattr(response, "usage_metadata", None)
+                )
+            return final_text
+
+        # Log tool calls to generation span then end it
+        if trace_context and gen:
+            tool_calls_log = [
+                {"tool_call": p.function_call.name, "args": dict(p.function_call.args)}
+                for p in fn_calls
+            ]
+            trace_context.end_generation(
+                gen, output=tool_calls_log, usage=getattr(response, "usage_metadata", None)
+            )
 
         # Execute each tool and collect responses
         fn_response_parts = []

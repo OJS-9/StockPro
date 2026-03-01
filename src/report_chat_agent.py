@@ -37,6 +37,8 @@ class ReportChatAgent:
         user_question: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         top_k: int = 5,
+        trace_context=None,
+        parent_span=None,
     ) -> str:
         """Answer a question about a report using RAG-lite retrieval."""
         query_embedding = self.embedding_service.create_embedding(user_question)
@@ -52,6 +54,14 @@ class ReportChatAgent:
         prompt = self._build_rag_prompt(user_question, relevant_chunks, conversation_history)
         system_instructions = self._get_system_instructions()
 
+        gen = None
+        if trace_context:
+            gen = trace_context.start_generation(
+                name=f"llm:{CHAT_AGENT_MODEL}",
+                model=CHAT_AGENT_MODEL,
+                input={"system": system_instructions, "messages": [{"role": "user", "content": prompt}]},
+                parent_span=parent_span,
+            )
         try:
             response = self._client.models.generate_content(
                 model=CHAT_AGENT_MODEL,
@@ -62,8 +72,13 @@ class ReportChatAgent:
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )
-            return response.text or ""
+            answer = response.text or ""
+            if trace_context and gen:
+                trace_context.end_generation(gen, output=answer, usage=getattr(response, "usage_metadata", None))
+            return answer
         except Exception as e:
+            if trace_context and gen:
+                trace_context.end_generation(gen)
             error_msg = f"Error generating answer: {e}"
             print(error_msg)
             return error_msg
@@ -125,16 +140,22 @@ class ReportChatAgent:
 
         return "\n".join(prompt_parts)
 
-    def chat_with_report(self, report_id: str, question: str, reset_history: bool = False) -> str:
+    def chat_with_report(self, report_id: str, question: str, reset_history: bool = False, trace_context=None) -> str:
         """Chat with a report, maintaining conversation history."""
         if reset_history:
             self.conversation_history = []
 
+        span = trace_context.start_span("chat_rag", input=question) if trace_context else None
         answer = self.answer_question(
             report_id=report_id,
             user_question=question,
             conversation_history=self.conversation_history,
+            trace_context=trace_context,
+            parent_span=span,
         )
+        if trace_context:
+            tc_out = answer[:500] + "..." if len(answer) > 500 else answer
+            trace_context.end_span(span, output=tc_out)
 
         self.conversation_history.append({"role": "user", "content": question})
         self.conversation_history.append({"role": "assistant", "content": answer})

@@ -22,6 +22,7 @@ from src.report_chat_agent import ReportChatAgent
 from src.planner_agent import PlannerAgent
 from src.research_plan import ResearchPlan
 from src.gemini_runner import run_agent, _get_client
+from src.trace_service import TraceContext
 
 load_dotenv()
 
@@ -46,6 +47,7 @@ class StockResearchAgent:
         self.last_report_text: Optional[str] = None
         self.current_plan: Optional[ResearchPlan] = None
         self.user_id = None
+        self._trace_context: Optional[TraceContext] = None
         self.research_orchestrator = ResearchOrchestrator(api_key=self.api_key)
         self.synthesis_agent = SynthesisAgent(api_key=self.api_key)
         self.planner_agent = PlannerAgent(api_key=self.api_key)
@@ -157,6 +159,8 @@ class StockResearchAgent:
                 max_turns=ORCHESTRATOR_MAX_TURNS,
                 temperature=0.7,
                 max_output_tokens=ORCHESTRATOR_MAX_OUTPUT_TOKENS,
+                trace_context=self._trace_context,
+                parent_span=None,
             )
 
             if ORCHESTRATOR_DEBUG_TOKEN_LOG:
@@ -182,35 +186,53 @@ class StockResearchAgent:
         print(f"Starting parallel research for {ticker} ({trade_type})")
         print(f"{'='*60}\n")
 
+        tc = self._trace_context
+        print(f"[TRACE DEBUG] _trace_context={tc}, _root_span={getattr(tc, '_root_span', 'N/A')}, _lf={getattr(tc, '_lf', 'N/A')}")
+
         try:
             print(f"{'='*60}")
             print("Building research plan with PlannerAgent...")
             print(f"{'='*60}\n")
 
+            if tc:
+                tc.emit_step("Planning research subjects...")
             plan = self.planner_agent.build_plan(
                 ticker=ticker,
                 trade_type=trade_type,
                 conversation_context=context,
+                trace_context=tc,
             )
             self.current_plan = plan
 
+            subject_names = ", ".join(plan.selected_subject_ids)
             print(
                 f"Research plan: {len(plan.selected_subject_ids)} subjects — "
-                + ", ".join(plan.selected_subject_ids)
+                + subject_names
             )
+            if tc:
+                tc.emit_step(f"Researching: {subject_names}...")
 
-            research_outputs = self.research_orchestrator.run_parallel_research(plan=plan)
+            research_outputs = self.research_orchestrator.run_parallel_research(
+                plan=plan, trace_context=tc
+            )
 
             print(f"\n{'='*60}")
             print("Synthesizing research findings into final report...")
             print(f"{'='*60}\n")
 
+            if tc:
+                tc.emit_step("Synthesizing report...")
+            synthesis_span = tc.start_span("synthesis", input=ticker) if tc else None
             report_text = self.synthesis_agent.synthesize_report(
                 ticker=ticker,
                 trade_type=trade_type,
                 research_outputs=research_outputs,
                 plan=plan,
+                trace_context=tc,
+                parent_span=synthesis_span,
             )
+            if tc:
+                tc.end_span(synthesis_span, output=f"{len(report_text)} chars")
 
             self.last_report_text = report_text
             self.current_report_id = str(uuid.uuid4())
@@ -219,6 +241,8 @@ class StockResearchAgent:
             print("Storing report with chunking and embeddings...")
             print(f"{'='*60}\n")
 
+            if tc:
+                tc.emit_step("Storing report...")
             metadata = {
                 "trade_type": trade_type,
                 "research_subjects": plan.selected_subject_ids,
@@ -226,6 +250,7 @@ class StockResearchAgent:
                 "planner_reasoning": plan.planner_reasoning,
             }
 
+            storage_span = tc.start_span("storage", input=ticker) if tc else None
             try:
                 report_id = self.report_storage.store_report(
                     ticker=ticker,
@@ -235,12 +260,15 @@ class StockResearchAgent:
                     user_id=self.user_id,
                 )
                 self.current_report_id = report_id
+                if tc:
+                    tc.end_span(storage_span, output=report_id)
                 print(f"\n{'='*60}")
                 print(f"Report generated and stored: {report_id}")
                 print(f"{'='*60}\n")
             except Exception as storage_err:
+                if tc:
+                    tc.end_span(storage_span, error=str(storage_err))
                 print(f"Report storage failed (display will still work, RAG chat disabled): {storage_err}")
-
 
             return report_text
 
@@ -248,6 +276,11 @@ class StockResearchAgent:
             error_msg = f"Error generating report: {e}"
             print(error_msg)
             return error_msg
+        finally:
+            print(f"[TRACE DEBUG] finally block reached, tc={tc}")
+            if tc:
+                tc.finish(output=f"Report {self.current_report_id or 'unknown'}")
+                print(f"[TRACE DEBUG] tc.finish() called")
 
     def chat_with_report(self, question: str) -> str:
         """Chat with the current report using RAG-lite."""
@@ -257,6 +290,10 @@ class StockResearchAgent:
             report_id=self.current_report_id,
             question=question,
         )
+
+    def set_trace_context(self, tc: Optional[TraceContext]):
+        """Attach a TraceContext for step emission and LangFuse spans."""
+        self._trace_context = tc
 
     def reset_conversation(self):
         """Reset the conversation history."""
@@ -286,6 +323,8 @@ def _run_agent_with_retry(
     max_turns: int,
     temperature: float,
     max_output_tokens: int,
+    trace_context=None,
+    parent_span=None,
 ) -> str:
     max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
     base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
@@ -303,6 +342,8 @@ def _run_agent_with_retry(
                 temperature=temperature,
                 max_output_tokens=max_output_tokens,
                 thinking_budget=0,
+                trace_context=trace_context,
+                parent_span=parent_span,
             )
         except Exception as exc:
             last_exc = exc
