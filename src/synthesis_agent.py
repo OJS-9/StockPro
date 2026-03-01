@@ -222,6 +222,10 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
             "  Each bullet must contain a specific metric or fact (no vague conclusions).",
             "  Cover at minimum: one growth finding, one margin finding, one competitive finding,",
             "  one near-term catalyst, and one primary risk.",
+            "- **COMPLETION REQUIREMENT**: You MUST write every section in the structure above,",
+            "  in order, without stopping early. Do NOT stop after Key Takeaways — the Sources",
+            "  and Citations section is mandatory. Only stop once you have written the final",
+            "  line of the Sources and Citations section. End the report with: END_OF_REPORT",
         ]
 
         return "\n".join(prompt_parts)
