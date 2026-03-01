@@ -83,6 +83,10 @@ def run_agent(
             return fallback if fallback else last_response_text or "[No response from model]"
 
         candidate = response.candidates[0]
+        finish_reason = getattr(candidate, "finish_reason", None)
+        finish_message = getattr(candidate, "finish_message", None)
+        print(f"[Gemini] finish_reason={finish_reason}, finish_message={finish_message}")
+
         contents.append(candidate.content)
 
         # Collect function calls from this turn
