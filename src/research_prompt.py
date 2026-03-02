@@ -40,28 +40,25 @@ Use a clear structure:
 
 ## Research Tools
 
-You have two complementary tool types:
+You have three complementary tool types:
 
-- Alpha Vantage MCP (structured data): fundamentals, financial statements, earnings, balance sheet, cash flow.
-- Perplexity Research (real-time web): news, market analysis, industry trends, expert opinions.
+- **Alpha Vantage MCP** (structured data): fundamentals, financial statements, earnings, balance sheet, cash flow.
+- **Nimble** (raw web): `nimble_web_search` for web searches, `nimble_extract` to read a specific URL.
+- **Perplexity** (synthesized answers): use sparingly for complex analytical questions only.
 
 Tool strategy:
-- Use Alpha Vantage first for core financials and trends.
-- Use Perplexity for current context, news, and qualitative insights.
-- Combine both for a balanced, data-driven view.
+- Use Alpha Vantage first for core financials and hard numbers.
+- Use nimble_web_search for any factual web research — news, announcements, filings, competitive moves.
+- Use nimble_extract when you have a specific URL to read in full.
+- Use Perplexity only when a synthesized expert answer adds value that raw search results cannot.
 
 Key Alpha Vantage tools:
 - overview, income_statement, balance_sheet, cash_flow, earnings, news_sentiment
 
 When using financial statement tools, analyze YoY and QoQ trends for revenue, margins, cash flow, and balance sheet strength. Summarize key trends rather than listing every data point.
 
-When using Perplexity, focus on:
-- Recent company and sector news
-- Management and C-suite developments
-- Notable analyst or market commentary
-
 Before generating the final report:
-- Ensure you have used both structured data and real-time research where relevant.
+- Ensure you have used structured financial data and real-time web research where relevant.
 - Ask a small number of clarifying questions if the user’s goals or constraints are unclear.
 
 Final output:
@@ -107,9 +104,23 @@ Your specific research task: {subject.description}
 - For Swing Trade: Focus on near-term (1–14 day) drivers.
 - For Investment: Focus on comprehensive, long-term fundamentals.
 
-**Available Tools:**
-- Alpha Vantage MCP: structured financial data, fundamentals, statements.
-- Perplexity Research: real-time news, analysis, qualitative insights.
+**Available Tools and When to Use Each:**
+
+1. **Alpha Vantage MCP** — structured financial data only.
+   Use for: income statements, balance sheets, cash flow, earnings, company overview, news sentiment scores.
+
+2. **nimble_web_search** — your primary tool for all web research.
+   Use for: product announcements, press releases, leadership changes, competitive moves, partnerships, regulatory filings, industry news, analyst commentary, pricing changes, and any factual company or market information you need to find yourself.
+   You are the analyst — search, read the results, and form your own conclusions.
+   Prefer `topic="news"` for recent events. Use `time_range="month"` or `time_range="week"` for recency.
+
+3. **nimble_extract** — read a specific page in full.
+   Use when a search result returns a URL that you need to read completely (e.g., a press release, earnings transcript, SEC filing page, investor relations announcement).
+
+4. **perplexity_research** — use sparingly, only when you need a synthesized expert answer.
+   Reserve for: complex multi-source analytical questions where synthesis adds value over raw results (e.g., "What is the consensus view on X's competitive moat?"). Do NOT use it for facts you can find directly with nimble_web_search.
+
+**Tool priority:** Alpha Vantage → nimble_web_search → nimble_extract → perplexity_research (last resort).
 
 **Output Format (required):**
 - Use markdown headers for each analytical section
@@ -226,7 +237,7 @@ def get_followup_question_prompt(trade_type: str, context: str = "") -> str:
 
 {guidance}
 
-If you need clarification on any of these areas, ask 1-3 concise, specific questions. Otherwise, proceed with gathering data using Alpha Vantage MCP tools and Perplexity research, then generate the research report.
+If you need clarification on any of these areas, ask 1-3 concise, specific questions. Otherwise, proceed with gathering data using Alpha Vantage MCP tools, Nimble web search, and Perplexity where synthesis is needed, then generate the research report.
 
 Context: {context}
 """

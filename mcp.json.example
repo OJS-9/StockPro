@@ -7,6 +7,19 @@
   }
 }
 
+// Nimble MCP server (for Claude Desktop / external MCP clients).
+// The Python app uses NIMBLE_API_KEY via src/nimble_client.py directly.
+// For Claude Desktop, add this to claude_desktop_config.json:
+// {
+//   "mcpServers": {
+//     "nimble-mcp-server": {
+//       "command": "npx",
+//       "args": ["-y", "mcp-remote@latest", "https://mcp.nimbleway.com/sse", "--header", "Authorization:${NIMBLE_API_KEY}"],
+//       "env": { "NIMBLE_API_KEY": "Bearer YOUR_NIMBLE_API_KEY" }
+//     }
+//   }
+// }
+
 
 
 

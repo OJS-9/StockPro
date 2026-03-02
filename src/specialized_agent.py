@@ -30,6 +30,7 @@ class SpecializedResearchAgent:
         self.mcp_manager = MCPManager()
         self.mcp_client = None
         self.perplexity_client = None
+        self.nimble_client = None
         self.tools_list = []
         self.tool_handlers = {}
 
@@ -47,15 +48,27 @@ class SpecializedResearchAgent:
             from perplexity_client import PerplexityClient
             self.perplexity_client = PerplexityClient()
         except ValueError as e:
-            print(f"Info: Perplexity API not configured ({e}). Continuing with Alpha Vantage tools only.")
+            print(f"Info: Perplexity API not configured ({e}). Continuing without Perplexity.")
             self.perplexity_client = None
         except Exception as e:
             print(f"Warning: Could not initialize Perplexity client: {e}")
             self.perplexity_client = None
 
+        try:
+            from nimble_client import NimbleClient
+            self.nimble_client = NimbleClient()
+        except ValueError as e:
+            print(f"Info: Nimble API not configured ({e}). Continuing without Nimble tools.")
+            self.nimble_client = None
+        except Exception as e:
+            print(f"Warning: Could not initialize Nimble client: {e}")
+            self.nimble_client = None
+
     def _initialize_tools(self):
         try:
-            self.tools_list, self.tool_handlers = create_all_tools(self.mcp_client, self.perplexity_client)
+            self.tools_list, self.tool_handlers = create_all_tools(
+                self.mcp_client, self.perplexity_client, self.nimble_client
+            )
         except Exception as e:
             print(f"Warning: Could not create tools: {e}")
             self.tools_list = []
