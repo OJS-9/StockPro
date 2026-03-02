@@ -104,3 +104,27 @@ class NimbleClient:
             return {"error": f"[Nimble timeout] Search exceeded {self.timeout:.0f}s: {e}"}
         except Exception as e:
             return {"error": f"[Nimble error] Search failed: {e}"}
+
+    def run_agent(self, agent_name: str, params: dict) -> list:
+        """
+        Run a Nimble pre-built agent and return its parsed results list.
+
+        Args:
+            agent_name: Agent ID (e.g. 'bloomberg_search_...')
+            params: Input parameters matching the agent's input schema
+
+        Returns:
+            List of result dicts, or empty list on failure
+        """
+        payload = {"agent": agent_name, "params": params}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(
+                    f"{NIMBLE_API_BASE}/agents/run",
+                    headers=self._headers(),
+                    json=payload,
+                )
+                resp.raise_for_status()
+                return resp.json().get("data", {}).get("parsing", [])
+        except Exception:
+            return []
