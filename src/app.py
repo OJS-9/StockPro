@@ -115,6 +115,9 @@ agent_sessions = {}
 # SSE step queues — keyed by session_id; cleaned up after stream completes
 _sse_queues: dict = {}
 
+# Background generation status — keyed by session_id
+_generation_status: dict = {}
+
 
 def initialize_session(session_id: str) -> StockResearchAgent:
     """
@@ -139,6 +142,38 @@ def get_or_create_session_id():
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
     return session['session_id']
+
+
+def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
+    """Make a single Gemini call to get 1-3 multiple-choice clarifying questions."""
+    from google import genai as _genai
+    from google.genai import types as _types
+
+    client = _genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    prompt = (
+        f"You are a stock research assistant. A user wants a {trade_type} research report on {ticker}. "
+        "Generate 1–3 multiple-choice clarifying questions to better tailor the report. "
+        "Each question must have 3–4 short answer options. "
+        "Return ONLY a JSON array of objects with keys 'question' (string) and 'options' (array of strings). "
+        'Example: [{"question": "What is your time horizon?", "options": ["Under 1 month", "1–6 months", "6–12 months", "1+ years"]}]'
+    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt,
+            config=_types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=400,
+                response_mime_type="application/json",
+            ),
+        )
+        questions = json.loads(response.text)
+        if isinstance(questions, list) and questions and isinstance(questions[0], dict):
+            return questions
+    except Exception:
+        pass
+    return [{"question": f"What is your primary goal for researching {ticker}?",
+             "options": ["Long-term investment", "Swing trade", "Day trade", "General analysis"]}]
 
 
 # ==================== Auth Routes ====================
@@ -579,6 +614,89 @@ def clear_conversation():
             pass
 
     return redirect(url_for('chat'))
+
+
+# ==================== Popup Q&A + Background Generation Routes ====================
+
+@app.route('/popup_start', methods=['POST'])
+@login_required
+def popup_start():
+    """Fetch clarifying questions for ticker + trade_type and initialize agent session."""
+    ticker = (request.form.get('ticker') or '').strip().upper()
+    trade_type = (request.form.get('trade_type') or '').strip()
+
+    if not ticker or not trade_type:
+        return jsonify({'error': 'ticker and trade_type are required'}), 400
+
+    session_id = get_or_create_session_id()
+    agent = initialize_session(session_id)
+    agent.reset_conversation()
+
+    # Set agent state without making an LLM call
+    agent.current_ticker = ticker
+    agent.current_trade_type = trade_type
+
+    # Store for use in start_generation
+    session['current_ticker'] = ticker
+    session['current_trade_type'] = trade_type
+
+    questions = _fetch_clarifying_questions(ticker, trade_type)
+    return jsonify({'questions': questions, 'session_id': session_id})
+
+
+@app.route('/start_generation', methods=['POST'])
+@login_required
+def start_generation():
+    """Kick off background report generation with collected Q&A context."""
+    data = request.get_json(force=True) or {}
+    questions = data.get('questions', [])
+    answers = data.get('answers', [])
+
+    session_id = get_or_create_session_id()
+    agent = initialize_session(session_id)
+    agent.user_id = session.get('user_id')
+
+    # Build context string from Q&A pairs
+    lines = []
+    for i, q in enumerate(questions):
+        a = answers[i] if i < len(answers) else ''
+        if q:
+            lines.append(f"Q: {q}")
+            lines.append(f"A: {a}")
+    context_str = "User context:\n" + "\n".join(lines) if lines else ""
+
+    _generation_status[session_id] = {'status': 'in_progress', 'report_id': None}
+
+    ticker = session.get('current_ticker', '')
+    trade_type = session.get('current_trade_type', 'Investment')
+
+    def run_generation():
+        tc = create_trace(ticker=ticker, trade_type=trade_type, session_id=session_id)
+        agent.set_trace_context(tc)
+        try:
+            agent.generate_report(context=context_str)
+            _generation_status[session_id] = {
+                'status': 'ready',
+                'report_id': agent.current_report_id,
+            }
+            tc.finish(output=f"Report {agent.current_report_id or 'unknown'}")
+        except Exception as e:
+            _generation_status[session_id] = {'status': 'error', 'message': str(e)}
+            tc.finish(output=f"Error: {e}")
+        finally:
+            agent.set_trace_context(None)
+
+    threading.Thread(target=run_generation, daemon=True).start()
+    return jsonify({'success': True})
+
+
+@app.route('/api/report_status/<session_id>')
+@login_required
+def report_status(session_id: str):
+    """Poll endpoint for background generation status."""
+    if session.get('session_id') != session_id:
+        return jsonify({'error': 'forbidden'}), 403
+    return jsonify(_generation_status.get(session_id, {'status': 'unknown'}))
 
 
 # ==================== Portfolio Routes ====================

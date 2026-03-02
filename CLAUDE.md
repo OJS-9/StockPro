@@ -18,7 +18,7 @@ An AI-powered multi-agent stock research platform that orchestrates specialized 
 | AI / LLM | Google GenAI SDK (`google-genai`), Gemini 3.1 Pro / 3 Flash |
 | Embeddings | Gemini `gemini-embedding-001` (3072d) |
 | Financial data | Alpha Vantage MCP (HTTP, JSON-RPC) |
-| Web research | Perplexity Sonar API |
+| Web research | Perplexity Sonar API, Nimble SDK API |
 | Crypto prices | CoinGecko API |
 | Database | MySQL (connection pool, pool_size=5) |
 | Vector search | NumPy cosine similarity (brute-force) |
@@ -46,6 +46,7 @@ src/
 ├── mcp_tools.py                   # MCP tool execution wrapper
 ├── perplexity_client.py           # Perplexity Sonar API client (AsyncOpenAI)
 ├── perplexity_tools.py            # Perplexity tool wrapper
+├── nimble_client.py               # Nimble SDK API client (web search + URL extraction)
 ├── report_storage.py              # Storage pipeline orchestrator
 ├── report_chunker.py              # Semantic text chunking (600-token, 100-overlap)
 ├── embedding_service.py           # OpenAI embeddings client
@@ -82,15 +83,20 @@ static/css/
 
 ## Architecture
 
+### Research UX Flow (Popup Q&A)
+
+Ticker submit on home page → popup modal (questions fetched via single Gemini call at `POST /popup_start`) → user answers all questions at once → popup closes → "Generating report..." toast → background generation thread (`POST /start_generation`) → polling via `GET /api/report_status/<session_id>` every 3s → "Report Ready" toast → click → `/report/<report_id>`.
+
+Module-level `_generation_status` dict in `app.py` tracks per-session state (`in_progress` / `ready` / `error`).
+
 ### Research Pipeline
 
 ```
-User Request
+User Request (popup answers submitted)
     │
     ▼
-StockResearchAgent (orchestrator)
-    │  ── asks 1–2 clarifying questions (max 6 turns, 4 history msgs)
-    │  ── calls generate_report tool
+Background Thread (app.py start_generation)
+    │  ── calls agent.generate_report(context=Q&A string)
     │
     ▼
 PlannerAgent
@@ -177,6 +183,8 @@ Tool outputs are truncated (max 5 series items, max 5 news items) before passing
 
 **Perplexity Sonar API** — real-time web research, queries formatted by focus type (news, analysis, financial, general), 10-second timeout.
 
+**Nimble SDK API** — raw web search (`POST /v1/search`) and URL content extraction (`POST /v1/extract`) via Bearer token auth. Exposed to specialized agents as `nimble_web_search` and `nimble_extract` tools. Complements Perplexity: Nimble for raw structured content, Perplexity for synthesized answers. Requires `NIMBLE_API_KEY` env var.
+
 **CoinGecko API** — crypto prices for portfolio module, 50+ symbol-to-ID mappings, batch price fetching.
 
 ### Database Schema (7 MySQL tables)
@@ -229,6 +237,8 @@ RESEARCH_MAX_WORKERS=3      # ThreadPoolExecutor concurrency
 PLANNER_MAX_SUBJECTS=8     # Max subjects shown to PlannerAgent
 GOOGLE_CLIENT_ID=          # Google OAuth (Authlib). Redirect URI: .../login/google/callback
 GOOGLE_CLIENT_SECRET=      # From Google Cloud Console OAuth 2.0 credentials
+NIMBLE_API_KEY=            # Nimble web search + extraction. Get from app.nimbleway.com
+NIMBLE_TIMEOUT_SECONDS=30  # Request timeout for Nimble API calls (default 30)
 ```
 
 ## Auth

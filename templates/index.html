@@ -18,18 +18,17 @@
                         </h2>
                     </div>
                     <div class="relative z-10 w-full max-w-2xl mt-6">
-                        <form method="POST" action="{{ url_for('start_research') }}" class="flex items-center gap-2 bg-white/10 dark:bg-surface-dark/90 backdrop-blur-md border border-white/20 dark:border-border-dark p-2 rounded-2xl shadow-2xl transition-all focus-within:ring-2 ring-primary/50 focus-within:bg-white/20 dark:focus-within:bg-surface-dark">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <form id="research-form" class="flex items-center gap-2 bg-white/10 dark:bg-surface-dark/90 backdrop-blur-md border border-white/20 dark:border-border-dark p-2 rounded-2xl shadow-2xl transition-all focus-within:ring-2 ring-primary/50 focus-within:bg-white/20 dark:focus-within:bg-surface-dark">
                             <div class="flex items-center justify-center pl-4 text-stone-400">
                                 <span class="material-symbols-outlined text-2xl">search</span>
                             </div>
                             <div class="flex-1 flex flex-col justify-center h-12">
-                                <input 
-                                    aria-label="Stock Ticker" 
+                                <input
+                                    aria-label="Stock Ticker"
                                     name="ticker"
                                     id="ticker"
-                                    class="w-full bg-transparent border-none p-0 text-white placeholder:text-stone-400 focus:ring-0 text-lg font-bold font-display" 
-                                    placeholder="Search Ticker..." 
+                                    class="w-full bg-transparent border-none p-0 text-white placeholder:text-stone-400 focus:ring-0 text-lg font-bold font-display"
+                                    placeholder="Search Ticker..."
                                     type="text"
                                     value="{{ current_ticker }}"
                                     required
@@ -40,8 +39,8 @@
                                     <span>BTC-USD</span>
                                 </div>
                             </div>
-                            <select 
-                                name="trade_type" 
+                            <select
+                                name="trade_type"
                                 id="trade_type"
                                 class="h-12 px-4 bg-white/10 dark:bg-surface-dark/50 border border-white/20 dark:border-border-dark text-white rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary/50 focus:outline-none"
                                 required
@@ -278,4 +277,219 @@
 </main>
 
 {% include '_footer.html' %}
+
+<!-- Popup Modal -->
+<div id="popup-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-surface-dark border border-border-dark rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="text-white text-lg font-display font-bold">A few quick questions</h3>
+            <button id="popup-close" class="text-stone-400 hover:text-white transition-colors">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <!-- Loading state -->
+        <div id="popup-loading" class="flex items-center gap-3 py-6 text-stone-400">
+            <span class="material-symbols-outlined animate-spin text-2xl">autorenew</span>
+            <span class="font-body">Preparing questions...</span>
+        </div>
+
+        <!-- Questions state -->
+        <div id="popup-questions" class="hidden flex flex-col gap-4">
+            <div id="questions-list" class="flex flex-col gap-5"></div>
+            <div class="flex items-center justify-between pt-4 border-t border-border-dark mt-2">
+                <button id="popup-skip" class="text-stone-400 hover:text-white transition-colors text-sm font-body">Skip all</button>
+                <button id="popup-submit" class="h-10 px-6 bg-primary text-[#0c0a09] font-bold rounded-lg text-sm flex items-center gap-2 hover:brightness-110 transition-all">
+                    Generate Report <span class="material-symbols-outlined text-base">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 hidden">
+    <div class="bg-surface-dark border border-border-dark rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl min-w-[260px] cursor-pointer">
+        <span id="toast-icon" class="material-symbols-outlined text-xl text-stone-400"></span>
+        <span id="toast-text" class="text-white text-sm font-body"></span>
+    </div>
+</div>
+
+<script>
+(function () {
+    const csrfToken = '{{ csrf_token() }}';
+    const form = document.getElementById('research-form');
+    const backdrop = document.getElementById('popup-backdrop');
+    const loadingEl = document.getElementById('popup-loading');
+    const questionsEl = document.getElementById('popup-questions');
+    const questionsList = document.getElementById('questions-list');
+    const closeBtn = document.getElementById('popup-close');
+    const skipBtn = document.getElementById('popup-skip');
+    const submitBtn = document.getElementById('popup-submit');
+    const toast = document.getElementById('toast');
+    const toastIcon = document.getElementById('toast-icon');
+    const toastText = document.getElementById('toast-text');
+
+    let currentQuestions = [];
+    let currentSessionId = null;
+    let pollInterval = null;
+    let toastTimeout = null;
+
+    function openPopup() {
+        backdrop.classList.remove('hidden');
+        loadingEl.classList.remove('hidden');
+        questionsEl.classList.add('hidden');
+        questionsList.innerHTML = '';
+    }
+
+    function closePopup() {
+        backdrop.classList.add('hidden');
+    }
+
+    function renderQuestions(questions) {
+        currentQuestions = questions;
+        questionsList.innerHTML = '';
+        questions.forEach(function (q, i) {
+            const item = typeof q === 'object' ? q : { question: q, options: [] };
+            const div = document.createElement('div');
+            div.className = 'flex flex-col gap-2';
+            let optionsHtml = '';
+            if (item.options && item.options.length) {
+                optionsHtml = '<div class="flex flex-wrap gap-2 mt-1" data-group="' + i + '">' +
+                    item.options.map(function (opt) {
+                        return '<button type="button" data-val="' + escapeHtml(opt) + '" ' +
+                            'class="option-pill px-3 py-1.5 rounded-lg text-xs font-body border border-border-dark text-stone-300 bg-[#0c0a09] hover:border-primary/60 hover:text-white transition-all">' +
+                            escapeHtml(opt) + '</button>';
+                    }).join('') +
+                    '</div>';
+            }
+            div.innerHTML = '<p class="text-white font-body font-medium text-sm">' + escapeHtml(item.question) + '</p>' + optionsHtml;
+            questionsList.appendChild(div);
+        });
+
+        // Option pill selection logic
+        questionsList.querySelectorAll('.option-pill').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const group = btn.closest('[data-group]');
+                group.querySelectorAll('.option-pill').forEach(function (b) {
+                    b.classList.remove('border-primary', 'text-white', 'bg-primary/10');
+                    b.classList.add('border-border-dark', 'text-stone-300', 'bg-[#0c0a09]');
+                });
+                btn.classList.add('border-primary', 'text-white', 'bg-primary/10');
+                btn.classList.remove('border-border-dark', 'text-stone-300', 'bg-[#0c0a09]');
+            });
+        });
+
+        loadingEl.classList.add('hidden');
+        questionsEl.classList.remove('hidden');
+    }
+
+    function collectAnswers() {
+        return Array.from(questionsList.querySelectorAll('[data-group]')).map(function (group) {
+            const selected = group.querySelector('.border-primary');
+            return selected ? selected.getAttribute('data-val') : '';
+        });
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showToast(type, text, reportId) {
+        clearTimeout(toastTimeout);
+        if (type === 'in_progress') {
+            toastIcon.textContent = 'autorenew';
+            toastIcon.className = 'material-symbols-outlined text-xl text-stone-400 animate-spin';
+            toast.onclick = null;
+            toastTimeout = setTimeout(function () { toast.classList.add('hidden'); }, 300000);
+        } else if (type === 'ready') {
+            toastIcon.textContent = 'check_circle';
+            toastIcon.className = 'material-symbols-outlined text-xl text-accent-up';
+            toast.onclick = function () { window.location.href = '/report/' + reportId; };
+            toastTimeout = setTimeout(function () { toast.classList.add('hidden'); }, 30000);
+        }
+        toastText.textContent = text;
+        toast.classList.remove('hidden');
+    }
+
+    async function submitAnswers() {
+        const answers = collectAnswers();
+        closePopup();
+        showToast('in_progress', 'Generating report...');
+
+        try {
+            await fetch('/start_generation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({
+            questions: currentQuestions.map(function(q) { return typeof q === 'object' ? q.question : q; }),
+            answers: answers
+        })
+            });
+        } catch (e) {
+            console.error('start_generation error', e);
+        }
+
+        if (!currentSessionId) return;
+
+        pollInterval = setInterval(async function () {
+            try {
+                const resp = await fetch('/api/report_status/' + currentSessionId);
+                if (resp.status === 403) { clearInterval(pollInterval); return; }
+                const status = await resp.json();
+                if (status.status === 'ready') {
+                    clearInterval(pollInterval);
+                    showToast('ready', 'Report Ready — Click to view', status.report_id);
+                } else if (status.status === 'error') {
+                    clearInterval(pollInterval);
+                    toast.classList.add('hidden');
+                }
+            } catch (e) {
+                // ignore transient network errors
+            }
+        }, 3000);
+    }
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const ticker = document.getElementById('ticker').value.trim();
+        const tradeType = document.getElementById('trade_type').value;
+        if (!ticker || !tradeType) return;
+
+        openPopup();
+
+        const formData = new FormData();
+        formData.append('ticker', ticker);
+        formData.append('trade_type', tradeType);
+        formData.append('csrf_token', csrfToken);
+
+        try {
+            const resp = await fetch('/popup_start', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.session_id) currentSessionId = data.session_id;
+            if (data.questions && data.questions.length > 0) {
+                renderQuestions(data.questions);
+            } else {
+                // No questions — go straight to generation
+                closePopup();
+                currentQuestions = [];
+                await submitAnswers();
+            }
+        } catch (e) {
+            closePopup();
+            console.error('popup_start error', e);
+        }
+    });
+
+    closeBtn.addEventListener('click', closePopup);
+    backdrop.addEventListener('click', function (e) {
+        if (e.target === backdrop) closePopup();
+    });
+    skipBtn.addEventListener('click', function () {
+        currentQuestions = [];
+        submitAnswers();
+    });
+    submitBtn.addEventListener('click', submitAnswers);
+})();
+</script>
 {% endblock %}

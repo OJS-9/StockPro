@@ -14,7 +14,7 @@ from src.research_subjects import get_research_subject_by_id
 
 load_dotenv()
 
-SYNTHESIS_AGENT_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-3.1-pro-preview")
+SYNTHESIS_AGENT_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-2.5-pro")
 SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS = int(os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000"))
 
 _TRADE_TYPE_FRAMING = {
@@ -59,6 +59,7 @@ class SynthesisAgent:
                 max_turns=3,
                 temperature=0.7,
                 max_output_tokens=SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS,
+                check_end_marker=True,
                 trace_context=trace_context,
                 parent_span=parent_span,
             )
@@ -222,6 +223,10 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
             "  Each bullet must contain a specific metric or fact (no vague conclusions).",
             "  Cover at minimum: one growth finding, one margin finding, one competitive finding,",
             "  one near-term catalyst, and one primary risk.",
+            "- **COMPLETION REQUIREMENT**: You MUST write every section in the structure above,",
+            "  in order, without stopping early. Do NOT stop after Key Takeaways — the Sources",
+            "  and Citations section is mandatory. Only stop once you have written the final",
+            "  line of the Sources and Citations section. End the report with: END_OF_REPORT",
         ]
 
         return "\n".join(prompt_parts)

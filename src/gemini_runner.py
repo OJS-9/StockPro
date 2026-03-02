@@ -57,6 +57,7 @@ def run_agent(
     temperature: float,
     max_output_tokens: int,
     thinking_budget: Optional[int] = None,
+    check_end_marker: bool = False,
     trace_context=None,
     parent_span=None,
 ) -> str:
@@ -117,7 +118,14 @@ def run_agent(
         candidate = response.candidates[0]
         finish_reason = getattr(candidate, "finish_reason", None)
         finish_message = getattr(candidate, "finish_message", None)
-        print(f"[Gemini] finish_reason={finish_reason}, finish_message={finish_message}")
+        usage = getattr(response, "usage_metadata", None)
+        prompt_tokens = getattr(usage, "prompt_token_count", "?")
+        output_tokens = getattr(usage, "candidates_token_count", "?")
+        print(
+            f"[Gemini] finish_reason={finish_reason}, finish_message={finish_message}, "
+            f"prompt_tokens={prompt_tokens}, output_tokens={output_tokens}, "
+            f"max_output_tokens={max_output_tokens}"
+        )
 
         contents.append(candidate.content)
 
@@ -128,6 +136,10 @@ def run_agent(
             # No tool calls — extract text and return
             text_parts = [p.text for p in candidate.content.parts if hasattr(p, "text") and p.text]
             final_text = "\n".join(text_parts) if text_parts else (getattr(response, "text", None) or "")
+            if finish_reason and getattr(finish_reason, "value", finish_reason) == "MAX_TOKENS":
+                print(f"[Gemini] WARNING: response truncated by MAX_TOKENS limit ({max_output_tokens})")
+            elif check_end_marker and final_text and "END_OF_REPORT" not in final_text and output_tokens > 1000:
+                print(f"[Gemini] WARNING: END_OF_REPORT marker missing — model may have stopped early (output_tokens={output_tokens})")
             if trace_context and gen:
                 trace_context.end_generation(
                     gen, output=final_text, usage=getattr(response, "usage_metadata", None)
