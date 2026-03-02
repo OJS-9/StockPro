@@ -12,6 +12,7 @@ from mcp_client import MCPClient
 from mcp_tools import execute_tool_by_name
 from perplexity_client import PerplexityClient
 from perplexity_tools import execute_perplexity_research
+from nimble_client import NimbleClient
 
 MAX_SERIES_ITEMS = 5
 MAX_NEWS_ITEMS = 5
@@ -178,9 +179,116 @@ def create_perplexity_tool(perplexity_client: PerplexityClient) -> Tuple[Optiona
     return tool, {"perplexity_research": handler}
 
 
+def _make_nimble_search_handler(nimble_client: NimbleClient):
+    """Return a sync handler callable for Nimble web search."""
+    def handler(args: Dict[str, Any]) -> str:
+        query = str(args.get("query", ""))
+        num_results = int(args.get("num_results", 5))
+        topic = str(args.get("topic", "general"))
+        time_range = args.get("time_range")
+        if not query:
+            return json.dumps({"error": "query parameter is required"})
+        try:
+            result = nimble_client.search(query, num_results=num_results, topic=topic, time_range=time_range)
+            return json.dumps(result, indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"Nimble search failed: {e}"})
+    return handler
+
+
+def _make_nimble_extract_handler(nimble_client: NimbleClient):
+    """Return a sync handler callable for Nimble URL extraction."""
+    def handler(args: Dict[str, Any]) -> str:
+        url = str(args.get("url", ""))
+        render = bool(args.get("render", False))
+        if not url:
+            return json.dumps({"error": "url parameter is required"})
+        try:
+            result = nimble_client.extract(url, render=render)
+            return json.dumps(result, indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"Nimble extract failed: {e}"})
+    return handler
+
+
+def create_nimble_tools(nimble_client: NimbleClient) -> Tuple[List[types.Tool], Dict[str, Any]]:
+    """Create Gemini Tool objects and handlers for Nimble web search and extract."""
+    if not nimble_client:
+        return [], {}
+
+    tools_list: List[types.Tool] = []
+    handlers: Dict[str, Any] = {}
+
+    # nimble_web_search
+    search_decl = types.FunctionDeclaration(
+        name="nimble_web_search",
+        description=(
+            "Search the web in real-time using Nimble's infrastructure. "
+            "Use for finding recent news, analyst reports, company announcements, "
+            "industry trends, and any information not in structured financial data. "
+            "Returns ranked search results with titles, URLs, and page content."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "query": types.Schema(
+                    type=types.Type.STRING,
+                    description="Search query. Be specific — include company name, ticker, and topic.",
+                ),
+                "num_results": types.Schema(
+                    type=types.Type.INTEGER,
+                    description="Number of results to return (default 5, max 10).",
+                ),
+                "topic": types.Schema(
+                    type=types.Type.STRING,
+                    enum=["general", "news", "shopping", "social"],
+                    description="Search topic filter. Use 'news' for recent news, 'general' otherwise.",
+                ),
+                "time_range": types.Schema(
+                    type=types.Type.STRING,
+                    enum=["hour", "day", "week", "month", "year"],
+                    description="Limit results by time period. Optional.",
+                ),
+            },
+            required=["query"],
+        ),
+    )
+    tools_list.append(types.Tool(function_declarations=[search_decl]))
+    handlers["nimble_web_search"] = _make_nimble_search_handler(nimble_client)
+
+    # nimble_extract
+    extract_decl = types.FunctionDeclaration(
+        name="nimble_extract",
+        description=(
+            "Extract and parse content from a specific URL using Nimble's browser infrastructure. "
+            "Use when you have a direct URL to a press release, SEC filing, earnings transcript, "
+            "investor relations page, or analyst report. Returns page content in markdown."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "url": types.Schema(
+                    type=types.Type.STRING,
+                    description="Full URL of the page to extract content from.",
+                ),
+                "render": types.Schema(
+                    type=types.Type.BOOLEAN,
+                    description="Enable JavaScript rendering for dynamic/SPA pages. Default false.",
+                ),
+            },
+            required=["url"],
+        ),
+    )
+    tools_list.append(types.Tool(function_declarations=[extract_decl]))
+    handlers["nimble_extract"] = _make_nimble_extract_handler(nimble_client)
+
+    return tools_list, handlers
+
+
 def create_all_tools(
     mcp_client: Optional[MCPClient],
     perplexity_client: Optional[PerplexityClient],
+    nimble_client: Optional[NimbleClient] = None,
 ) -> Tuple[List[types.Tool], Dict[str, Any]]:
     """
     Create all tools for use with gemini_runner.
@@ -202,5 +310,10 @@ def create_all_tools(
         if perp_tool:
             tools_list.append(perp_tool)
             handlers.update(perp_handlers)
+
+    if nimble_client:
+        nimble_tools, nimble_handlers = create_nimble_tools(nimble_client)
+        tools_list.extend(nimble_tools)
+        handlers.update(nimble_handlers)
 
     return tools_list, handlers
