@@ -10,8 +10,6 @@ from google.genai import types
 
 from mcp_client import MCPClient
 from mcp_tools import execute_tool_by_name
-from perplexity_client import PerplexityClient
-from perplexity_tools import execute_perplexity_research
 from nimble_client import NimbleClient
 
 MAX_SERIES_ITEMS = 5
@@ -82,23 +80,15 @@ def _make_mcp_handler(mcp_client: MCPClient, mcp_tool_name: str):
     return handler
 
 
-def _make_perplexity_handler(perplexity_client: PerplexityClient):
-    """Return a sync handler callable for the Perplexity research tool."""
+def _make_perplexity_handler(nimble_client: NimbleClient):
+    """Return a sync handler callable for the Perplexity research tool (via Nimble agent)."""
     def handler(args: Dict[str, Any]) -> str:
         query = str(args.get("query", ""))
         focus = str(args.get("focus", "general"))
         if not query:
             return json.dumps({"error": "query parameter is required", "status": "error"})
-        try:
-            result = execute_perplexity_research(perplexity_client, query=query, focus=focus)
-            if isinstance(result, dict):
-                for key in ("results", "answers", "citations", "items"):
-                    if key in result and isinstance(result[key], list) and len(result[key]) > MAX_RESEARCH_ITEMS:
-                        result[key] = result[key][:MAX_RESEARCH_ITEMS]
-                return json.dumps(result, indent=2, default=str)
-            return json.dumps({"research": str(result), "status": "success"})
-        except Exception as e:
-            return json.dumps({"error": f"Perplexity failed: {e}"})
+        result = nimble_client.perplexity_research(query, focus)
+        return json.dumps({"research": result, "status": "success"})
     return handler
 
 
@@ -134,9 +124,9 @@ def create_mcp_tools(mcp_client: MCPClient) -> Tuple[List[types.Tool], Dict[str,
     return tools_list, handlers
 
 
-def create_perplexity_tool(perplexity_client: PerplexityClient) -> Tuple[Optional[types.Tool], Dict[str, Any]]:
-    """Create Gemini Tool object and handler for Perplexity research."""
-    if not perplexity_client:
+def create_perplexity_tool(nimble_client: NimbleClient) -> Tuple[Optional[types.Tool], Dict[str, Any]]:
+    """Create Gemini Tool object and handler for Perplexity research (via Nimble agent)."""
+    if not nimble_client:
         return None, {}
 
     parameters = types.Schema(
@@ -167,7 +157,7 @@ def create_perplexity_tool(perplexity_client: PerplexityClient) -> Tuple[Optiona
     declaration = types.FunctionDeclaration(
         name="perplexity_research",
         description=(
-            "Perform real-time web research on a topic using Perplexity's Sonar API. "
+            "Perform real-time web research on a topic using Perplexity (via Nimble). "
             "Use this for finding recent news, market analysis, company developments, "
             "industry trends, and other information not available in structured financial data."
         ),
@@ -175,7 +165,7 @@ def create_perplexity_tool(perplexity_client: PerplexityClient) -> Tuple[Optiona
     )
 
     tool = types.Tool(function_declarations=[declaration])
-    handler = _make_perplexity_handler(perplexity_client)
+    handler = _make_perplexity_handler(nimble_client)
     return tool, {"perplexity_research": handler}
 
 
@@ -186,10 +176,17 @@ def _make_nimble_search_handler(nimble_client: NimbleClient):
         num_results = int(args.get("num_results", 5))
         topic = str(args.get("topic", "general"))
         time_range = args.get("time_range")
+        deep_search = bool(args.get("deep_search", False))
         if not query:
             return json.dumps({"error": "query parameter is required"})
         try:
-            result = nimble_client.search(query, num_results=num_results, topic=topic, time_range=time_range)
+            result = nimble_client.search(
+                query,
+                num_results=num_results,
+                topic=topic,
+                time_range=time_range,
+                deep_search=deep_search,
+            )
             return json.dumps(result, indent=2, default=str)
         except Exception as e:
             return json.dumps({"error": f"Nimble search failed: {e}"})
@@ -249,6 +246,17 @@ def create_nimble_tools(nimble_client: NimbleClient) -> Tuple[List[types.Tool], 
                     enum=["hour", "day", "week", "month", "year"],
                     description="Limit results by time period. Optional.",
                 ),
+                "deep_search": types.Schema(
+                    type=types.Type.BOOLEAN,
+                    description=(
+                        "If true, fetches full page content for each result — use for research "
+                        "queries where you need the actual article/announcement text (e.g., earnings "
+                        "transcripts, product launches, press releases). Slower (15-45s). "
+                        "Reduce num_results to 3 or fewer when enabling. "
+                        "If false (default), returns title/snippet/URL only — use for quick "
+                        "factual lookups or when you plan to call nimble_extract on specific URLs."
+                    ),
+                ),
             },
             required=["query"],
         ),
@@ -287,7 +295,6 @@ def create_nimble_tools(nimble_client: NimbleClient) -> Tuple[List[types.Tool], 
 
 def create_all_tools(
     mcp_client: Optional[MCPClient],
-    perplexity_client: Optional[PerplexityClient],
     nimble_client: Optional[NimbleClient] = None,
 ) -> Tuple[List[types.Tool], Dict[str, Any]]:
     """
@@ -305,13 +312,12 @@ def create_all_tools(
         tools_list.extend(mcp_tools)
         handlers.update(mcp_handlers)
 
-    if perplexity_client:
-        perp_tool, perp_handlers = create_perplexity_tool(perplexity_client)
+    if nimble_client:
+        perp_tool, perp_handlers = create_perplexity_tool(nimble_client)
         if perp_tool:
             tools_list.append(perp_tool)
             handlers.update(perp_handlers)
 
-    if nimble_client:
         nimble_tools, nimble_handlers = create_nimble_tools(nimble_client)
         tools_list.extend(nimble_tools)
         handlers.update(nimble_handlers)

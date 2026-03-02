@@ -18,7 +18,7 @@ An AI-powered multi-agent stock research platform that orchestrates specialized 
 | AI / LLM | Google GenAI SDK (`google-genai`), Gemini 3.1 Pro / 3 Flash |
 | Embeddings | Gemini `gemini-embedding-001` (3072d) |
 | Financial data | Alpha Vantage MCP (HTTP, JSON-RPC) |
-| Web research | Perplexity Sonar API, Nimble SDK API |
+| Web research | Nimble SDK API (web search, extraction, Perplexity agent) |
 | Crypto prices | CoinGecko API |
 | Database | MySQL (connection pool, pool_size=5) |
 | Vector search | NumPy cosine similarity (brute-force) |
@@ -44,9 +44,7 @@ src/
 ├── mcp_client.py                  # Alpha Vantage MCP HTTP client (JSON-RPC)
 ├── mcp_manager.py                 # MCP server configuration
 ├── mcp_tools.py                   # MCP tool execution wrapper
-├── perplexity_client.py           # Perplexity Sonar API client (AsyncOpenAI)
-├── perplexity_tools.py            # Perplexity tool wrapper
-├── nimble_client.py               # Nimble SDK API client (web search + URL extraction)
+├── nimble_client.py               # Nimble SDK API client (web search, extraction, Perplexity agent)
 ├── report_storage.py              # Storage pipeline orchestrator
 ├── report_chunker.py              # Semantic text chunking (600-token, 100-overlap)
 ├── embedding_service.py           # OpenAI embeddings client
@@ -181,9 +179,7 @@ Each subject carries a priority per trade type (1=high, 2=medium, 3=low). The Pl
 
 Tool outputs are truncated (max 5 series items, max 5 news items) before passing to agents.
 
-**Perplexity Sonar API** — real-time web research, queries formatted by focus type (news, analysis, financial, general), 10-second timeout.
-
-**Nimble SDK API** — raw web search (`POST /v1/search`) and URL content extraction (`POST /v1/extract`) via Bearer token auth. Exposed to specialized agents as `nimble_web_search` and `nimble_extract` tools. Complements Perplexity: Nimble for raw structured content, Perplexity for synthesized answers. Requires `NIMBLE_API_KEY` env var.
+**Nimble SDK API** — web search (`POST /v1/search`), URL extraction (`POST /v1/extract`), and Perplexity synthesis (`POST /v1/agents/run` with `agent="perplexity"`). Exposed to specialized agents as `nimble_web_search`, `nimble_extract`, and `perplexity_research` tools. Requires `NIMBLE_API_KEY` env var.
 
 **CoinGecko API** — crypto prices for portfolio module, 50+ symbol-to-ID mappings, batch price fetching.
 
@@ -222,7 +218,6 @@ python -m pytest test_nvda_research.py
 Required in `.env`:
 ```
 GEMINI_API_KEY=
-PERPLEXITY_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 MYSQL_HOST=localhost
 MYSQL_USER=
