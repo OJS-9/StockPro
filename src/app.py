@@ -21,18 +21,19 @@ import time
 from functools import wraps
 from dotenv import load_dotenv
 import uuid
+import bleach
 import markdown as md_lib
 from markupsafe import Markup
 from decimal import Decimal
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from agent import create_agent, StockResearchAgent
+from orchestrator_graph import create_session, OrchestratorSession
+from langsmith_service import create_emitter
 from portfolio.portfolio_service import get_portfolio_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
-from trace_service import create_trace, create_chat_trace
 
 # Load environment variables
 load_dotenv()
@@ -42,15 +43,23 @@ load_dotenv()
 app = Flask(__name__, 
             template_folder=str(project_root / 'templates'), 
             static_folder=str(project_root / 'static'))
-app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24).hex())
+_secret_key = os.getenv('FLASK_SECRET_KEY')
+if not _secret_key:
+    raise RuntimeError("FLASK_SECRET_KEY environment variable is not set")
+app.secret_key = _secret_key
 csrf = CSRFProtect(app)
+
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
-            session['next_url'] = request.url
+            session['next_url'] = request.path
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated
@@ -75,12 +84,17 @@ def inject_user():
 
 
 
+_MD_ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
+    'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'pre', 'code', 'blockquote', 'table', 'thead',
+    'tbody', 'tr', 'th', 'td', 'hr', 'br', 'ul', 'ol', 'li',
+]
+_MD_ALLOWED_ATTRS = {**bleach.sanitizer.ALLOWED_ATTRIBUTES, '*': ['class']}
+
 @app.template_filter('markdown')
 def markdown_filter(text):
-    return Markup(md_lib.markdown(
-        text or '',
-        extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists']
-    ))
+    raw_html = md_lib.markdown(text or '', extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists'])
+    return Markup(bleach.clean(raw_html, tags=_MD_ALLOWED_TAGS, attributes=_MD_ALLOWED_ATTRS, strip=True))
 
 
 @app.template_filter('markdown_preview')
@@ -118,22 +132,29 @@ _sse_queues: dict = {}
 # Background generation status — keyed by session_id
 _generation_status: dict = {}
 
+# Session creation timestamps for TTL eviction
+_session_created_at: dict = {}
 
-def initialize_session(session_id: str) -> StockResearchAgent:
-    """
-    Initialize or get agent for a session.
-    
-    Args:
-        session_id: Unique session identifier
-    
-    Returns:
-        StockResearchAgent instance
-    """
+
+def _evict_stale_sessions(max_age_seconds: int = 86400):
+    cutoff = time.time() - max_age_seconds
+    stale = [sid for sid, t in _session_created_at.items() if t < cutoff]
+    for sid in stale:
+        agent_sessions.pop(sid, None)
+        _generation_status.pop(sid, None)
+        _sse_queues.pop(sid, None)
+        _session_created_at.pop(sid, None)
+
+
+def initialize_session(session_id: str) -> OrchestratorSession:
+    """Initialize or get orchestrator session."""
     if session_id not in agent_sessions:
+        _evict_stale_sessions()
+        _session_created_at[session_id] = time.time()
         try:
-            agent_sessions[session_id] = create_agent()
+            agent_sessions[session_id] = create_session()
         except Exception as e:
-            raise ValueError(f"Failed to initialize agent: {str(e)}")
+            raise ValueError(f"Failed to initialize session: {str(e)}")
     return agent_sessions[session_id]
 
 
@@ -145,11 +166,10 @@ def get_or_create_session_id():
 
 
 def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
-    """Make a single Gemini call to get 1-3 multiple-choice clarifying questions."""
-    from google import genai as _genai
-    from google.genai import types as _types
+    """Make a single LLM call to get 1-3 multiple-choice clarifying questions."""
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_core.messages import HumanMessage
 
-    client = _genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     prompt = (
         f"You are a stock research assistant. A user wants a {trade_type} research report on {ticker}. "
         "Generate 1–3 multiple-choice clarifying questions to better tailor the report. "
@@ -158,16 +178,15 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
         'Example: [{"question": "What is your time horizon?", "options": ["Under 1 month", "1–6 months", "6–12 months", "1+ years"]}]'
     )
     try:
-        response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=prompt,
-            config=_types.GenerateContentConfig(
-                temperature=0.3,
-                max_output_tokens=400,
-                response_mime_type="application/json",
-            ),
-        )
-        questions = json.loads(response.text)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.3, max_output_tokens=400)
+        response = llm.invoke([HumanMessage(content=prompt)])
+        raw = response.content or ""
+        # Strip markdown fences if present
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        questions = json.loads(raw.strip())
         if isinstance(questions, list) and questions and isinstance(questions[0], dict):
             return questions
     except Exception:
@@ -179,6 +198,7 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
 # ==================== Auth Routes ====================
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     """Login page."""
     if 'user_id' in session:
@@ -204,7 +224,8 @@ def login():
                 session['user_id'] = user['user_id']
                 session['username'] = user['username']
                 get_or_create_session_id()
-                return redirect(next_url or url_for('index'))
+                safe_next = next_url if (next_url and next_url.startswith('/') and not next_url.startswith('//')) else None
+                return redirect(safe_next or url_for('index'))
             else:
                 error = 'Invalid username or password.'
 
@@ -212,6 +233,7 @@ def login():
 
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def register():
     """Registration page."""
     if 'user_id' in session:
@@ -317,7 +339,8 @@ def google_callback():
     session['user_id'] = user['user_id']
     session['username'] = user['username']
     get_or_create_session_id()
-    return redirect(next_url or url_for('index'))
+    safe_next = next_url if (next_url and next_url.startswith('/') and not next_url.startswith('//')) else None
+    return redirect(safe_next or url_for('index'))
 
 
 @app.route('/')
@@ -420,11 +443,11 @@ def continue_conversation():
     ticker = session.get('current_ticker', '')
     trade_type = session.get('current_trade_type', 'Investment')
 
-    # Create SSE queue and trace context
+    # Create SSE queue and emitter
     step_q: queue.Queue = queue.Queue()
     _sse_queues[session_id] = step_q
-    tc = create_trace(ticker=ticker, trade_type=trade_type, session_id=session_id, step_queue=step_q)
-    agent.set_trace_context(tc)
+    emitter = create_emitter(step_q)
+    agent.set_emitter(emitter)
 
     def run_in_background():
         try:
@@ -458,7 +481,7 @@ def continue_conversation():
         except Exception as e:
             step_q.put({"type": "error", "message": str(e)})
         finally:
-            agent.set_trace_context(None)
+            agent.set_emitter(None)
 
     t = threading.Thread(target=run_in_background, daemon=True)
     t.start()
@@ -610,8 +633,8 @@ def clear_conversation():
     if session_id in agent_sessions:
         try:
             agent_sessions[session_id].reset_conversation()
-        except:
-            pass
+        except Exception as e:
+            app.logger.warning(f"Session reset failed: {e}")
 
     return redirect(url_for('chat'))
 
@@ -671,20 +694,18 @@ def start_generation():
     trade_type = session.get('current_trade_type', 'Investment')
 
     def run_generation():
-        tc = create_trace(ticker=ticker, trade_type=trade_type, session_id=session_id)
-        agent.set_trace_context(tc)
+        emitter = create_emitter()
+        agent.set_emitter(emitter)
         try:
             agent.generate_report(context=context_str)
             _generation_status[session_id] = {
                 'status': 'ready',
                 'report_id': agent.current_report_id,
             }
-            tc.finish(output=f"Report {agent.current_report_id or 'unknown'}")
         except Exception as e:
             _generation_status[session_id] = {'status': 'error', 'message': str(e)}
-            tc.finish(output=f"Error: {e}")
         finally:
-            agent.set_trace_context(None)
+            agent.set_emitter(None)
 
     threading.Thread(target=run_generation, daemon=True).start()
     return jsonify({'success': True})
@@ -805,6 +826,10 @@ def import_csv():
             if file.filename == '':
                 raise ValueError("No file selected")
 
+            file.seek(0, 2)
+            if file.tell() > 10 * 1024 * 1024:
+                raise ValueError("File exceeds 10MB limit")
+            file.seek(0)
             csv_content = file.read().decode('utf-8')
             result = portfolio_service.import_csv(
                 portfolio_id=portfolio_data['portfolio_id'],
@@ -882,29 +907,27 @@ def delete_transaction(transaction_id: str):
     try:
         portfolio_service = get_portfolio_service()
 
-        # Get transaction to find symbol for redirect
         txn = portfolio_service.get_transaction(transaction_id)
         if not txn:
             session['status_message'] = '❌ Transaction not found'
             return redirect(url_for('portfolio'))
 
         holding = portfolio_service.get_holding_by_id(txn['holding_id'])
-        symbol = holding['symbol'] if holding else None
+        if not holding:
+            session['status_message'] = '❌ Transaction not found'
+            return redirect(url_for('portfolio'))
 
-        if holding:
-            portfolio = portfolio_service.get_portfolio(holding['portfolio_id'])
-            if not portfolio or portfolio.get('user_id') != session['user_id']:
-                session['status_message'] = '❌ Not authorized'
-                return redirect(url_for('portfolio'))
+        portfolio = portfolio_service.get_portfolio(holding['portfolio_id'])
+        if not portfolio or portfolio.get('user_id') != session['user_id']:
+            session['status_message'] = '❌ Not authorized'
+            return redirect(url_for('portfolio'))
 
+        symbol = holding['symbol']
         if portfolio_service.delete_transaction(transaction_id):
             session['status_message'] = '✅ Transaction deleted'
         else:
             session['status_message'] = '❌ Failed to delete transaction'
-
-        # Redirect back to holding detail if we have the symbol
-        if symbol:
-            return redirect(url_for('holding_detail', symbol=symbol))
+        return redirect(url_for('holding_detail', symbol=symbol))
 
     except Exception as e:
         session['status_message'] = f'❌ Error: {str(e)}'
