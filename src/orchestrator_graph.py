@@ -19,7 +19,7 @@ from research_graph import run_research
 from agents.chat_agent import ReportChatAgent
 from langsmith_service import StepEmitter
 
-ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-2.0-flash")
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-2.0-flash-exp")
 ORCHESTRATOR_MAX_OUTPUT_TOKENS = int(os.getenv("ORCHESTRATOR_MAX_OUTPUT_TOKENS", "600"))
 
 
@@ -110,7 +110,7 @@ class OrchestratorSession:
         agent = create_react_agent(
             llm,
             [generate_report],
-            state_modifier=system_instructions,
+            prompt=system_instructions,
         )
 
         # Build message history (last 4 non-system messages)

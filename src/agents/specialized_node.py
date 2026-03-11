@@ -146,7 +146,7 @@ def specialized_node(state: dict) -> dict:
             agent = create_react_agent(
                 llm,
                 tools,
-                state_modifier=instructions,
+                prompt=instructions,
             )
             result = agent.invoke(
                 {"messages": [HumanMessage(content=research_prompt)]},

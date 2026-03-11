@@ -15,7 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from research_plan import ResearchPlan
 from research_subjects import ResearchSubject, get_research_subjects_for_trade_type
 
-PLANNER_MODEL = os.getenv("PLANNER_MODEL", "gemini-2.0-flash")
+PLANNER_MODEL = os.getenv("PLANNER_MODEL", "gemini-2.0-flash-exp")
 PLANNER_MAX_SUBJECTS = int(os.getenv("PLANNER_MAX_SUBJECTS", "8"))
 
 
