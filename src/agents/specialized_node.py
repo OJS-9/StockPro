@@ -152,11 +152,19 @@ def specialized_node(state: dict) -> dict:
                 {"messages": [HumanMessage(content=research_prompt)]},
                 config={"recursion_limit": SPECIALIZED_MAX_TURNS * 2},
             )
-            # Extract the last AI message as the research output
+            # Extract the last AI message as the research output.
+            # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
             output_text = ""
             for msg in reversed(result["messages"]):
                 if hasattr(msg, "content") and msg.content and not getattr(msg, "tool_calls", None):
-                    output_text = msg.content
+                    content = msg.content
+                    if isinstance(content, list):
+                        output_text = "\n".join(
+                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            for part in content
+                        )
+                    else:
+                        output_text = str(content)
                     break
 
             print(f"[SpecializedNode] {subject.name}: {len(output_text)} chars")

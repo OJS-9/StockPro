@@ -13,7 +13,7 @@ from embedding_service import EmbeddingService
 from vector_search import VectorSearch
 from date_utils import get_datetime_context_string
 
-CHAT_MODEL = os.getenv("CHAT_AGENT_MODEL", "gemini-2.0-flash-exp")
+CHAT_MODEL = os.getenv("CHAT_AGENT_MODEL", "gemini-2.5-flash")
 
 
 def _get_system_instructions() -> str:

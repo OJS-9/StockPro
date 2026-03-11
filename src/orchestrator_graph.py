@@ -19,7 +19,7 @@ from research_graph import run_research
 from agents.chat_agent import ReportChatAgent
 from langsmith_service import StepEmitter
 
-ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-2.0-flash-exp")
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-2.5-flash")
 ORCHESTRATOR_MAX_OUTPUT_TOKENS = int(os.getenv("ORCHESTRATOR_MAX_OUTPUT_TOKENS", "600"))
 
 
@@ -134,7 +134,15 @@ class OrchestratorSession:
             response_text = ""
             for msg in reversed(result["messages"]):
                 if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
-                    response_text = msg.content
+                    content = msg.content
+                    response_text = (
+                        "\n".join(
+                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            for part in content
+                        )
+                        if isinstance(content, list)
+                        else str(content)
+                    )
                     break
             self.conversation_history.append({"role": "assistant", "content": response_text})
             return response_text
