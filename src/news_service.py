@@ -1,5 +1,5 @@
 """
-News briefing service — fetches financial articles via Nimble agents (Bloomberg + Morningstar)
+News briefing service — fetches financial articles via Nimble agents (Bloomberg + Morningstar + WSJ)
 as primary source, and web search (WSJ + Reuters) as secondary on demand.
 Results are cached in memory with a 15-minute TTL per cache slot.
 """
@@ -12,6 +12,8 @@ CACHE_TTL = 15 * 60  # 15 minutes
 
 BLOOMBERG_AGENT = "bloomberg_search_2026_02_23_a9u4p1tv_1184e640"
 MORNINGSTAR_AGENT = "morningstar_search_2026_02_23_zicq0zdj_02869390"
+WSJ_AGENT = "wsj_article_template_2026_03_02_z7hhhvxe"
+WSJ_PIPELINE = "RSSWorldNews"
 SEARCH_QUERY = "markets stocks economy finance"
 
 _cache = {
@@ -45,41 +47,55 @@ def _refresh_primary() -> None:
 
     bloomberg_results = client.run_agent(BLOOMBERG_AGENT, {"query": SEARCH_QUERY})
     morningstar_results = client.run_agent(MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY})
+    wsj_results = client.run_agent(WSJ_AGENT, {"feed_name": WSJ_PIPELINE})
 
-    # Interleave: bloomberg[0], morningstar[0], bloomberg[1] → first 3
+    # Sort each source by image presence before interleaving, so image articles
+    # lead within each source without collapsing all no-image sources to the end.
+    def _sort_by_image(items, publisher):
+        mapped = [_map_article(item, publisher) for item in items]
+        mapped.sort(key=lambda a: 0 if a["image"] else 1)
+        return mapped
+
+    sources = [
+        _sort_by_image(bloomberg_results, "Bloomberg"),
+        _sort_by_image(morningstar_results, "Morningstar"),
+        _sort_by_image(wsj_results, "WSJ"),
+    ]
+
+    # Round-robin interleave: Bloomberg → Morningstar → WSJ
+    indices = [0, 0, 0]
     interleaved = []
-    b_idx = m_idx = 0
-    toggle = True
-    while len(interleaved) < 3 and (b_idx < len(bloomberg_results) or m_idx < len(morningstar_results)):
-        if toggle and b_idx < len(bloomberg_results):
-            interleaved.append((_map_article(bloomberg_results[b_idx], "Bloomberg"), "bloomberg"))
-            b_idx += 1
-        elif not toggle and m_idx < len(morningstar_results):
-            interleaved.append((_map_article(morningstar_results[m_idx], "Morningstar"), "morningstar"))
-            m_idx += 1
-        elif b_idx < len(bloomberg_results):
-            interleaved.append((_map_article(bloomberg_results[b_idx], "Bloomberg"), "bloomberg"))
-            b_idx += 1
-        elif m_idx < len(morningstar_results):
-            interleaved.append((_map_article(morningstar_results[m_idx], "Morningstar"), "morningstar"))
-            m_idx += 1
-        toggle = not toggle
+    while True:
+        added = False
+        for i, items in enumerate(sources):
+            if indices[i] < len(items):
+                interleaved.append(items[indices[i]])
+                indices[i] += 1
+                added = True
+        if not added:
+            break
 
-    _cache["primary"]["articles"] = [a for a, _ in interleaved]
+    _cache["primary"]["articles"] = interleaved
     _cache["primary"]["fetched_at"] = time.time()
 
 
 def _map_article(item: Dict, publisher: str) -> Dict:
-    headline = item.get("headline", item.get("title", "")).strip()
+    headline = item.get("headline", item.get("header", item.get("title", ""))).strip()
     article_url = item.get("article_url", "").strip()
     if not article_url:
-        encoded = urllib.parse.urlencode({"query" if publisher == "Bloomberg" else "q": headline})
-        base = "https://www.bloomberg.com/search" if publisher == "Bloomberg" else "https://www.morningstar.com/search"
-        article_url = f"{base}?{encoded}"
+        if publisher == "Bloomberg":
+            encoded = urllib.parse.urlencode({"query": headline})
+            article_url = f"https://www.bloomberg.com/search?{encoded}"
+        elif publisher == "WSJ":
+            encoded = urllib.parse.urlencode({"query": headline})
+            article_url = f"https://www.wsj.com/search?{encoded}"
+        else:
+            encoded = urllib.parse.urlencode({"q": headline})
+            article_url = f"https://www.morningstar.com/search?{encoded}"
 
     return {
         "title": headline,
-        "description": item.get("summary", "").strip(),
+        "description": item.get("summary", item.get("description", "")).strip(),
         "image": item.get("image_url", ""),
         "category": item.get("category", "Markets"),
         "publisher": publisher,
@@ -102,7 +118,7 @@ def _refresh_more() -> None:
     articles = []
     for source in secondary_sources:
         try:
-            result = client.search(source["query"], num_results=2, topic="news")
+            result = client.search(source["query"], num_results=10, topic="news")
             results = result.get("results") or []
             for item in results:
                 title = item.get("title", "").strip()
@@ -116,7 +132,6 @@ def _refresh_more() -> None:
                         "publisher": source["name"],
                         "url": url,
                     })
-                    break
         except Exception:
             continue
 

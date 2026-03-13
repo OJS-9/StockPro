@@ -125,6 +125,10 @@ class NimbleClient:
                     json=payload,
                 )
                 resp.raise_for_status()
-                return resp.json().get("data", {}).get("parsing", [])
+                parsing = resp.json().get("data", {}).get("parsing", [])
+                # Some agents return {"articles": [...]} instead of a plain list
+                if isinstance(parsing, dict):
+                    parsing = next(iter(parsing.values()), [])
+                return parsing
         except Exception:
             return []

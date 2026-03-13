@@ -173,10 +173,6 @@
                 <p class="text-stone-500 mt-1 font-body">Curated stories moving the markets.</p>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <button data-filter="all"    class="briefing-filter px-4 py-2 rounded-xl text-xs font-bold font-body bg-primary text-background-dark shadow-lg shadow-primary/20">All Stories</button>
-                <button data-filter="macro"  class="briefing-filter px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">Macro</button>
-                <button data-filter="tech"   class="briefing-filter px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">Tech</button>
-                <button data-filter="crypto" class="briefing-filter px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">Crypto</button>
                 <button id="briefing-more-btn" class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">More Stories</button>
             </div>
         </div>
@@ -216,36 +212,29 @@
     </section>
 
     <script>
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
     (function () {
-        var KEYWORDS = {
-            macro:  ["macro","fed","economy","gdp","inflation","rate","central bank","monetary","treasury","yield"],
-            tech:   ["tech","ai","artificial intelligence","chip","semiconductor","software","nasdaq","apple","microsoft","nvidia","google","meta"],
-            crypto: ["bitcoin","crypto","ethereum","blockchain","digital asset","btc","eth","defi"],
-        };
-
-        var activeFilter = 'all';
-
         function buildCard(article) {
             const category = (article.category || 'News').toUpperCase();
-            const title = article.title || '';
-            const description = article.description || '';
-            const publisher = article.publisher || article.source || '';
-            const url = article.url || '#';
+            const title = escapeHtml(article.title || '');
+            const description = escapeHtml(article.description || '');
+            const publisher = escapeHtml(article.publisher || article.source || '');
+            const rawUrl = article.url || '#';
+            const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
             const image = article.image || '';
 
             const imageInner = image
                 ? `<img src="${image}" alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">`
-                : `<div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>`;
+                : article.publisher === 'WSJ'
+                    ? `<img src="/static/images/wsj-logo.svg" alt="WSJ" class="absolute inset-0 w-full h-full object-cover">`
+                    : `<div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>`;
 
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer"
-                    data-title="${title.replace(/"/g,'&quot;')}"
-                    data-summary="${description.replace(/"/g,'&quot;')}"
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
                     class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-primary/50 transition-all hover:shadow-2xl hover:-translate-y-1 no-underline">
                 <div class="h-48 w-full relative bg-stone-100 dark:bg-stone-800 overflow-hidden">
                     ${imageInner}
-                    <div class="absolute top-4 left-4 bg-white/90 dark:bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg text-stone-900 dark:text-white text-xs font-bold font-mono tracking-wide border border-stone-200 dark:border-white/10">
-                        ${category}
-                    </div>
                 </div>
                 <div class="p-6 flex-1 flex flex-col">
                     <div class="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono mb-3">
@@ -266,62 +255,64 @@
             grid.innerHTML = `<div class="col-span-3 py-10 text-center text-stone-500 font-body">News unavailable right now. Check back shortly.</div>`;
         }
 
-        function applyFilter(filter) {
-            activeFilter = filter;
-            document.querySelectorAll('#briefing-grid a[data-title]').forEach(function (card) {
-                var text = ((card.dataset.title || '') + ' ' + (card.dataset.summary || '')).toLowerCase();
-                var show = filter === 'all' || (KEYWORDS[filter] || []).some(function (k) { return text.includes(k); });
-                card.style.display = show ? '' : 'none';
-            });
-
-            // Update active button styles
-            document.querySelectorAll('.briefing-filter').forEach(function (btn) {
-                var isActive = btn.dataset.filter === filter;
-                btn.className = btn.className
-                    .replace(/bg-primary text-background-dark shadow-lg shadow-primary\/20/g, '')
-                    .replace(/bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white\/20 transition-colors/g, '')
-                    .trim();
-                if (isActive) {
-                    btn.className += ' bg-primary text-background-dark shadow-lg shadow-primary/20';
-                } else {
-                    btn.className += ' bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors';
-                }
-            });
-        }
-
         document.addEventListener('DOMContentLoaded', function () {
             var grid = document.getElementById('briefing-grid');
+            var allPrimary = [];
 
-            // Load primary articles
             fetch('/api/news')
                 .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
                 .then(function (articles) {
                     if (!articles || articles.length === 0) { showFallback(grid); return; }
-                    grid.innerHTML = articles.map(buildCard).join('');
-                    applyFilter(activeFilter);
+                    allPrimary = articles;
+                    grid.innerHTML = articles.slice(0, 3).map(buildCard).join('');
+                    if (articles.length <= 3) {
+                        document.getElementById('briefing-more-btn').style.display = 'none';
+                    }
                 })
                 .catch(function () { showFallback(grid); });
 
-            // Filter buttons
-            document.querySelectorAll('.briefing-filter').forEach(function (btn) {
-                btn.addEventListener('click', function () { applyFilter(btn.dataset.filter); });
-            });
+            var LIMIT = 15;
+            var expanded = false;
+            var secondaryAborted = false;
 
-            // "More Stories" button
             var moreBtn = document.getElementById('briefing-more-btn');
             moreBtn.addEventListener('click', function () {
-                moreBtn.disabled = true;
-                moreBtn.textContent = 'Loading...';
-                fetch('/api/news/more')
-                    .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
-                    .then(function (articles) {
-                        if (articles && articles.length > 0) {
-                            grid.insertAdjacentHTML('beforeend', articles.map(buildCard).join(''));
-                            applyFilter(activeFilter);
-                        }
-                        moreBtn.style.display = 'none';
-                    })
-                    .catch(function () { moreBtn.style.display = 'none'; });
+                if (!expanded) {
+                    expanded = true;
+                    secondaryAborted = false;
+
+                    var extraPrimary = allPrimary.slice(3, LIMIT);
+                    var secondarySlots = LIMIT - 3 - extraPrimary.length;
+
+                    if (extraPrimary.length > 0) {
+                        var html = extraPrimary.map(function (a) {
+                            return '<div class="briefing-extra">' + buildCard(a) + '</div>';
+                        }).join('');
+                        grid.insertAdjacentHTML('beforeend', html);
+                    }
+
+                    moreBtn.textContent = 'Less';
+
+                    if (secondarySlots > 0) {
+                        fetch('/api/news/more')
+                            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+                            .then(function (articles) {
+                                if (secondaryAborted || !articles || !articles.length) return;
+                                var html = articles.slice(0, secondarySlots).map(function (a) {
+                                    return '<div class="briefing-extra">' + buildCard(a) + '</div>';
+                                }).join('');
+                                grid.insertAdjacentHTML('beforeend', html);
+                            })
+                            .catch(function () {});
+                    }
+                } else {
+                    expanded = false;
+                    secondaryAborted = true;
+                    document.querySelectorAll('#briefing-grid .briefing-extra').forEach(function (el) {
+                        el.remove();
+                    });
+                    moreBtn.textContent = 'More Stories';
+                }
             });
         });
     })();
