@@ -60,6 +60,11 @@
             --hero-graphic-url: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" fill="none"><rect width="1200" height="600" fill="%23fafaf9"/><path d="M0 300L200 250L400 350L600 280L800 380L1000 320L1200 370V600H0V300Z" fill="url(%23gradientGreen)"/><path d="M0 400L200 370L400 430L600 390L800 450L1000 410L1200 460V600H0V400Z" fill="url(%23gradientGray)"/><path d="M0 200L200 230L400 170L600 210L800 150L1000 190L1200 140V600H0V200Z" fill="url(%23gradientRed)"/><defs><linearGradient id="gradientGreen" x1="0" y1="0" x2="0" y2="600" gradientUnits="userSpaceOnUse"><stop stop-color="%2322c55e" stop-opacity="0.3"/><stop offset="1" stop-color="%2322c55e" stop-opacity="0"/></linearGradient><linearGradient id="gradientGray" x1="0" y1="0" x2="0" y2="600" gradientUnits="userSpaceOnUse"><stop stop-color="%23d6d3d1" stop-opacity="0.2"/><stop offset="1" stop-color="%23d6d3d1" stop-opacity="0"/></linearGradient><linearGradient id="gradientRed" x1="0" y1="0" x2="0" y2="600" gradientUnits="userSpaceOnUse"><stop stop-color="%23ef4444" stop-opacity="0.2"/><stop offset="1" stop-color="%23ef4444" stop-opacity="0"/></linearGradient></defs></svg>');
         }
     </style>
+    <script async crossorigin="anonymous"
+            data-clerk-publishable-key="{{ clerk_publishable_key }}"
+            src="https://unpkg.com/@clerk/clerk-js@5.125.5/dist/clerk.browser.js"
+            integrity="sha384-yLZTu1O54Q9pspCqrFz0uMuWfSeqF6BgiV5b00xMCG+3dELhDiVa/j3nP1uwyNCM"
+            type="text/javascript"></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-background-light dark:bg-background-dark text-stone-900 dark:text-white font-body overflow-x-hidden min-h-screen flex flex-col">

@@ -206,34 +206,20 @@ class TestOpenRedirectValidation:
         result = _safe_redirect_url('http://evil.com', self.FALLBACK)
         assert result == self.FALLBACK
 
-    def test_login_required_stores_path_not_absolute_url(self):
-        """login_required decorator must store request.path (relative), not request.url (absolute)."""
+    def test_login_required_redirects_to_sign_in_not_login(self):
+        """login_required decorator must redirect to sign_in, not the old /login route."""
         import ast, pathlib
         source = pathlib.Path('src/app.py').read_text()
         tree = ast.parse(source)
 
-        # Find the login_required function body and look for the assignment to session['next_url']
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == 'login_required':
-                for subnode in ast.walk(node):
-                    if (
-                        isinstance(subnode, ast.Assign)
-                        and any(
-                            isinstance(t, ast.Subscript)
-                            and isinstance(t.slice, ast.Constant)
-                            and t.slice.value == 'next_url'
-                            for t in subnode.targets
-                        )
-                    ):
-                        # The value assigned must be request.path, not request.url.
-                        # ast.dump renders Attribute nodes as: Attribute(..., attr='url', ...)
-                        assigned = ast.dump(subnode.value)
-                        # request.url → attr='url'; request.path → attr='path'
-                        assert "attr='url'" not in assigned, (
-                            "login_required stores request.url — must use request.path to avoid storing absolute URLs"
-                        )
-                        assert "attr='path'" in assigned, (
-                            "login_required should store request.path, not found in assignment"
-                        )
-                        return
-        pytest.fail("Could not find session['next_url'] assignment in login_required")
+                func_src = ast.unparse(node)
+                assert "url_for('login')" not in func_src, (
+                    "login_required should not redirect to /login after Clerk migration"
+                )
+                assert "sign_in" in func_src or "sign-in" in func_src, (
+                    "login_required should redirect to sign_in"
+                )
+                return
+        pytest.fail("Could not find login_required function in src/app.py")

@@ -11,7 +11,7 @@ sys.path.insert(0, str(project_root))
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_wtf.csrf import CSRFProtect
-from authlib.integrations.flask_client import OAuth
+from clerk_backend_api import Clerk as ClerkClient
 import os
 import re
 import threading
@@ -26,7 +26,6 @@ import markdown as md_lib
 from markupsafe import Markup
 from decimal import Decimal
 from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from orchestrator_graph import create_session, OrchestratorSession
 from langsmith_service import create_emitter
@@ -37,6 +36,16 @@ from pdf_generator import get_pdf_generator
 
 # Load environment variables
 load_dotenv()
+
+# Clerk auth client
+_clerk_secret_key_raw = os.getenv('CLERK_SECRET_KEY')
+if not _clerk_secret_key_raw:
+    raise RuntimeError("CLERK_SECRET_KEY environment variable is not set")
+_clerk_jwt_key_raw = os.getenv('CLERK_JWT_KEY')
+if not _clerk_jwt_key_raw:
+    raise RuntimeError("CLERK_JWT_KEY environment variable is not set")
+clerk_client = ClerkClient(bearer_auth=_clerk_secret_key_raw)
+CLERK_JWT_KEY = _clerk_jwt_key_raw.replace('\\n', '\n')
 
 # Create Flask app
 # Set template and static folders explicitly to point to project root
@@ -58,29 +67,51 @@ limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="m
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user_id' not in session:
-            session['next_url'] = request.path
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated
-
-oauth = OAuth(app)
-oauth.register(
-    name='google',
-    client_id=os.getenv('GOOGLE_CLIENT_ID'),
-    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'},
-)
+        if 'user_id' in session:
+            return f(*args, **kwargs)
+        # Verify Clerk __session cookie JWT
+        token = request.cookies.get('__session')
+        if token:
+            try:
+                claims = clerk_client.sessions.verify_token(token, jwt_key=CLERK_JWT_KEY)
+                clerk_user_id = claims.sub
+                if 'user_id' not in session or session['user_id'] != clerk_user_id:
+                    # Upsert user in MySQL
+                    from database import get_database_manager
+                    db = get_database_manager()
+                    user = db.get_user_by_id(clerk_user_id)
+                    if not user:
+                        clerk_user = clerk_client.users.get(user_id=clerk_user_id)
+                        email = ''
+                        username = clerk_user_id
+                        if clerk_user.email_addresses:
+                            email = clerk_user.email_addresses[0].email_address or ''
+                        if clerk_user.username:
+                            username = clerk_user.username
+                        elif clerk_user.first_name or clerk_user.last_name:
+                            username = f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip() or clerk_user_id
+                        db.create_user(user_id=clerk_user_id, username=username, email=email)
+                    else:
+                        username = user.get('username', clerk_user_id)
+                    session['user_id'] = clerk_user_id
+                    session['username'] = username
+                    get_or_create_session_id()
+                return f(*args, **kwargs)
+            except Exception as e:
+                app.logger.error("Clerk auth failed: %s", e)
+        return redirect(url_for('sign_in'))
 
 
 @app.context_processor
 def inject_user():
-    return {'current_user': {
-        'is_authenticated': 'user_id' in session,
-        'user_id': session.get('user_id'),
-        'username': session.get('username'),
-    }}
+    return {
+        'current_user': {
+            'is_authenticated': 'user_id' in session,
+            'user_id': session.get('user_id'),
+            'username': session.get('username'),
+        },
+        'clerk_publishable_key': os.getenv('CLERK_PUBLISHABLE_KEY', ''),
+    }
 
 
 
@@ -197,150 +228,28 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
 
 # ==================== Auth Routes ====================
 
-@app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("5 per minute")
-def login():
-    """Login page."""
+@app.route('/sign-in')
+def sign_in():
+    """Sign-in page (Clerk hosted component)."""
     if 'user_id' in session:
         return redirect(url_for('index'))
-
-    error = None
-    if request.method == 'GET' and request.args.get('error', '').startswith('google_'):
-        error = 'Google sign-in was cancelled or failed. Try again or sign in with your password.'
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-
-        if not username or not password:
-            error = 'Username and password are required.'
-        else:
-            from database import get_database_manager
-            db = get_database_manager()
-            user = db.get_user_by_username(username)
-
-            if user and user.get('password_hash') and check_password_hash(user['password_hash'], password):
-                next_url = session.get('next_url')
-                session.clear()
-                session['user_id'] = user['user_id']
-                session['username'] = user['username']
-                get_or_create_session_id()
-                safe_next = next_url if (next_url and next_url.startswith('/') and not next_url.startswith('//')) else None
-                return redirect(safe_next or url_for('index'))
-            else:
-                error = 'Invalid username or password.'
-
-    return render_template('login.html', error=error)
+    next_url = request.args.get('next', '')
+    return render_template('sign_in.html', next_url=next_url)
 
 
-@app.route('/register', methods=['GET', 'POST'])
-@limiter.limit("10 per minute")
-def register():
-    """Registration page."""
+@app.route('/sign-up')
+def sign_up():
+    """Sign-up page (Clerk hosted component)."""
     if 'user_id' in session:
         return redirect(url_for('index'))
-
-    error = None
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        email = request.form.get('email', '').strip()
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-
-        if len(username) < 3:
-            error = 'Username must be at least 3 characters.'
-        elif len(password) < 8:
-            error = 'Password must be at least 8 characters.'
-        elif password != confirm_password:
-            error = 'Passwords do not match.'
-        elif not email:
-            error = 'Email is required.'
-        else:
-            try:
-                from database import get_database_manager
-                db = get_database_manager()
-                user_id = str(uuid.uuid4())
-                password_hash = generate_password_hash(password)
-                db.create_user(user_id, username, email, password_hash)
-
-                session.clear()
-                session['user_id'] = user_id
-                session['username'] = username
-                get_or_create_session_id()
-                return redirect(url_for('index'))
-            except RuntimeError as e:
-                if 'Duplicate entry' in str(e):
-                    error = 'Username or email already taken.'
-                else:
-                    error = f'Registration failed: {str(e)}'
-
-    return render_template('register.html', error=error)
+    return render_template('sign_up.html')
 
 
-@app.route('/logout')
-def logout():
-    """Log out and redirect to login."""
+@app.route('/sign-out')
+def sign_out():
+    """Sign out: clear Flask session and redirect to sign-in."""
     session.clear()
-    return redirect(url_for('login'))
-
-
-@app.route('/login/google')
-def google_login():
-    """Initiate Google OAuth flow."""
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-    redirect_uri = url_for('google_callback', _external=True)
-    return oauth.google.authorize_redirect(redirect_uri)
-
-
-@app.route('/login/google/callback')
-def google_callback():
-    """Handle Google OAuth callback: find or create user, set session, redirect."""
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-    try:
-        token = oauth.google.authorize_access_token()
-    except Exception:
-        return redirect(url_for('login') + '?error=google_denied')
-    user_info = token.get('userinfo')
-    if not user_info:
-        return redirect(url_for('login') + '?error=google_no_userinfo')
-    google_id = user_info.get('sub')
-    email = (user_info.get('email') or '').strip().lower()
-    name = (user_info.get('name') or '').strip() or email
-    if not google_id or not email:
-        return redirect(url_for('login') + '?error=google_missing_data')
-
-    from database import get_database_manager
-    db = get_database_manager()
-
-    user = db.get_user_by_google_id(google_id)
-    if user:
-        pass
-    else:
-        user = db.get_user_by_email(email)
-        if user:
-            db.update_user_google_id(user['user_id'], google_id)
-        else:
-            base_username = re.sub(r'[^a-z0-9._-]', '', name.lower().replace(' ', '.'))[:50] or 'user'
-            username = base_username
-            suffix = 0
-            while db.get_user_by_username(username):
-                suffix += 1
-                username = f"{base_username}{suffix}"
-            user_id = str(uuid.uuid4())
-            db.create_user(user_id=user_id, username=username, email=email, google_id=google_id)
-            user = db.get_user_by_id(user_id)
-
-    if not user:
-        return redirect(url_for('login') + '?error=google_failed')
-
-    next_url = session.get('next_url')
-    session.clear()
-    session['user_id'] = user['user_id']
-    session['username'] = user['username']
-    get_or_create_session_id()
-    safe_next = next_url if (next_url and next_url.startswith('/') and not next_url.startswith('//')) else None
-    return redirect(safe_next or url_for('index'))
+    return redirect(url_for('sign_in'))
 
 
 @app.route('/')

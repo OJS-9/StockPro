@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}StockIntel - Sign Up{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-background-dark">
+    <div class="w-full max-w-sm px-4">
+        <div class="flex items-center justify-center gap-3 mb-8">
+            <div class="size-9 text-primary">
+                <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
+                </svg>
+            </div>
+            <span class="text-white text-2xl font-bold tracking-tight font-display">StockIntel</span>
+        </div>
+        <div id="sign-up-container" class="bg-surface-dark border border-border-dark rounded-2xl p-2 min-h-[400px] flex items-center justify-center">
+            <span class="text-stone-400 text-sm">Loading...</span>
+        </div>
+    </div>
+</div>
+<script>
+window.addEventListener('load', async () => {
+    try {
+        await Clerk.load();
+        Clerk.mountSignUp(document.getElementById('sign-up-container'), {
+            afterSignUpUrl: '/',
+            signInUrl: '/sign-in',
+        });
+    } catch (e) {
+        document.getElementById('sign-up-container').innerHTML = '<p class="text-stone-400 text-sm">Authentication service unavailable. Please try again later.</p>';
+    }
+});
+</script>
+{% endblock %}
