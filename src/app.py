@@ -29,6 +29,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from agent import create_agent, StockResearchAgent
 from portfolio.portfolio_service import get_portfolio_service
+from portfolio.history_service import get_history_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
@@ -910,6 +911,18 @@ def delete_transaction(transaction_id: str):
         session['status_message'] = f'❌ Error: {str(e)}'
 
     return redirect(url_for('portfolio'))
+
+
+@app.route('/api/portfolio/<portfolio_id>/history')
+@login_required
+def portfolio_history(portfolio_id):
+    """Return monthly portfolio value history as JSON."""
+    portfolio = get_portfolio_service().get_portfolio(portfolio_id)
+    if not portfolio or portfolio.get('user_id') != session['user_id']:
+        return jsonify({'error': 'Not found'}), 404
+    history_service = get_history_service()
+    data = history_service.get_monthly_values(portfolio_id)
+    return jsonify(data)
 
 
 # ============================================================================
