@@ -1,4 +1,4 @@
-# StockIntel
+# StockPro
 
 An AI-powered multi-agent stock research platform that orchestrates specialized research agents, integrates financial data APIs with real-time web research, and provides an interactive chat interface for exploring investment opportunities. Includes a portfolio tracker for equities and crypto.
 

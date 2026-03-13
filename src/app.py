@@ -11,7 +11,7 @@ sys.path.insert(0, str(project_root))
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response, abort
 from flask_wtf.csrf import CSRFProtect
-from clerk_backend_api import Clerk as ClerkClient
+from clerk_backend_api import Clerk as ClerkClient, AuthenticateRequestOptions
 import os
 import re
 import threading
@@ -69,37 +69,38 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' in session:
             return f(*args, **kwargs)
-        # Verify Clerk __session cookie JWT
-        token = request.cookies.get('__session')
-        if token:
-            try:
-                claims = clerk_client.sessions.verify_token(token, jwt_key=CLERK_JWT_KEY)
-                clerk_user_id = claims.sub
-                if 'user_id' not in session or session['user_id'] != clerk_user_id:
-                    # Upsert user in MySQL
-                    from database import get_database_manager
-                    db = get_database_manager()
-                    user = db.get_user_by_id(clerk_user_id)
-                    if not user:
-                        clerk_user = clerk_client.users.get(user_id=clerk_user_id)
-                        email = ''
-                        username = clerk_user_id
-                        if clerk_user.email_addresses:
-                            email = clerk_user.email_addresses[0].email_address or ''
-                        if clerk_user.username:
-                            username = clerk_user.username
-                        elif clerk_user.first_name or clerk_user.last_name:
-                            username = f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip() or clerk_user_id
-                        db.create_user(user_id=clerk_user_id, username=username, email=email)
-                    else:
-                        username = user.get('username', clerk_user_id)
-                    session['user_id'] = clerk_user_id
-                    session['username'] = username
-                    get_or_create_session_id()
-                return f(*args, **kwargs)
-            except Exception as e:
-                app.logger.error("Clerk auth failed: %s", e)
+        # Verify Clerk session token via authenticate_request
+        request_state = clerk_client.authenticate_request(
+            request,
+            AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
+        )
+        if request_state.is_authenticated:
+            clerk_user_id = request_state.payload['sub']
+            if 'user_id' not in session or session['user_id'] != clerk_user_id:
+                # Upsert user in MySQL
+                from database import get_database_manager
+                db = get_database_manager()
+                user = db.get_user_by_id(clerk_user_id)
+                if not user:
+                    clerk_user = clerk_client.users.get(user_id=clerk_user_id)
+                    email = ''
+                    username = clerk_user_id
+                    if clerk_user.email_addresses:
+                        email = clerk_user.email_addresses[0].email_address or ''
+                    if clerk_user.username:
+                        username = clerk_user.username
+                    elif clerk_user.first_name or clerk_user.last_name:
+                        username = f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip() or clerk_user_id
+                    db.create_user(user_id=clerk_user_id, username=username, email=email)
+                else:
+                    username = user.get('username', clerk_user_id)
+                session['user_id'] = clerk_user_id
+                session['username'] = username
+                get_or_create_session_id()
+            return f(*args, **kwargs)
+        app.logger.warning("Clerk auth failed: %s", request_state.reason)
         return redirect(url_for('sign_in'))
+    return decorated
 
 
 @app.context_processor

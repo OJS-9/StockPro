@@ -100,10 +100,13 @@ class TestLoginRequiredDecorator:
         # If we can't find the function, the test fails
         assert False, "login_required function not found in app.py"
 
-    def test_clerk_session_cookie_checked(self):
-        """login_required should verify __session cookie via Clerk."""
-        assert "__session" in APP_SRC, (
-            "login_required should check __session cookie for Clerk JWT"
+    def test_clerk_authenticate_request_used(self):
+        """login_required should verify session via authenticate_request."""
+        assert "authenticate_request" in APP_SRC, (
+            "login_required should use clerk_client.authenticate_request for JWT verification"
+        )
+        assert "AuthenticateRequestOptions" in APP_SRC, (
+            "login_required should pass AuthenticateRequestOptions with jwt_key"
         )
 
 
