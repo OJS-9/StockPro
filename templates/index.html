@@ -173,107 +173,150 @@
                 <p class="text-stone-500 mt-1 font-body">Curated stories moving the markets.</p>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <button class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-primary text-background-dark shadow-lg shadow-primary/20">All Stories</button>
-                <button class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">Macro</button>
-                <button class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">Tech</button>
-                <button class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">Crypto</button>
+                <button id="briefing-more-btn" class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">More Stories</button>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <article class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-primary/50 transition-all hover:shadow-2xl hover:-translate-y-1">
-                <div class="h-48 w-full relative bg-stone-100 dark:bg-stone-800 overflow-hidden">
-                    <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
-                    <div class="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
-                        <svg height="100%" preserveAspectRatio="xMidYMid slice" viewBox="0 0 200 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="150" cy="50" fill="#d6d3d1" fill-opacity="0.1" r="40"></circle>
-                            <circle cx="50" cy="80" fill="#d6d3d1" fill-opacity="0.2" r="60"></circle>
-                            <rect class="text-primary" fill="currentColor" height="40" rx="10" width="40" x="80" y="30"></rect>
-                        </svg>
-                    </div>
-                    <div class="absolute top-4 left-4 bg-white/90 dark:bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg text-stone-900 dark:text-white text-xs font-bold font-mono tracking-wide border border-stone-200 dark:border-white/10">
-                        MACRO
-                    </div>
+        <div id="briefing-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Skeleton cards shown while loading -->
+            <div class="briefing-skeleton flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark">
+                <div class="h-48 bg-stone-200 dark:bg-stone-800 animate-pulse"></div>
+                <div class="p-6 flex flex-col gap-3">
+                    <div class="h-3 w-24 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-5 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-5 w-3/4 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-4 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse mt-1"></div>
+                    <div class="h-4 w-2/3 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
                 </div>
-                <div class="p-6 flex-1 flex flex-col">
-                    <div class="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono mb-3">
-                        <span class="font-bold text-primary">Bloomberg</span>
-                        <span>•</span>
-                        <span>2h ago</span>
-                    </div>
-                    <h3 class="text-stone-900 dark:text-white text-xl font-display font-bold leading-tight group-hover:text-primary transition-colors mb-2">
-                        Fed holds rates steady, signals potential cuts later this year as inflation cools
-                    </h3>
-                    <p class="text-stone-600 dark:text-stone-400 text-sm font-body leading-relaxed line-clamp-3">
-                        Analysts weigh in on the implications for consumers and businesses as the central bank maintains its stance in a surprising move.
-                    </p>
-                    <div class="mt-auto pt-4 flex items-center text-primary text-sm font-bold gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Read Analysis <span class="material-symbols-outlined text-sm">arrow_outward</span>
-                    </div>
+            </div>
+            <div class="briefing-skeleton flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark">
+                <div class="h-48 bg-stone-200 dark:bg-stone-800 animate-pulse"></div>
+                <div class="p-6 flex flex-col gap-3">
+                    <div class="h-3 w-24 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-5 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-5 w-3/4 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-4 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse mt-1"></div>
+                    <div class="h-4 w-2/3 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
                 </div>
-            </article>
-            <article class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-accent-up/50 transition-all hover:shadow-2xl hover:-translate-y-1">
-                <div class="h-48 w-full relative bg-stone-100 dark:bg-stone-800 overflow-hidden">
-                    <div class="absolute inset-0 bg-gradient-to-br from-accent-up/10 to-transparent"></div>
-                    <div class="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
-                        <svg height="100%" preserveAspectRatio="xMidYMid slice" viewBox="0 0 200 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                            <path class="text-accent-up" d="M20 80 Q 50 20 80 80 T 140 80 T 200 20" fill="none" stroke="currentColor" stroke-width="2"></path>
-                            <circle class="text-accent-up" cx="140" cy="50" fill="currentColor" fill-opacity="0.2" r="20"></circle>
-                        </svg>
-                    </div>
-                    <div class="absolute top-4 left-4 bg-white/90 dark:bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg text-stone-900 dark:text-white text-xs font-bold font-mono tracking-wide border border-stone-200 dark:border-white/10">
-                        TECH
-                    </div>
+            </div>
+            <div class="briefing-skeleton flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark">
+                <div class="h-48 bg-stone-200 dark:bg-stone-800 animate-pulse"></div>
+                <div class="p-6 flex flex-col gap-3">
+                    <div class="h-3 w-24 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-5 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-5 w-3/4 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+                    <div class="h-4 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse mt-1"></div>
+                    <div class="h-4 w-2/3 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
                 </div>
-                <div class="p-6 flex-1 flex flex-col">
-                    <div class="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono mb-3">
-                        <span class="font-bold text-accent-up">TechCrunch</span>
-                        <span>•</span>
-                        <span>45m ago</span>
-                    </div>
-                    <h3 class="text-stone-900 dark:text-white text-xl font-display font-bold leading-tight group-hover:text-accent-up transition-colors mb-2">
-                        AI chip demand surges as tech giants race to build larger data centers
-                    </h3>
-                    <p class="text-stone-600 dark:text-stone-400 text-sm font-body leading-relaxed line-clamp-3">
-                        The unprecedented demand for specialized hardware is reshaping the semiconductor industry landscape and driving stock prices.
-                    </p>
-                    <div class="mt-auto pt-4 flex items-center text-accent-up text-sm font-bold gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Read Analysis <span class="material-symbols-outlined text-sm">arrow_outward</span>
-                    </div>
-                </div>
-            </article>
-            <article class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-primary/50 transition-all hover:shadow-2xl hover:-translate-y-1">
-                <div class="h-48 w-full relative bg-stone-100 dark:bg-stone-800 overflow-hidden">
-                    <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent"></div>
-                    <div class="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
-                        <svg height="100%" preserveAspectRatio="xMidYMid slice" viewBox="0 0 200 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                            <rect class="text-stone-600" fill="currentColor" height="60" width="30" x="40" y="40"></rect>
-                            <rect class="text-stone-500" fill="currentColor" height="80" width="30" x="85" y="20"></rect>
-                            <rect class="text-stone-400" fill="currentColor" height="50" width="30" x="130" y="50"></rect>
-                        </svg>
-                    </div>
-                    <div class="absolute top-4 left-4 bg-white/90 dark:bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg text-stone-900 dark:text-white text-xs font-bold font-mono tracking-wide border border-stone-200 dark:border-white/10">
-                        FINANCE
-                    </div>
-                </div>
-                <div class="p-6 flex-1 flex flex-col">
-                    <div class="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono mb-3">
-                        <span class="font-bold text-primary">CNBC</span>
-                        <span>•</span>
-                        <span>3h ago</span>
-                    </div>
-                    <h3 class="text-stone-900 dark:text-white text-xl font-display font-bold leading-tight group-hover:text-primary transition-colors mb-2">
-                        Banking sector shows resilience in stress tests, paving way for buybacks
-                    </h3>
-                    <p class="text-stone-600 dark:text-stone-400 text-sm font-body leading-relaxed line-clamp-3">
-                        Major banks demonstrate strong capital positions, easing concerns about financial stability and pleasing investors.
-                    </p>
-                    <div class="mt-auto pt-4 flex items-center text-primary text-sm font-bold gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Read Analysis <span class="material-symbols-outlined text-sm">arrow_outward</span>
-                    </div>
-                </div>
-            </article>
+            </div>
         </div>
     </section>
+
+    <script>
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    (function () {
+        function buildCard(article) {
+            const category = (article.category || 'News').toUpperCase();
+            const title = escapeHtml(article.title || '');
+            const description = escapeHtml(article.description || '');
+            const publisher = escapeHtml(article.publisher || article.source || '');
+            const rawUrl = article.url || '#';
+            const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
+            const image = article.image || '';
+
+            const imageInner = image
+                ? `<img src="${image}" alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">`
+                : article.publisher === 'WSJ'
+                    ? `<img src="/static/images/wsj-logo.svg" alt="WSJ" class="absolute inset-0 w-full h-full object-cover">`
+                    : `<div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>`;
+
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
+                    class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-primary/50 transition-all hover:shadow-2xl hover:-translate-y-1 no-underline">
+                <div class="h-48 w-full relative bg-stone-100 dark:bg-stone-800 overflow-hidden">
+                    ${imageInner}
+                </div>
+                <div class="p-6 flex-1 flex flex-col">
+                    <div class="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono mb-3">
+                        <span class="font-bold text-primary">${publisher}</span>
+                    </div>
+                    <h3 class="text-stone-900 dark:text-white text-xl font-display font-bold leading-tight group-hover:text-primary transition-colors mb-2 line-clamp-3">
+                        ${title}
+                    </h3>
+                    ${description ? `<p class="text-stone-600 dark:text-stone-400 text-sm font-body leading-relaxed line-clamp-3">${description}</p>` : ''}
+                    <div class="mt-auto pt-4 flex items-center text-primary text-sm font-bold gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Read more <span class="material-symbols-outlined text-sm">arrow_outward</span>
+                    </div>
+                </div>
+            </a>`;
+        }
+
+        function showFallback(grid) {
+            grid.innerHTML = `<div class="col-span-3 py-10 text-center text-stone-500 font-body">News unavailable right now. Check back shortly.</div>`;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var grid = document.getElementById('briefing-grid');
+            var allPrimary = [];
+
+            fetch('/api/news')
+                .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+                .then(function (articles) {
+                    if (!articles || articles.length === 0) { showFallback(grid); return; }
+                    allPrimary = articles;
+                    grid.innerHTML = articles.slice(0, 3).map(buildCard).join('');
+                    if (articles.length <= 3) {
+                        document.getElementById('briefing-more-btn').style.display = 'none';
+                    }
+                })
+                .catch(function () { showFallback(grid); });
+
+            var LIMIT = 15;
+            var expanded = false;
+            var secondaryAborted = false;
+
+            var moreBtn = document.getElementById('briefing-more-btn');
+            moreBtn.addEventListener('click', function () {
+                if (!expanded) {
+                    expanded = true;
+                    secondaryAborted = false;
+
+                    var extraPrimary = allPrimary.slice(3, LIMIT);
+                    var secondarySlots = LIMIT - 3 - extraPrimary.length;
+
+                    if (extraPrimary.length > 0) {
+                        var html = extraPrimary.map(function (a) {
+                            return '<div class="briefing-extra">' + buildCard(a) + '</div>';
+                        }).join('');
+                        grid.insertAdjacentHTML('beforeend', html);
+                    }
+
+                    moreBtn.textContent = 'Less';
+
+                    if (secondarySlots > 0) {
+                        fetch('/api/news/more')
+                            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+                            .then(function (articles) {
+                                if (secondaryAborted || !articles || !articles.length) return;
+                                var html = articles.slice(0, secondarySlots).map(function (a) {
+                                    return '<div class="briefing-extra">' + buildCard(a) + '</div>';
+                                }).join('');
+                                grid.insertAdjacentHTML('beforeend', html);
+                            })
+                            .catch(function () {});
+                    }
+                } else {
+                    expanded = false;
+                    secondaryAborted = true;
+                    document.querySelectorAll('#briefing-grid .briefing-extra').forEach(function (el) {
+                        el.remove();
+                    });
+                    moreBtn.textContent = 'More Stories';
+                }
+            });
+        });
+    })();
+    </script>
 </main>
 
 {% include '_footer.html' %}

@@ -977,6 +977,18 @@ def report_history():
         )
 
 
+@app.route('/api/news')
+def api_news():
+    from news_service import get_briefing
+    return jsonify(get_briefing())
+
+
+@app.route('/api/news/more')
+def api_news_more():
+    from news_service import get_more
+    return jsonify(get_more())
+
+
 @app.route('/api/reports')
 @login_required
 def api_reports():

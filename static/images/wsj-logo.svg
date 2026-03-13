@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225" width="400" height="225">
+  <rect width="400" height="225" fill="#1c1917"/>
+  <text
+    x="200"
+    y="148"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="96"
+    font-weight="700"
+    fill="#ffffff"
+    letter-spacing="8"
+  >WSJ</text>
+</svg>

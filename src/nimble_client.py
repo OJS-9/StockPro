@@ -146,3 +146,31 @@ class NimbleClient:
             return f"[Nimble Perplexity timeout] Exceeded {self.timeout:.0f}s: {e}"
         except Exception as e:
             return f"[Nimble Perplexity error] Request failed: {e}"
+
+    def run_agent(self, agent_name: str, params: dict) -> list:
+        """
+        Run a Nimble pre-built agent and return its parsed results list.
+
+        Args:
+            agent_name: Agent ID (e.g. 'bloomberg_search_...')
+            params: Input parameters matching the agent's input schema
+
+        Returns:
+            List of result dicts, or empty list on failure
+        """
+        payload = {"agent": agent_name, "params": params}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(
+                    f"{NIMBLE_API_BASE}/agents/run",
+                    headers=self._headers(),
+                    json=payload,
+                )
+                resp.raise_for_status()
+                parsing = resp.json().get("data", {}).get("parsing", [])
+                # Some agents return {"articles": [...]} instead of a plain list
+                if isinstance(parsing, dict):
+                    parsing = next(iter(parsing.values()), [])
+                return parsing
+        except Exception:
+            return []
