@@ -23,6 +23,10 @@ window.addEventListener('load', async () => {
     const nextUrl = {{ (next_url or '/')|tojson }};
     try {
         await Clerk.load();
+        // If Clerk still has an active session (e.g. coming from sign-out), clear it first
+        if (Clerk.user) {
+            await Clerk.signOut();
+        }
         Clerk.mountSignIn(document.getElementById('sign-in-container'), {
             afterSignInUrl: nextUrl || '/',
             signUpUrl: '/sign-up',
