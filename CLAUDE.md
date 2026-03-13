@@ -30,17 +30,18 @@ An AI-powered multi-agent stock research platform that orchestrates specialized 
 ```
 src/
 ├── __init__.py
-├── agent.py                       # Orchestrator agent (StockResearchAgent)
-├── planner_agent.py               # Research planning (PlannerAgent)
-├── specialized_agent.py           # Per-subject research agents
-├── synthesis_agent.py             # Report consolidation from research outputs
-├── research_orchestrator.py       # Parallel execution via ThreadPoolExecutor
+├── orchestrator_graph.py          # LangGraph orchestrator session (replaces StockResearchAgent/agent.py)
+├── agents/
+│   ├── __init__.py
+│   ├── planner_node.py            # Research planning node
+│   ├── specialized_node.py        # Per-subject research nodes
+│   ├── synthesis_node.py          # Report synthesis node
+│   └── chat_agent.py              # RAG-lite Q&A on generated reports
+├── research_graph.py              # LangGraph StateGraph for full pipeline
 ├── research_subjects.py           # 12 subject definitions with trade-type eligibility
 ├── research_plan.py               # ResearchPlan dataclass
 ├── research_prompt.py             # System prompts and templates
-├── report_chat_agent.py           # RAG-lite Q&A on generated reports
-├── conversation_handler_agent.py  # Enhanced Q&A (uses raw research outputs too)
-├── agent_tools.py                 # Agents SDK FunctionTool wrappers
+├── langsmith_service.py           # LangSmith StepEmitter + SSE integration
 ├── mcp_client.py                  # Alpha Vantage MCP HTTP client (JSON-RPC)
 ├── mcp_manager.py                 # MCP server configuration
 ├── mcp_tools.py                   # MCP tool execution wrapper
@@ -51,7 +52,7 @@ src/
 ├── vector_search.py               # Cosine similarity search over stored chunks
 ├── database.py                    # MySQL operations & schema (~940 lines)
 ├── date_utils.py                  # Datetime context utilities
-├── app.py                         # Flask routes, session management, auth
+├── app.py                         # Flask routes, session management, auth (now uses OrchestratorSession)
 ├── portfolio/
 │   ├── __init__.py
 │   ├── portfolio_service.py       # Portfolio business logic
@@ -136,14 +137,13 @@ ReportChatAgent (RAG-lite follow-up Q&A)
 
 ### Agent Inventory
 
-| Agent | File | Model | Role | Tools | Output Tokens |
+| Component | File | Model | Role | Tools / Integration | Output Tokens |
 |---|---|---|---|---|---|
-| StockResearchAgent | `agent.py` | gemini-3-flash-preview | Orchestrate conversation, trigger report | `generate_report` | 600 |
-| PlannerAgent | `planner_agent.py` | gemini-3-flash-preview | Select & prioritize research subjects | None (JSON response) | 1,200 |
-| SpecializedResearchAgent | `specialized_agent.py` | gemini-3.1-pro-preview | Deep-dive one subject | 6 MCP + Perplexity | 1,500 |
-| SynthesisAgent | `synthesis_agent.py` | gemini-3.1-pro-preview | Merge outputs into cohesive report | None (synthesis) | 8,000 |
-| ReportChatAgent | `report_chat_agent.py` | gemini-3-flash-preview | RAG Q&A on report chunks | None (prompt injection) | — |
-| ConversationHandlerAgent | `conversation_handler_agent.py` | gemini-3-flash-preview | Enhanced Q&A with raw research outputs | None (prompt injection) | — |
+| OrchestratorSession | `orchestrator_graph.py` | gemini-2.5-flash (via LangChain) | Orchestrate conversation, ask clarifying questions, trigger research graph | Calls `run_research` tool in `research_graph.py` | ~600 per turn (configured) |
+| Planner node | `agents/planner_node.py` | gemini-3-flash-preview | Select & prioritize research subjects | None (JSON-like state updates) | ~1,200 |
+| Specialized node | `agents/specialized_node.py` | gemini-3.1-pro-preview | Deep-dive one subject | 6 MCP + Perplexity tools | ~1,500 |
+| Synthesis node | `agents/synthesis_node.py` | gemini-3.1-pro-preview | Merge outputs into cohesive report | None (synthesis) | ~8,000 |
+| ReportChatAgent | `agents/chat_agent.py` | gemini-3-flash-preview | RAG Q&A on stored report chunks | Vector search over `report_chunks` | — |
 
 ### Research Subjects (12 total)
 

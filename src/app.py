@@ -27,12 +27,12 @@ from decimal import Decimal
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from agent import create_agent, StockResearchAgent
+from orchestrator_graph import OrchestratorSession, create_session
 from portfolio.portfolio_service import get_portfolio_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
-from trace_service import create_trace, create_chat_trace
+from langsmith_service import create_emitter
 
 # Load environment variables
 load_dotenv()
@@ -119,21 +119,21 @@ _sse_queues: dict = {}
 _generation_status: dict = {}
 
 
-def initialize_session(session_id: str) -> StockResearchAgent:
+def initialize_session(session_id: str) -> OrchestratorSession:
     """
-    Initialize or get agent for a session.
-    
+    Initialize or get orchestrator session for a user.
+
     Args:
         session_id: Unique session identifier
-    
+
     Returns:
-        StockResearchAgent instance
+        OrchestratorSession instance
     """
     if session_id not in agent_sessions:
         try:
-            agent_sessions[session_id] = create_agent()
+            agent_sessions[session_id] = create_session()
         except Exception as e:
-            raise ValueError(f"Failed to initialize agent: {str(e)}")
+            raise ValueError(f"Failed to initialize agent session: {str(e)}")
     return agent_sessions[session_id]
 
 
@@ -420,11 +420,11 @@ def continue_conversation():
     ticker = session.get('current_ticker', '')
     trade_type = session.get('current_trade_type', 'Investment')
 
-    # Create SSE queue and trace context
+    # Create SSE queue and LangSmith emitter
     step_q: queue.Queue = queue.Queue()
     _sse_queues[session_id] = step_q
-    tc = create_trace(ticker=ticker, trade_type=trade_type, session_id=session_id, step_queue=step_q)
-    agent.set_trace_context(tc)
+    emitter = create_emitter(step_queue=step_q)
+    agent.set_emitter(emitter)
 
     def run_in_background():
         try:
@@ -458,7 +458,7 @@ def continue_conversation():
         except Exception as e:
             step_q.put({"type": "error", "message": str(e)})
         finally:
-            agent.set_trace_context(None)
+            agent.set_emitter(None)
 
     t = threading.Thread(target=run_in_background, daemon=True)
     t.start()
@@ -671,20 +671,18 @@ def start_generation():
     trade_type = session.get('current_trade_type', 'Investment')
 
     def run_generation():
-        tc = create_trace(ticker=ticker, trade_type=trade_type, session_id=session_id)
-        agent.set_trace_context(tc)
+        emitter = create_emitter()
+        agent.set_emitter(emitter)
         try:
             agent.generate_report(context=context_str)
             _generation_status[session_id] = {
                 'status': 'ready',
                 'report_id': agent.current_report_id,
             }
-            tc.finish(output=f"Report {agent.current_report_id or 'unknown'}")
         except Exception as e:
             _generation_status[session_id] = {'status': 'error', 'message': str(e)}
-            tc.finish(output=f"Error: {e}")
         finally:
-            agent.set_trace_context(None)
+            agent.set_emitter(None)
 
     threading.Thread(target=run_generation, daemon=True).start()
     return jsonify({'success': True})
