@@ -81,6 +81,12 @@
                 </div>
             </div>
 
+            <!-- Portfolio Value History Chart -->
+            <div class="bg-surface-dark rounded-3xl p-6 border border-border-dark mb-6">
+                <h2 class="font-display font-semibold text-lg mb-4">Portfolio Value</h2>
+                <canvas id="historyChart" height="80"></canvas>
+            </div>
+
             <!-- Holdings Table -->
             <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden">
                 <div class="px-5 py-4 border-b border-border-dark">
@@ -183,4 +189,65 @@
     </main>
 
 {% include '_footer.html' %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function () {
+    var portfolioId = {{ portfolio.portfolio_id | tojson }};
+    fetch('/api/portfolio/' + portfolioId + '/history')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var labels = data.map(function (d) { return d.date; });
+            var values = data.map(function (d) { return d.value; });
+            var ctx = document.getElementById('historyChart');
+            if (!ctx) return;
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        borderColor: '#22c55e',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#22c55e',
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function (ctx) {
+                                    return '$' + ctx.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#292524' },
+                            ticks: { color: '#78716c' }
+                        },
+                        y: {
+                            grid: { color: '#292524' },
+                            ticks: {
+                                color: '#78716c',
+                                callback: function (v) {
+                                    return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(function () {
+            document.getElementById('historyChart').parentElement.innerHTML = '<p class="text-stone-500 text-sm text-center py-8">Could not load chart data</p>';
+        });
+}());
+</script>
 {% endblock %}

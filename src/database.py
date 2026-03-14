@@ -1127,6 +1127,37 @@ class DatabaseManager:
                 cursor.close()
                 connection.close()
 
+    def get_all_portfolio_transactions(self, portfolio_id: str) -> List[Dict[str, Any]]:
+        """Get all transactions for a portfolio joined with holding symbol and asset_type."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor(dictionary=True)
+
+            cursor.execute("""
+                SELECT t.transaction_id, t.holding_id, t.transaction_type, t.quantity,
+                       t.price_per_unit, t.fees, t.transaction_date, t.notes,
+                       h.symbol, h.asset_type
+                FROM transactions t
+                JOIN holdings h ON t.holding_id = h.holding_id
+                WHERE h.portfolio_id = %s
+                ORDER BY t.transaction_date ASC
+            """, (portfolio_id,))
+
+            results = cursor.fetchall()
+            for result in results:
+                result['quantity'] = Decimal(str(result['quantity']))
+                result['price_per_unit'] = Decimal(str(result['price_per_unit']))
+                result['fees'] = Decimal(str(result['fees']))
+            return results
+
+        except Error as e:
+            raise RuntimeError(f"Failed to get portfolio transactions: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
     # ==================== CSV Import Logging ====================
 
     def log_csv_import(
