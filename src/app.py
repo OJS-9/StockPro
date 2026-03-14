@@ -705,15 +705,37 @@ def report_status(session_id: str):
 @app.route('/portfolio')
 @login_required
 def portfolio():
-    """Portfolio dashboard."""
+    """Portfolio list page."""
+    portfolio_service = get_portfolio_service()
+    portfolios = portfolio_service.list_portfolios(user_id=session['user_id'])
+    status_message = session.pop('status_message', None)
+    return render_template('portfolio_list.html', portfolios=portfolios, status_message=status_message)
+
+
+@app.route('/portfolio/create', methods=['POST'])
+@login_required
+def create_portfolio_route():
+    """Create a new portfolio."""
+    name = request.form.get('name', '').strip()
+    if not name:
+        session['status_message'] = '❌ Portfolio name is required'
+        return redirect(url_for('portfolio'))
+    portfolio_service = get_portfolio_service()
+    portfolio_id = portfolio_service.create_portfolio(name=name, user_id=session['user_id'])
+    return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
+
+
+@app.route('/portfolio/<portfolio_id>')
+@login_required
+def portfolio_detail(portfolio_id: str):
+    """Portfolio dashboard for a specific portfolio."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+        abort(404)
     try:
-        portfolio_service = get_portfolio_service()
-        portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
-        summary = portfolio_service.get_portfolio_summary(portfolio_data['portfolio_id'])
-
-        # Get status message if any
+        summary = portfolio_service.get_portfolio_summary(portfolio_id)
         status_message = session.pop('status_message', None)
-
         return render_template(
             'portfolio.html',
             portfolio=portfolio_data,
@@ -725,22 +747,24 @@ def portfolio():
         session['status_message'] = f'❌ Error loading portfolio: {str(e)}'
         return render_template(
             'portfolio.html',
-            portfolio=None,
+            portfolio=portfolio_data,
             summary=None,
             holdings=[],
             status_message=session.pop('status_message', None)
         )
 
 
-@app.route('/portfolio/add', methods=['GET', 'POST'])
+@app.route('/portfolio/<portfolio_id>/add', methods=['GET', 'POST'])
 @login_required
-def add_transaction():
+def add_transaction(portfolio_id: str):
     """Add transaction form."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+        abort(404)
+
     if request.method == 'POST':
         try:
-            portfolio_service = get_portfolio_service()
-            portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
-
             # Parse form data
             symbol = request.form.get('symbol', '').strip().upper()
             transaction_type = request.form.get('transaction_type', '')
@@ -765,9 +789,8 @@ def add_transaction():
 
             transaction_date = datetime.strptime(date_str, '%Y-%m-%d')
 
-            # Add transaction
             portfolio_service.add_transaction(
-                portfolio_id=portfolio_data['portfolio_id'],
+                portfolio_id=portfolio_id,
                 symbol=symbol,
                 transaction_type=transaction_type,
                 quantity=quantity,
@@ -783,22 +806,24 @@ def add_transaction():
         except Exception as e:
             session['status_message'] = f'❌ Error: {str(e)}'
 
-        return redirect(url_for('portfolio'))
+        return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
     # GET request - show form
     status_message = session.pop('status_message', None)
-    return render_template('add_transaction.html', status_message=status_message)
+    return render_template('add_transaction.html', portfolio=portfolio_data, status_message=status_message)
 
 
-@app.route('/portfolio/import', methods=['GET', 'POST'])
+@app.route('/portfolio/<portfolio_id>/import', methods=['GET', 'POST'])
 @login_required
-def import_csv():
+def import_csv(portfolio_id: str):
     """CSV import page."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+        abort(404)
+
     if request.method == 'POST':
         try:
-            portfolio_service = get_portfolio_service()
-            portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
-
             if 'csv_file' not in request.files:
                 raise ValueError("No file uploaded")
 
@@ -808,44 +833,47 @@ def import_csv():
 
             csv_content = file.read().decode('utf-8')
             result = portfolio_service.import_csv(
-                portfolio_id=portfolio_data['portfolio_id'],
+                portfolio_id=portfolio_id,
                 csv_content=csv_content,
                 filename=file.filename
             )
 
             if result.error_count > 0:
                 session['status_message'] = f'⚠️ Imported {result.success_count} transactions, {result.error_count} errors'
-                session['import_errors'] = result.errors[:10]  # Limit to first 10 errors
+                session['import_errors'] = result.errors[:10]
             else:
                 session['status_message'] = f'✅ Successfully imported {result.success_count} transactions'
 
         except Exception as e:
             session['status_message'] = f'❌ Import failed: {str(e)}'
 
-        return redirect(url_for('portfolio'))
+        return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
     # GET request - show import form
     status_message = session.pop('status_message', None)
     import_errors = session.pop('import_errors', None)
-    return render_template('import_csv.html', status_message=status_message, import_errors=import_errors)
+    return render_template('import_csv.html', portfolio=portfolio_data, status_message=status_message, import_errors=import_errors)
 
 
-@app.route('/portfolio/holding/<symbol>')
+@app.route('/portfolio/<portfolio_id>/holding/<symbol>')
 @login_required
-def holding_detail(symbol: str):
+def holding_detail(portfolio_id: str, symbol: str):
     """View holding details and transactions."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+        abort(404)
+
     try:
-        portfolio_service = get_portfolio_service()
-        portfolio_data = portfolio_service.get_default_portfolio(user_id=session['user_id'])
-        holding = portfolio_service.get_holding(portfolio_data['portfolio_id'], symbol)
+        holding = portfolio_service.get_holding(portfolio_id, symbol)
 
         if not holding:
             session['status_message'] = f'⚠️ Holding not found: {symbol}'
-            return redirect(url_for('portfolio'))
+            return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         if holding.get('total_quantity', Decimal('0')) <= Decimal('0'):
             session['status_message'] = f'⚠️ {symbol} is a closed position with no remaining quantity.'
-            return redirect(url_for('portfolio'))
+            return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         transactions = portfolio_service.get_transactions(holding['holding_id'])
 
@@ -866,6 +894,7 @@ def holding_detail(symbol: str):
 
         return render_template(
             'holding_detail.html',
+            portfolio=portfolio_data,
             holding=holding,
             transactions=transactions,
             status_message=status_message
@@ -873,44 +902,47 @@ def holding_detail(symbol: str):
 
     except Exception as e:
         session['status_message'] = f'❌ Error: {str(e)}'
-        return redirect(url_for('portfolio'))
+        return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
 
-@app.route('/portfolio/transaction/<transaction_id>/delete', methods=['POST'])
+@app.route('/portfolio/<portfolio_id>/transaction/<transaction_id>/delete', methods=['POST'])
 @login_required
-def delete_transaction(transaction_id: str):
+def delete_transaction(portfolio_id: str, transaction_id: str):
     """Delete a transaction."""
     try:
         portfolio_service = get_portfolio_service()
+
+        # Verify portfolio ownership
+        portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+        if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+            abort(404)
 
         # Get transaction to find symbol for redirect
         txn = portfolio_service.get_transaction(transaction_id)
         if not txn:
             session['status_message'] = '❌ Transaction not found'
-            return redirect(url_for('portfolio'))
+            return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         holding = portfolio_service.get_holding_by_id(txn['holding_id'])
-        symbol = holding['symbol'] if holding else None
-
-        if holding:
-            portfolio = portfolio_service.get_portfolio(holding['portfolio_id'])
-            if not portfolio or portfolio.get('user_id') != session['user_id']:
-                session['status_message'] = '❌ Not authorized'
-                return redirect(url_for('portfolio'))
+        if not holding or holding.get('portfolio_id') != portfolio_id:
+            abort(404)
+        symbol = holding['symbol']
 
         if portfolio_service.delete_transaction(transaction_id):
             session['status_message'] = '✅ Transaction deleted'
         else:
             session['status_message'] = '❌ Failed to delete transaction'
 
-        # Redirect back to holding detail if we have the symbol
         if symbol:
-            return redirect(url_for('holding_detail', symbol=symbol))
+            return redirect(url_for('holding_detail', portfolio_id=portfolio_id, symbol=symbol))
 
     except Exception as e:
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            raise
         session['status_message'] = f'❌ Error: {str(e)}'
 
-    return redirect(url_for('portfolio'))
+    return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
 
 @app.route('/api/portfolio/<portfolio_id>/history')
