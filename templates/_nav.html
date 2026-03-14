@@ -1,3 +1,4 @@
+<div id="nav-wrapper">
 <header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-stone-200 dark:border-b-border-dark bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md px-4 sm:px-10 py-3">
     <div class="flex items-center gap-4 text-stone-900 dark:text-white">
         <a href="{{ url_for('index') }}" class="flex items-center gap-4">
@@ -32,7 +33,84 @@
             {% endif %}
         </div>
     </div>
-    <div class="md:hidden text-white">
-        <span class="material-symbols-outlined cursor-pointer">menu</span>
+    <div class="md:hidden text-stone-900 dark:text-white">
+        <button type="button" id="mobile-menu-btn" aria-expanded="false" aria-controls="mobile-menu-panel" class="p-1 rounded-lg hover:bg-stone-200 dark:hover:bg-surface-dark transition-colors">
+            <span class="material-symbols-outlined cursor-pointer" aria-hidden="true">menu</span>
+        </button>
     </div>
 </header>
+
+<div id="mobile-menu-overlay" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm hidden" aria-hidden="true"></div>
+<div id="mobile-menu-panel" role="dialog" aria-label="Mobile menu" aria-hidden="true" class="fixed top-0 right-0 z-50 h-full w-64 max-w-[85vw] bg-surface-dark border-l border-border-dark shadow-xl flex flex-col transition-transform duration-200 ease-out -translate-x-full hidden">
+    <div class="flex items-center justify-between p-4 border-b border-border-dark">
+        <span class="text-sm font-bold font-display text-stone-900 dark:text-white">Menu</span>
+        <button type="button" id="mobile-menu-close" class="p-2 rounded-lg text-stone-900 dark:text-white hover:bg-stone-200 dark:hover:bg-surface-dark transition-colors" aria-label="Close menu">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <nav class="flex flex-col gap-1 p-4" aria-label="Main">
+        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint == 'index' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('index') }}">Markets</a>
+        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint == 'report_history' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('report_history') }}">Reports</a>
+        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint in ['chat', 'continue_conversation', 'chat_with_report'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('chat') }}">AI Agent</a>
+        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint in ['portfolio', 'add_transaction', 'import_csv', 'holding_detail'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('portfolio') }}">Portfolio</a>
+    </nav>
+    <div class="mt-auto p-4 border-t border-border-dark flex flex-col gap-2">
+        {% if current_user.is_authenticated %}
+        <span class="text-stone-900 dark:text-stone-300 text-sm font-medium px-2 py-1">{{ current_user.username }}</span>
+        <a href="{{ url_for('logout') }}" class="mobile-menu-link flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
+            <span class="truncate">Logout</span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('register') }}" class="mobile-menu-link flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-primary text-[#0c0a09] text-sm font-bold leading-normal tracking-[0.015em] hover:brightness-110 transition-all">
+            <span class="truncate">Sign Up</span>
+        </a>
+        <a href="{{ url_for('login') }}" class="mobile-menu-link flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
+            <span class="truncate">Login</span>
+        </a>
+        {% endif %}
+    </div>
+</div>
+</div>
+
+<script>
+(function () {
+    var btn = document.getElementById('mobile-menu-btn');
+    var overlay = document.getElementById('mobile-menu-overlay');
+    var panel = document.getElementById('mobile-menu-panel');
+    var closeBtn = document.getElementById('mobile-menu-close');
+    var links = document.querySelectorAll('.mobile-menu-link');
+
+    function openMenu() {
+        overlay.classList.remove('hidden');
+        overlay.setAttribute('aria-hidden', 'false');
+        panel.classList.remove('hidden', '-translate-x-full');
+        panel.classList.add('translate-x-0');
+        panel.setAttribute('aria-hidden', 'false');
+        btn.setAttribute('aria-expanded', 'true');
+        closeBtn.focus();
+    }
+
+    function closeMenu() {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+        panel.classList.add('-translate-x-full');
+        panel.classList.remove('translate-x-0');
+        panel.setAttribute('aria-hidden', 'true');
+        btn.setAttribute('aria-expanded', 'false');
+        setTimeout(function () { panel.classList.add('hidden'); }, 200);
+        btn.focus();
+    }
+
+    function handleEscape(e) {
+        if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') closeMenu();
+    }
+
+    if (btn && overlay && panel && closeBtn) {
+        btn.addEventListener('click', openMenu);
+        closeBtn.addEventListener('click', closeMenu);
+        overlay.addEventListener('click', closeMenu);
+        document.addEventListener('keydown', handleEscape);
+        links.forEach(function (link) { link.addEventListener('click', closeMenu); });
+    }
+})();
+</script>

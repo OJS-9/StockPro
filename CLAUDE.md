@@ -296,7 +296,7 @@ Additional colors used directly via Tailwind utilities:
 
 **Chat bubbles** — Both user and AI: `bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl`. User avatar: `bg-primary/20 rounded-full`. AI avatar: `bg-surface-dark rounded-full` with `smart_toy` icon.
 
-**Header/Nav** — Sticky, backdrop blur (`bg-background-dark/95 backdrop-blur-md`), bottom border `border-b-border-dark`. Nav links use `hover:text-primary` transition.
+**Header/Nav** — Sticky, backdrop blur (`bg-background-dark/95 backdrop-blur-md`), bottom border `border-b-border-dark`. Nav links use `hover:text-primary` transition. On viewports below `md`, a hamburger button opens a slide-out drawer (right) with the same links and auth; close via overlay click, close button, Escape, or link click.
 
 **Hero search bar** — `bg-surface-dark/90 backdrop-blur-md border border-border-dark rounded-2xl` with `focus-within:ring-2 ring-primary/50`.
 
