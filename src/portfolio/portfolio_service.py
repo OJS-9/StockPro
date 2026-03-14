@@ -47,7 +47,9 @@ class PortfolioService:
         self,
         name: str = "My Portfolio",
         description: str = "",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        track_cash: bool = False,
+        cash_balance: float = 0.0
     ) -> str:
         """
         Create a new portfolio.
@@ -56,13 +58,33 @@ class PortfolioService:
             name: Portfolio name
             description: Portfolio description
             user_id: Owner user ID (optional)
+            track_cash: Whether to track cash in this portfolio
+            cash_balance: Initial cash balance (default 0)
 
         Returns:
             portfolio_id: Generated portfolio ID
         """
         portfolio_id = str(uuid.uuid4())
-        self.db.create_portfolio(portfolio_id, name, description, user_id=user_id)
+        self.db.create_portfolio(
+            portfolio_id, name, description, user_id=user_id,
+            track_cash=track_cash, cash_balance=cash_balance
+        )
         return portfolio_id
+
+    def update_cash_balance(self, portfolio_id: str, cash_balance: float) -> None:
+        """
+        Update the cash balance for a portfolio (when track_cash is enabled).
+
+        Args:
+            portfolio_id: Portfolio ID
+            cash_balance: New cash balance (must be >= 0)
+
+        Raises:
+            ValueError: If cash_balance is negative
+        """
+        if cash_balance < 0:
+            raise ValueError("Cash balance cannot be negative")
+        self.db.update_cash_balance(portfolio_id, cash_balance)
 
     def get_portfolio(self, portfolio_id: str) -> Optional[Dict]:
         """
@@ -432,8 +454,13 @@ class PortfolioService:
             - holdings_count
             - stock_value, crypto_value
             - stock_allocation_pct, crypto_allocation_pct
+            - track_cash, cash_balance, cash_value, cash_allocation_pct (when track_cash)
             - holdings (list)
         """
+        portfolio = self.db.get_portfolio(portfolio_id)
+        track_cash = portfolio.get('track_cash', False) if portfolio else False
+        cash_balance = Decimal(str(portfolio.get('cash_balance', 0) or 0)) if portfolio else Decimal('0')
+
         holdings = self.get_holdings(portfolio_id)
 
         total_cost_basis = sum(
@@ -442,6 +469,8 @@ class PortfolioService:
         total_market_value = sum(
             h.get('market_value') or Decimal('0') for h in holdings
         )
+        if track_cash:
+            total_market_value += cash_balance
         total_unrealized_gain = total_market_value - total_cost_basis
 
         if total_cost_basis > 0:
@@ -458,15 +487,18 @@ class PortfolioService:
             h.get('market_value') or Decimal('0')
             for h in holdings if h['asset_type'] == 'crypto'
         )
+        cash_value = cash_balance if track_cash else Decimal('0')
 
         if total_market_value > 0:
             stock_allocation_pct = (stock_value / total_market_value) * 100
             crypto_allocation_pct = (crypto_value / total_market_value) * 100
+            cash_allocation_pct = (cash_value / total_market_value) * 100 if track_cash else Decimal('0')
         else:
             stock_allocation_pct = Decimal('0')
             crypto_allocation_pct = Decimal('0')
+            cash_allocation_pct = Decimal('0')
 
-        return {
+        result = {
             'portfolio_id': portfolio_id,
             'total_cost_basis': total_cost_basis,
             'total_market_value': total_market_value,
@@ -479,6 +511,12 @@ class PortfolioService:
             'crypto_allocation_pct': crypto_allocation_pct,
             'holdings': holdings,
         }
+        if track_cash:
+            result['track_cash'] = True
+            result['cash_balance'] = cash_balance
+            result['cash_value'] = cash_value
+            result['cash_allocation_pct'] = cash_allocation_pct
+        return result
 
     def get_portfolios_with_summaries(self, user_id: Optional[str] = None) -> Dict:
         """

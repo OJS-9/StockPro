@@ -73,7 +73,7 @@
                         <span class="material-symbols-outlined text-lg">pie_chart</span>
                         <span class="text-sm">Allocation</span>
                     </div>
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-4 flex-wrap">
                         <div class="flex items-center gap-1">
                             <span class="w-3 h-3 rounded-full bg-blue-500"></span>
                             <span class="text-sm">Stocks {{ "%.0f"|format(summary.stock_allocation_pct|float) }}%</span>
@@ -82,6 +82,12 @@
                             <span class="w-3 h-3 rounded-full bg-orange-500"></span>
                             <span class="text-sm">Crypto {{ "%.0f"|format(summary.crypto_allocation_pct|float) }}%</span>
                         </div>
+                        {% if summary.track_cash %}
+                        <div class="flex items-center gap-1">
+                            <span class="w-3 h-3 rounded-full bg-stone-400"></span>
+                            <span class="text-sm">Cash {{ "%.0f"|format(summary.cash_allocation_pct|float) }}%</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -95,10 +101,10 @@
             <!-- Holdings Table -->
             <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden">
                 <div class="px-5 py-4 border-b border-border-dark">
-                    <h2 class="font-display font-semibold text-lg">Holdings ({{ summary.holdings_count }})</h2>
+                    <h2 class="font-display font-semibold text-lg">Holdings ({{ summary.holdings_count + (1 if summary.track_cash else 0) }})</h2>
                 </div>
 
-                {% if holdings %}
+                {% if holdings or summary.track_cash %}
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead>
@@ -113,6 +119,27 @@
                             </tr>
                         </thead>
                         <tbody>
+                            {% if summary.track_cash %}
+                            <tr class="border-b border-border-dark bg-border-dark/30 hover:bg-border-dark/50 transition-colors" data-portfolio-id="{{ portfolio.portfolio_id }}">
+                                <td class="px-5 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full flex items-center justify-center bg-stone-500/20 text-stone-400">
+                                            <span class="material-symbols-outlined">payments</span>
+                                        </div>
+                                        <div>
+                                            <p class="font-semibold">CASH</p>
+                                            <p class="text-xs text-stone-400">Cash</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
+                                <td class="px-5 py-4 text-right font-mono font-semibold cursor-pointer cash-edit-cell" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ "%.2f"|format(summary.cash_balance|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
+                            </tr>
+                            {% endif %}
                             {% for holding in holdings %}
                             <tr class="border-b border-border-dark hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('holding_detail', portfolio_id=portfolio.portfolio_id, symbol=holding.symbol) }}'">
                                 <td class="px-5 py-4">
@@ -254,5 +281,71 @@
             document.getElementById('historyChart').parentElement.innerHTML = '<p class="text-stone-500 text-sm text-center py-8">Could not load chart data</p>';
         });
 }());
+
+(function () {
+    var cell = document.querySelector('.cash-edit-cell');
+    if (!cell) return;
+    var portfolioId = cell.getAttribute('data-portfolio-id');
+    var csrfToken = {{ csrf_token() | tojson }};
+    function formatCash(n) {
+        return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function parseCash(s) {
+        var n = parseFloat(String(s).replace(/[,$\s]/g, ''));
+        return isNaN(n) ? null : Math.max(0, n);
+    }
+    cell.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (cell.querySelector('input')) return;
+        var current = cell.getAttribute('data-cash-balance') || '0';
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = current;
+        input.className = 'w-24 px-2 py-1 bg-background-dark border border-primary rounded text-right font-mono text-white focus:outline-none focus:ring-1 focus:ring-primary';
+        input.style.fontSize = 'inherit';
+        function save() {
+            var val = parseCash(input.value);
+            if (val === null) {
+                cell.textContent = formatCash(current);
+                cell.removeChild(input);
+                return;
+            }
+            fetch('/portfolio/' + portfolioId + '/cash', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ cash_balance: val })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    cell.setAttribute('data-cash-balance', data.cash_balance);
+                    cell.textContent = formatCash(data.cash_balance);
+                    location.reload();
+                } else {
+                    cell.textContent = formatCash(current);
+                    alert(data.error || 'Failed to update');
+                }
+            })
+            .catch(function () {
+                cell.textContent = formatCash(current);
+                alert('Failed to update cash balance');
+            });
+            cell.removeChild(input);
+        }
+        function cancel() {
+            cell.textContent = formatCash(current);
+            cell.removeChild(input);
+        }
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+            if (ev.key === 'Escape') { ev.preventDefault(); cancel(); }
+        });
+        cell.textContent = '';
+        cell.appendChild(input);
+        input.focus();
+        input.select();
+    });
+})();
 </script>
 {% endblock %}

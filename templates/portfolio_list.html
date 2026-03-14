@@ -144,6 +144,23 @@
                     class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500"
                 />
             </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="track_cash" value="on" id="track-cash" class="rounded border-border-dark bg-background-dark text-primary focus:ring-primary">
+                    <span class="text-sm font-medium text-stone-300">Track cash in this portfolio</span>
+                </label>
+            </div>
+            <div id="cash-balance-wrap" class="mb-4 hidden">
+                <label for="cash-balance" class="block text-sm font-medium text-stone-300 mb-2">Initial cash balance (optional)</label>
+                <input
+                    type="text"
+                    id="cash-balance"
+                    name="cash_balance"
+                    placeholder="0"
+                    inputmode="decimal"
+                    class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500"
+                />
+            </div>
             <div class="flex items-center justify-end gap-3">
                 <button type="button" onclick="document.getElementById('create-modal').classList.add('hidden')" class="px-4 py-2 text-stone-400 hover:text-white transition-colors cursor-pointer">
                     Cancel
@@ -164,6 +181,18 @@
             this.classList.add('hidden');
         }
     });
+
+    // Show/hide initial cash balance when "Track cash" is toggled
+    (function() {
+        var check = document.getElementById('track-cash');
+        var wrap = document.getElementById('cash-balance-wrap');
+        if (!check || !wrap) return;
+        function toggle() {
+            wrap.classList.toggle('hidden', !check.checked);
+        }
+        check.addEventListener('change', toggle);
+        toggle();
+    })();
 
     // Portfolio tip: per-user keys so one account's dismiss doesn't affect another. X = this session; Don't Show Again = all sessions for this user.
     (function() {

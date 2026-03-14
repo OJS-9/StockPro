@@ -208,6 +208,21 @@ class DatabaseManager:
                         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
                 """)
 
+            # Inline migration: add track_cash and cash_balance if they don't exist
+            cursor.execute("""
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'portfolios'
+                  AND COLUMN_NAME = 'track_cash'
+            """)
+            (track_cash_exists,) = cursor.fetchone()
+            if not track_cash_exists:
+                cursor.execute("""
+                    ALTER TABLE portfolios
+                    ADD COLUMN track_cash TINYINT(1) NOT NULL DEFAULT 0,
+                    ADD COLUMN cash_balance DECIMAL(18, 2) NOT NULL DEFAULT 0
+                """)
+
             # Create holdings table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS holdings (
@@ -614,7 +629,9 @@ class DatabaseManager:
         portfolio_id: str,
         name: str = "My Portfolio",
         description: str = "",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        track_cash: bool = False,
+        cash_balance: float = 0.0
     ):
         """Create a new portfolio."""
         connection = None
@@ -623,9 +640,9 @@ class DatabaseManager:
             cursor = connection.cursor()
 
             cursor.execute("""
-                INSERT INTO portfolios (portfolio_id, name, description, user_id)
-                VALUES (%s, %s, %s, %s)
-            """, (portfolio_id, name, description, user_id))
+                INSERT INTO portfolios (portfolio_id, name, description, user_id, track_cash, cash_balance)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (portfolio_id, name, description, user_id, 1 if track_cash else 0, cash_balance))
 
             connection.commit()
 
@@ -646,15 +663,39 @@ class DatabaseManager:
             cursor = connection.cursor(dictionary=True)
 
             cursor.execute("""
-                SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                SELECT portfolio_id, name, description, user_id, created_at, updated_at,
+                       COALESCE(track_cash, 0) AS track_cash, COALESCE(cash_balance, 0) AS cash_balance
                 FROM portfolios
                 WHERE portfolio_id = %s
             """, (portfolio_id,))
 
-            return cursor.fetchone()
+            row = cursor.fetchone()
+            if row and 'track_cash' in row:
+                row['track_cash'] = bool(row['track_cash'])
+            return row
 
         except Error as e:
             raise RuntimeError(f"Failed to get portfolio: {e}")
+        finally:
+            if connection and connection.is_connected():
+                cursor.close()
+                connection.close()
+
+    def update_cash_balance(self, portfolio_id: str, cash_balance: float) -> None:
+        """Update the cash balance for a portfolio."""
+        connection = None
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+            cursor.execute("""
+                UPDATE portfolios SET cash_balance = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE portfolio_id = %s
+            """, (cash_balance, portfolio_id))
+            connection.commit()
+        except Error as e:
+            if connection:
+                connection.rollback()
+            raise RuntimeError(f"Failed to update cash balance: {e}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()
@@ -669,14 +710,16 @@ class DatabaseManager:
 
             if user_id is not None:
                 cursor.execute("""
-                    SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at,
+                           COALESCE(track_cash, 0) AS track_cash, COALESCE(cash_balance, 0) AS cash_balance
                     FROM portfolios
                     WHERE user_id = %s
                     ORDER BY created_at ASC
                 """, (user_id,))
             else:
                 cursor.execute("""
-                    SELECT portfolio_id, name, description, user_id, created_at, updated_at
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at,
+                           COALESCE(track_cash, 0) AS track_cash, COALESCE(cash_balance, 0) AS cash_balance
                     FROM portfolios
                     ORDER BY created_at ASC
                 """)

@@ -726,9 +726,47 @@ def create_portfolio_route():
     if not name:
         session['status_message'] = '❌ Portfolio name is required'
         return redirect(url_for('portfolio'))
+    track_cash = request.form.get('track_cash') == 'on'
+    cash_balance = 0.0
+    if track_cash:
+        try:
+            raw = request.form.get('cash_balance', '').strip().replace(',', '')
+            cash_balance = float(raw) if raw else 0.0
+            cash_balance = max(0.0, cash_balance)
+        except (ValueError, TypeError):
+            cash_balance = 0.0
     portfolio_service = get_portfolio_service()
-    portfolio_id = portfolio_service.create_portfolio(name=name, user_id=session['user_id'])
+    portfolio_id = portfolio_service.create_portfolio(
+        name=name,
+        user_id=session['user_id'],
+        track_cash=track_cash,
+        cash_balance=cash_balance
+    )
     return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
+
+
+@app.route('/portfolio/<portfolio_id>/cash', methods=['POST'])
+@login_required
+def update_portfolio_cash(portfolio_id: str):
+    """Update cash balance for a portfolio (JSON body: { \"cash_balance\": number })."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+        return {'ok': False, 'error': 'Not found'}, 404
+    if not portfolio_data.get('track_cash'):
+        return {'ok': False, 'error': 'Portfolio does not track cash'}, 400
+    data = request.get_json(silent=True) or {}
+    try:
+        cash_balance = float(data.get('cash_balance', 0))
+        if cash_balance < 0:
+            return {'ok': False, 'error': 'Cash balance cannot be negative'}, 400
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'Invalid cash_balance'}, 400
+    try:
+        portfolio_service.update_cash_balance(portfolio_id, cash_balance)
+        return {'ok': True, 'cash_balance': cash_balance}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}, 500
 
 
 @app.route('/portfolio/<portfolio_id>')
