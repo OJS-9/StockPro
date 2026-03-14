@@ -229,13 +229,28 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
 
 # ==================== Auth Routes ====================
 
+def _safe_redirect_url(next_url, fallback='/'):
+    """Allow only relative paths to prevent open redirects."""
+    if next_url and next_url.startswith('/') and not next_url.startswith('//'):
+        return next_url
+    return fallback
+
+
 @app.route('/sign-in')
 def sign_in():
     """Sign-in page (Clerk hosted component)."""
     if 'user_id' in session:
         return redirect(url_for('index'))
     next_url = request.args.get('next', '')
-    return render_template('sign_in.html', next_url=next_url)
+    return render_template('sign_in.html', next_url=_safe_redirect_url(next_url, '/'))
+
+
+@app.route('/auth/sso-callback')
+def auth_sso_callback():
+    """OAuth/SSO callback: ClerkJS runs handleRedirectCallback here to set __session cookie, then redirects."""
+    next_url = request.args.get('next', '')
+    redirect_url = _safe_redirect_url(next_url, '/')
+    return render_template('auth_sso_callback.html', redirect_url=redirect_url)
 
 
 @app.route('/sign-up')

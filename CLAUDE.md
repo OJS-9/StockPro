@@ -238,7 +238,7 @@ NIMBLE_TIMEOUT_SECONDS=30  # Request timeout for Nimble API calls (default 30)
 
 ## Auth
 
-Session-based auth. Routes: `/login` (GET/POST), `/register` (GET/POST), `/logout`, `/login/google` (redirect to Google), `/login/google/callback` (OAuth callback). Username/password and Google OAuth coexist; existing email accounts are linked when signing in with Google.
+Clerk-based auth with Flask session sync. Routes: `/sign-in`, `/sign-up`, `/sign-out`, `/auth/sso-callback`. The SSO callback route is required for "Continue with Google": after OAuth, Clerk redirects to `/auth/sso-callback`, where ClerkJS runs `handleRedirectCallback()` to set the `__session` cookie on the app origin, then the user is redirected to `/` (or `next`). Add the callback URL to Clerk Dashboard allowed redirect URLs if needed (e.g. `http://localhost:5000/auth/sso-callback`, `https://<domain>/auth/sso-callback`).
 
 ## MCP Configuration
 

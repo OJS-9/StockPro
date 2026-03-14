@@ -14,7 +14,6 @@
             <span class="text-white text-2xl font-bold tracking-tight font-display">StockIntel</span>
         </div>
         <div id="sign-up-container" class="bg-surface-dark border border-border-dark rounded-2xl p-2 min-h-[400px] flex items-center justify-center">
-            <span class="text-stone-400 text-sm">Loading...</span>
         </div>
     </div>
 </div>
@@ -23,7 +22,8 @@ window.addEventListener('load', async () => {
     try {
         await Clerk.load();
         Clerk.mountSignUp(document.getElementById('sign-up-container'), {
-            afterSignUpUrl: '/',
+            signUpForceRedirectUrl: '/auth/sso-callback',
+            signUpFallbackRedirectUrl: '/auth/sso-callback',
             signInUrl: '/sign-in',
         });
     } catch (e) {
