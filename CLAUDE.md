@@ -68,7 +68,8 @@ templates/
 ├── base.html                      # Shared layout (Tailwind, dark stone theme)
 ├── index.html                     # Landing page with hero search
 ├── chat.html                      # AI research chat interface (markdown via Marked.js)
-├── portfolio.html                 # Portfolio dashboard
+├── portfolio_list.html            # Portfolio list page (overall recap, per-card summary, empty state + create modal)
+├── portfolio.html                 # Portfolio detail dashboard (single portfolio view)
 ├── holding_detail.html            # Per-holding detail + transactions
 ├── add_transaction.html           # Manual transaction form
 ├── import_csv.html                # CSV import with drag-and-drop
@@ -340,6 +341,8 @@ Research depth scales with trade horizon:
 
 ### Portfolio Module
 - `PortfolioService` encapsulates all portfolio operations
+- Users can create multiple named portfolios; `GET /portfolio` shows the list (with overall recap: combined value, P&L and %, total holdings; each card shows that portfolio’s value, P&L %, and holdings count), `GET /portfolio/<id>` shows a detail view
+- All portfolio sub-routes are scoped to portfolio_id: `/portfolio/<id>/add`, `/portfolio/<id>/import`, `/portfolio/<id>/holding/<symbol>`, `/portfolio/<id>/transaction/<txn_id>/delete`
 - Cost basis: simple average method, applied chronologically
 - Asset type auto-detected from symbol (BTC, ETH, etc. → crypto)
 - Price providers: `StockDataProvider` (Alpha Vantage) / `CryptoDataProvider` (CoinGecko) via factory

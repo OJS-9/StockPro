@@ -480,6 +480,71 @@ class PortfolioService:
             'holdings': holdings,
         }
 
+    def get_portfolios_with_summaries(self, user_id: Optional[str] = None) -> Dict:
+        """
+        List portfolios with light summary per portfolio and overall aggregate.
+        For list view: no full holdings, just value/P&L/count.
+
+        Args:
+            user_id: User ID (optional)
+
+        Returns:
+            Dict with:
+            - portfolios: list of portfolio dicts, each with 'summary' (light: total_market_value,
+              total_cost_basis, total_unrealized_gain, total_unrealized_gain_pct, holdings_count)
+            - overall: total_market_value, total_cost_basis, total_unrealized_gain,
+              total_unrealized_gain_pct, total_holdings_count (or None if no portfolios)
+        """
+        portfolios = self.list_portfolios(user_id=user_id)
+        if not portfolios:
+            return {'portfolios': [], 'overall': None}
+
+        total_market_value = Decimal('0')
+        total_cost_basis = Decimal('0')
+        total_holdings_count = 0
+
+        for p in portfolios:
+            pid = p.get('portfolio_id')
+            try:
+                summary = self.get_portfolio_summary(pid)
+                light = {
+                    'total_market_value': summary['total_market_value'],
+                    'total_cost_basis': summary['total_cost_basis'],
+                    'total_unrealized_gain': summary['total_unrealized_gain'],
+                    'total_unrealized_gain_pct': summary['total_unrealized_gain_pct'],
+                    'holdings_count': summary['holdings_count'],
+                }
+                p['summary'] = light
+                total_market_value += summary['total_market_value']
+                total_cost_basis += summary['total_cost_basis']
+                total_holdings_count += summary['holdings_count']
+            except Exception:
+                holdings = self.db.get_holdings(pid)
+                count = len(holdings)
+                p['summary'] = {
+                    'total_market_value': Decimal('0'),
+                    'total_cost_basis': Decimal('0'),
+                    'total_unrealized_gain': Decimal('0'),
+                    'total_unrealized_gain_pct': Decimal('0'),
+                    'holdings_count': count,
+                }
+                total_holdings_count += count
+
+        total_unrealized_gain = total_market_value - total_cost_basis
+        if total_cost_basis > 0:
+            total_unrealized_gain_pct = (total_unrealized_gain / total_cost_basis) * 100
+        else:
+            total_unrealized_gain_pct = Decimal('0')
+
+        overall = {
+            'total_market_value': total_market_value,
+            'total_cost_basis': total_cost_basis,
+            'total_unrealized_gain': total_unrealized_gain,
+            'total_unrealized_gain_pct': total_unrealized_gain_pct,
+            'total_holdings_count': total_holdings_count,
+        }
+        return {'portfolios': portfolios, 'overall': overall}
+
 
 # Global service instance
 _portfolio_service: Optional[PortfolioService] = None

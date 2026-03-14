@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolios - StockIntel{% endblock %}
+
+{% block content %}
+{% include '_nav.html' %}
+
+    <main class="flex-1 px-6 py-8">
+        <div class="max-w-7xl mx-auto">
+            <!-- Page Header -->
+            <div class="flex items-center justify-between mb-6">
+                <h1 class="text-2xl font-display font-bold">Portfolios</h1>
+                <button onclick="document.getElementById('create-modal').classList.remove('hidden')" class="flex items-center gap-2 px-4 py-2 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all cursor-pointer">
+                    <span class="material-symbols-outlined text-xl">add</span>
+                    Create Portfolio
+                </button>
+            </div>
+
+            <!-- Status Message -->
+            {% if status_message %}
+            <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
+                <p class="text-sm">{{ status_message }}</p>
+            </div>
+            {% endif %}
+
+            {% if portfolios %}
+            <!-- Tip: how to open a portfolio. X = hide for this session; Don't Show Again = hide for all sessions. Keys are per user so each account has its own dismiss state. -->
+            <div id="portfolio-tip" class="hidden mb-6" data-user-id="{{ user_id|e }}">
+                <div class="bg-surface-dark rounded-xl border border-border-dark px-5 py-4 flex justify-center items-center gap-4">
+                    <p class="text-sm text-stone-300 flex-1 pt-0.5">Click a row in the table to open that portfolio and see its holdings, transactions, and history.</p>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button type="button" id="portfolio-tip-dont-show" class="text-xs text-stone-500 hover:text-stone-300 transition-colors cursor-pointer whitespace-nowrap">Don't Show Again</button>
+                        <button type="button" id="portfolio-tip-close" class="p-1 rounded-lg text-stone-400 hover:text-white hover:bg-border-dark transition-colors cursor-pointer" aria-label="Close">
+                            <span class="material-symbols-outlined text-xl">close</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Overall Recap -->
+            {% if overall %}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">account_balance_wallet</span>
+                        <span class="text-sm">Total Value</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold">${{ "%.2f"|format(overall.total_market_value|float) }}</p>
+                </div>
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">trending_up</span>
+                        <span class="text-sm">Unrealized P&L</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold {% if overall.total_unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
+                        {% if overall.total_unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(overall.total_unrealized_gain|float) }}
+                        <span class="text-sm font-normal">({{ "%.1f"|format(overall.total_unrealized_gain_pct|float) }}%)</span>
+                    </p>
+                </div>
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">pie_chart</span>
+                        <span class="text-sm">Total Holdings</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold">{{ overall.total_holdings_count }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Portfolios Status Table -->
+            <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-stone-400 text-sm border-b border-border-dark">
+                            <th class="text-left px-5 py-3 font-medium">Name</th>
+                            <th class="text-right px-5 py-3 font-medium">Cost Basis</th>
+                            <th class="text-right px-5 py-3 font-medium">Total Value</th>
+                            <th class="text-right px-5 py-3 font-medium">Unrealized P&L</th>
+                            <th class="text-right px-5 py-3 font-medium">Unrealized P&L (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in portfolios %}
+                        <tr class="border-b border-border-dark last:border-b-0 hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('portfolio_detail', portfolio_id=p.portfolio_id) }}'">
+                            <td class="px-5 py-4">
+                                <span class="font-display font-semibold text-primary hover:underline">{{ p.name }}</span>
+                                {% if p.description %}
+                                <p class="text-sm text-stone-500 truncate max-w-xs">{{ p.description }}</p>
+                                {% endif %}
+                            </td>
+                            {% if p.summary %}
+                            <td class="text-right px-5 py-4 text-white">${{ "%.2f"|format(p.summary.total_cost_basis|float) }}</td>
+                            <td class="text-right px-5 py-4 text-white">${{ "%.2f"|format(p.summary.total_market_value|float) }}</td>
+                            <td class="text-right px-5 py-4 {% if p.summary.total_unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
+                                {% if p.summary.total_unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(p.summary.total_unrealized_gain|float) }}
+                            </td>
+                            <td class="text-right px-5 py-4 {% if p.summary.total_unrealized_gain_pct|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
+                                {% if p.summary.total_unrealized_gain_pct|float >= 0 %}+{% endif %}{{ "%.1f"|format(p.summary.total_unrealized_gain_pct|float) }}%
+                            </td>
+                            {% else %}
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="bg-surface-dark rounded-3xl border border-border-dark px-6 py-16 text-center max-w-lg mx-auto">
+                <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <span class="material-symbols-outlined text-3xl text-primary">account_balance_wallet</span>
+                </div>
+                <h2 class="font-display font-semibold text-xl mb-2">No portfolios yet</h2>
+                <p class="text-stone-400 mb-6">Create your first portfolio to start tracking stocks and crypto</p>
+                <button onclick="document.getElementById('create-modal').classList.remove('hidden')" class="inline-flex items-center gap-2 px-6 py-3 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all cursor-pointer">
+                    <span class="material-symbols-outlined">add</span>
+                    Create Portfolio
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+{% include '_footer.html' %}
+
+<!-- Create Portfolio Modal -->
+<div id="create-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div class="bg-surface-dark rounded-2xl border border-border-dark p-6 w-full max-w-sm mx-4">
+        <h2 class="font-display font-bold text-lg mb-4">Create Portfolio</h2>
+        <form method="POST" action="{{ url_for('create_portfolio_route') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-4">
+                <label for="portfolio-name" class="block text-sm font-medium text-stone-300 mb-2">Portfolio Name</label>
+                <input
+                    type="text"
+                    id="portfolio-name"
+                    name="name"
+                    required
+                    placeholder="e.g. Long-term stocks"
+                    autofocus
+                    class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500"
+                />
+            </div>
+            <div class="flex items-center justify-end gap-3">
+                <button type="button" onclick="document.getElementById('create-modal').classList.add('hidden')" class="px-4 py-2 text-stone-400 hover:text-white transition-colors cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit" class="flex items-center gap-2 px-5 py-2 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all cursor-pointer">
+                    <span class="material-symbols-outlined text-sm">add</span>
+                    Create
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Close modal on backdrop click
+    document.getElementById('create-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.add('hidden');
+        }
+    });
+
+    // Portfolio tip: per-user keys so one account's dismiss doesn't affect another. X = this session; Don't Show Again = all sessions for this user.
+    (function() {
+        var tip = document.getElementById('portfolio-tip');
+        if (!tip) return;
+        var userId = tip.getAttribute('data-user-id') || '';
+        var sessionKey = 'portfolio-list-tip-dismissed-' + userId;
+        var permanentKey = 'portfolio-list-tip-hidden-' + userId;
+
+        if (localStorage.getItem(permanentKey)) {
+            return;
+        }
+        if (sessionStorage.getItem(sessionKey)) {
+            return;
+        }
+        tip.classList.remove('hidden');
+
+        tip.querySelector('#portfolio-tip-close').addEventListener('click', function() {
+            sessionStorage.setItem(sessionKey, '1');
+            tip.classList.add('hidden');
+        });
+        tip.querySelector('#portfolio-tip-dont-show').addEventListener('click', function() {
+            localStorage.setItem(permanentKey, '1');
+            tip.classList.add('hidden');
+        });
+    })();
+</script>
+{% endblock %}

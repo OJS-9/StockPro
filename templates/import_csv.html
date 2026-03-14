@@ -9,7 +9,7 @@
     <main class="flex-1 px-6 py-8">
         <div class="max-w-3xl mx-auto">
             <div class="flex items-center gap-3 mb-6">
-                <a href="{{ url_for('portfolio') }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
+                <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
                     <span class="material-symbols-outlined">arrow_back</span>
                 </a>
                 <h1 class="text-2xl font-display font-bold">Import CSV</h1>
@@ -62,7 +62,7 @@
             </div>
 
             <!-- Upload Form -->
-            <form method="POST" action="{{ url_for('import_csv') }}" enctype="multipart/form-data" class="bg-surface-dark rounded-xl border border-border-dark">
+            <form method="POST" action="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" enctype="multipart/form-data" class="bg-surface-dark rounded-xl border border-border-dark">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="p-6">
                     <label for="csv_file" class="block">
@@ -85,7 +85,7 @@
 
                 <!-- Form Actions -->
                 <div class="px-6 py-4 bg-background-dark/50 border-t border-border-dark flex items-center justify-end gap-3">
-                    <a href="{{ url_for('portfolio') }}" class="px-4 py-2 text-stone-400 hover:text-white transition-colors">
+                    <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="px-4 py-2 text-stone-400 hover:text-white transition-colors">
                         Cancel
                     </a>
                     <button type="submit" id="submit-btn" disabled class="flex items-center gap-2 px-6 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">

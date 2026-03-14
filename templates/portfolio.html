@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Portfolio - StockIntel{% endblock %}
+{% block title %}{{ portfolio.name if portfolio else 'Portfolio' }} - StockIntel{% endblock %}
 
 {% block content %}
 {% include '_nav.html' %}
@@ -10,13 +10,18 @@
         <div class="max-w-7xl mx-auto">
             <!-- Page Actions -->
             <div class="flex items-center justify-between mb-6">
-                <h1 class="text-2xl font-display font-bold">Portfolio</h1>
                 <div class="flex items-center gap-3">
-                    <a href="{{ url_for('add_transaction') }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                    <a href="{{ url_for('portfolio') }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
+                        <span class="material-symbols-outlined">arrow_back</span>
+                    </a>
+                    <h1 class="text-2xl font-display font-bold">{{ portfolio.name if portfolio else 'Portfolio' }}</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
                         <span class="material-symbols-outlined text-xl">add</span>
                         Add Transaction
                     </a>
-                    <a href="{{ url_for('import_csv') }}" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
+                    <a href="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
                         <span class="material-symbols-outlined text-xl">upload_file</span>
                         Import CSV
                     </a>
@@ -109,7 +114,7 @@
                         </thead>
                         <tbody>
                             {% for holding in holdings %}
-                            <tr class="border-b border-border-dark hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('holding_detail', symbol=holding.symbol) }}'">
+                            <tr class="border-b border-border-dark hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('holding_detail', portfolio_id=portfolio.portfolio_id, symbol=holding.symbol) }}'">
                                 <td class="px-5 py-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-10 h-10 rounded-full flex items-center justify-center {% if holding.asset_type == 'crypto' %}bg-orange-500/20 text-orange-400{% else %}bg-blue-500/20 text-blue-400{% endif %}">
@@ -160,7 +165,7 @@
                 <div class="px-5 py-12 text-center">
                     <span class="material-symbols-outlined text-5xl text-stone-500 mb-4">inventory_2</span>
                     <p class="text-stone-400 mb-4">No holdings yet</p>
-                    <a href="{{ url_for('add_transaction') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
                         <span class="material-symbols-outlined">add</span>
                         Add your first transaction
                     </a>
@@ -174,11 +179,11 @@
                 <h2 class="font-display font-semibold text-xl mb-2">Start tracking your portfolio</h2>
                 <p class="text-stone-400 mb-6">Add transactions to track your stocks and crypto holdings</p>
                 <div class="flex items-center justify-center gap-3">
-                    <a href="{{ url_for('add_transaction') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
+                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
                         <span class="material-symbols-outlined">add</span>
                         Add Transaction
                     </a>
-                    <a href="{{ url_for('import_csv') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
+                    <a href="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
                         <span class="material-symbols-outlined">upload_file</span>
                         Import CSV
                     </a>

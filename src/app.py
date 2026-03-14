@@ -707,9 +707,15 @@ def report_status(session_id: str):
 def portfolio():
     """Portfolio list page."""
     portfolio_service = get_portfolio_service()
-    portfolios = portfolio_service.list_portfolios(user_id=session['user_id'])
+    data = portfolio_service.get_portfolios_with_summaries(user_id=session['user_id'])
     status_message = session.pop('status_message', None)
-    return render_template('portfolio_list.html', portfolios=portfolios, status_message=status_message)
+    return render_template(
+        'portfolio_list.html',
+        portfolios=data['portfolios'],
+        overall=data['overall'],
+        status_message=status_message,
+        user_id=session.get('user_id', '')
+    )
 
 
 @app.route('/portfolio/create', methods=['POST'])

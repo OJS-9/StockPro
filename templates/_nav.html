@@ -14,7 +14,7 @@
             <a class="{{ 'text-primary text-sm font-bold' if request.endpoint == 'index' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('index') }}">Markets</a>
             <a class="{{ 'text-primary text-sm font-bold' if request.endpoint == 'report_history' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('report_history') }}">Reports</a>
             <a class="{{ 'text-primary text-sm font-bold' if request.endpoint in ['chat', 'continue_conversation', 'chat_with_report'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('chat') }}">AI Agent</a>
-            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint in ['portfolio', 'add_transaction', 'import_csv', 'holding_detail'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('portfolio') }}">Portfolio</a>
+            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint in ['portfolio', 'portfolio_detail', 'add_transaction', 'import_csv', 'holding_detail', 'delete_transaction', 'create_portfolio_route'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('portfolio') }}">Portfolio</a>
         </div>
         <div class="flex gap-2 items-center">
             {% if current_user.is_authenticated %}
