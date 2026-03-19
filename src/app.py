@@ -31,6 +31,7 @@ from orchestrator_graph import create_session, OrchestratorSession
 from langsmith_service import create_emitter
 from portfolio.portfolio_service import get_portfolio_service
 from portfolio.history_service import get_history_service
+from watchlist.watchlist_service import get_watchlist_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
@@ -275,15 +276,26 @@ def index():
     """Render the main landing page."""
     # Initialize session ID if needed
     get_or_create_session_id()
-    
+
     # Get current values from session for form pre-filling
     current_ticker = session.get('current_ticker', '')
     current_trade_type = session.get('current_trade_type', 'Investment')
-    
+
+    # Pinned tickers for Market Overview (None for guests — section hidden)
+    pinned_tickers = None
+    user_id = session.get('user_id')
+    if user_id:
+        try:
+            watchlist_svc = get_watchlist_service()
+            pinned_tickers = watchlist_svc.get_pinned_tickers(user_id)
+        except Exception:
+            pinned_tickers = None
+
     return render_template(
         'index.html',
         current_ticker=current_ticker,
-        current_trade_type=current_trade_type
+        current_trade_type=current_trade_type,
+        pinned_tickers=pinned_tickers
     )
 
 
@@ -1086,12 +1098,257 @@ def chat_with_report(report_id):
         return redirect(url_for('report_history'))
 
 
+# ==================== Watchlist Routes ====================
+
+@app.route('/watchlist')
+@login_required
+def watchlist():
+    """Main watchlist page — auto-creates default watchlist if none exist."""
+    try:
+        watchlist_svc = get_watchlist_service()
+        user_id = session['user_id']
+        watchlists = watchlist_svc.list_watchlists(user_id)
+
+        # Auto-create default
+        if not watchlists:
+            watchlist_svc.get_or_create_default_watchlist(user_id)
+            watchlists = watchlist_svc.list_watchlists(user_id)
+
+        active_watchlist_id = request.args.get('wl', watchlists[0]['watchlist_id'] if watchlists else None)
+        active_watchlist = None
+        if active_watchlist_id:
+            # Ownership check
+            wl = watchlist_svc.db.get_watchlist(active_watchlist_id)
+            if wl and wl['user_id'] == user_id:
+                active_watchlist = watchlist_svc.get_watchlist_with_items(active_watchlist_id)
+
+        status_message = session.pop('status_message', None)
+        return render_template(
+            'watchlist.html',
+            watchlists=watchlists,
+            active_watchlist=active_watchlist,
+            status_message=status_message
+        )
+    except Exception as e:
+        return render_template(
+            'watchlist.html',
+            watchlists=[],
+            active_watchlist=None,
+            status_message=f'Error loading watchlist: {str(e)}'
+        )
+
+
+@app.route('/watchlist/create', methods=['POST'])
+@login_required
+def watchlist_create():
+    name = request.form.get('name', '').strip() or 'My Watchlist'
+    try:
+        watchlist_svc = get_watchlist_service()
+        wl_id = watchlist_svc.create_watchlist(session['user_id'], name)
+        session['status_message'] = f'Watchlist "{name}" created'
+        return redirect(url_for('watchlist', wl=wl_id))
+    except Exception as e:
+        session['status_message'] = f'Error: {str(e)}'
+        return redirect(url_for('watchlist'))
+
+
+@app.route('/watchlist/<watchlist_id>/rename', methods=['POST'])
+@login_required
+def watchlist_rename(watchlist_id):
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl['user_id'] != session['user_id']:
+        abort(403)
+    name = request.form.get('name', '').strip()
+    if name:
+        watchlist_svc.rename_watchlist(watchlist_id, name)
+        session['status_message'] = f'Renamed to "{name}"'
+    return redirect(url_for('watchlist', wl=watchlist_id))
+
+
+@app.route('/watchlist/<watchlist_id>/delete', methods=['POST'])
+@login_required
+def watchlist_delete(watchlist_id):
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl['user_id'] != session['user_id']:
+        abort(403)
+    watchlist_svc.delete_watchlist(watchlist_id)
+    session['status_message'] = 'Watchlist deleted'
+    return redirect(url_for('watchlist'))
+
+
+@app.route('/watchlist/<watchlist_id>/add-symbol', methods=['POST'])
+@login_required
+def watchlist_add_symbol(watchlist_id):
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl['user_id'] != session['user_id']:
+        abort(403)
+    symbol = request.form.get('symbol', '').strip().upper()
+    section_id = request.form.get('section_id') or None
+    if not symbol:
+        session['status_message'] = 'Symbol is required'
+        return redirect(url_for('watchlist', wl=watchlist_id))
+    try:
+        watchlist_svc.add_symbol(watchlist_id, symbol, section_id)
+        session['status_message'] = f'{symbol} added to watchlist'
+    except ValueError as e:
+        session['status_message'] = str(e)
+    except Exception as e:
+        session['status_message'] = f'Error adding {symbol}: {str(e)}'
+    return redirect(url_for('watchlist', wl=watchlist_id))
+
+
+@app.route('/watchlist/item/<item_id>/remove', methods=['POST'])
+@login_required
+def watchlist_remove_item(item_id):
+    watchlist_svc = get_watchlist_service()
+    # Find which watchlist this item belongs to for ownership check + redirect
+    from database import get_database_manager
+    db = get_database_manager()
+    conn = db.get_connection()
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute("""
+                SELECT wi.watchlist_id, wl.user_id
+                FROM watchlist_items wi
+                JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id
+                WHERE wi.item_id = %s
+            """, (item_id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row or row['user_id'] != session['user_id']:
+        abort(403)
+
+    watchlist_id = row['watchlist_id']
+    watchlist_svc.remove_symbol(item_id)
+    session['status_message'] = 'Symbol removed'
+    return redirect(url_for('watchlist', wl=watchlist_id))
+
+
+@app.route('/watchlist/item/<item_id>/pin', methods=['POST'])
+@login_required
+def watchlist_toggle_pin(item_id):
+    watchlist_svc = get_watchlist_service()
+    from database import get_database_manager
+    db = get_database_manager()
+    conn = db.get_connection()
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute("""
+                SELECT wi.watchlist_id, wi.is_pinned, wl.user_id
+                FROM watchlist_items wi
+                JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id
+                WHERE wi.item_id = %s
+            """, (item_id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row or row['user_id'] != session['user_id']:
+        abort(403)
+
+    watchlist_id = row['watchlist_id']
+    user_id = session['user_id']
+
+    try:
+        if row['is_pinned']:
+            watchlist_svc.unpin_item(item_id)
+            session['status_message'] = 'Unpinned from homepage'
+        else:
+            watchlist_svc.pin_item(user_id, item_id)
+            session['status_message'] = 'Pinned to homepage'
+    except ValueError as e:
+        session['status_message'] = str(e)
+
+    return redirect(url_for('watchlist', wl=watchlist_id))
+
+
+@app.route('/watchlist/<watchlist_id>/section/create', methods=['POST'])
+@login_required
+def watchlist_create_section(watchlist_id):
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl['user_id'] != session['user_id']:
+        abort(403)
+    name = request.form.get('name', '').strip()
+    if name:
+        try:
+            watchlist_svc.create_section(watchlist_id, name)
+            session['status_message'] = f'Section "{name}" created'
+        except Exception as e:
+            session['status_message'] = f'Error creating section: {str(e)}'
+    return redirect(url_for('watchlist', wl=watchlist_id))
+
+
+@app.route('/watchlist/section/<section_id>/rename', methods=['POST'])
+@login_required
+def watchlist_rename_section(section_id):
+    watchlist_svc = get_watchlist_service()
+    from database import get_database_manager
+    db = get_database_manager()
+    conn = db.get_connection()
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute("""
+                SELECT ws.watchlist_id, wl.user_id
+                FROM watchlist_sections ws
+                JOIN watchlists wl ON ws.watchlist_id = wl.watchlist_id
+                WHERE ws.section_id = %s
+            """, (section_id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row or row['user_id'] != session['user_id']:
+        abort(403)
+
+    name = request.form.get('name', '').strip()
+    if name:
+        watchlist_svc.rename_section(section_id, name)
+        session['status_message'] = f'Section renamed to "{name}"'
+    return redirect(url_for('watchlist', wl=row['watchlist_id']))
+
+
+@app.route('/watchlist/section/<section_id>/delete', methods=['POST'])
+@login_required
+def watchlist_delete_section(section_id):
+    watchlist_svc = get_watchlist_service()
+    from database import get_database_manager
+    db = get_database_manager()
+    conn = db.get_connection()
+    try:
+        with conn.cursor(dictionary=True) as cur:
+            cur.execute("""
+                SELECT ws.watchlist_id, wl.user_id
+                FROM watchlist_sections ws
+                JOIN watchlists wl ON ws.watchlist_id = wl.watchlist_id
+                WHERE ws.section_id = %s
+            """, (section_id,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row or row['user_id'] != session['user_id']:
+        abort(403)
+
+    watchlist_svc.delete_section(section_id)
+    session['status_message'] = 'Section deleted'
+    return redirect(url_for('watchlist', wl=row['watchlist_id']))
+
+
 def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
     if not os.getenv("GEMINI_API_KEY"):
         print("Warning: GEMINI_API_KEY not found in environment variables.")
         print("Please set it in your .env file or environment.")
+
+    from watchlist.price_refresh import start_price_refresh
+    start_price_refresh()
 
     app.run(
         host='127.0.0.1',

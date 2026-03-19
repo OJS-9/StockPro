@@ -111,6 +111,42 @@ class StockDataProvider(BaseDataProvider):
 
         return None
 
+    def get_price_with_change(self, symbol: str) -> dict:
+        """
+        Get current price and 24h change% from Alpha Vantage GLOBAL_QUOTE.
+
+        Returns:
+            {'price': Decimal|None, 'change_percent': Decimal|None}
+        """
+        result = {'price': None, 'change_percent': None}
+        try:
+            raw = self.mcp_manager.get_global_quote(symbol)
+            if 'raw' in raw:
+                lines = raw['raw'].strip().split('\n')
+                if len(lines) >= 2:
+                    headers = [h.strip() for h in lines[0].split(',')]
+                    values = [v.strip() for v in lines[1].split(',')]
+                    row = dict(zip(headers, values))
+                    price_str = row.get('price', '').replace('%', '')
+                    change_str = row.get('changePercent', '').replace('%', '')
+                    if price_str:
+                        result['price'] = Decimal(price_str)
+                        self._set_cached_price(symbol, result['price'])
+                    if change_str:
+                        result['change_percent'] = Decimal(change_str)
+            else:
+                quote = raw.get('Global Quote', raw)
+                price_str = (quote.get('05. price') or quote.get('price') or '').replace('%', '')
+                change_str = (quote.get('10. change percent') or quote.get('change percent') or '').replace('%', '')
+                if price_str:
+                    result['price'] = Decimal(str(price_str))
+                    self._set_cached_price(symbol, result['price'])
+                if change_str:
+                    result['change_percent'] = Decimal(str(change_str))
+        except Exception as e:
+            print(f"get_price_with_change failed for {symbol}: {e}")
+        return result
+
     def get_prices_batch(self, symbols: list) -> Dict[str, Decimal]:
         """
         Get prices for multiple stocks.

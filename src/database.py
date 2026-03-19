@@ -262,9 +262,70 @@ class DatabaseManager:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
+            # Create watchlists table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS watchlists (
+                    watchlist_id VARCHAR(36) PRIMARY KEY,
+                    user_id VARCHAR(36) NOT NULL,
+                    name VARCHAR(100) NOT NULL DEFAULT 'My Watchlist',
+                    position INT NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                    INDEX idx_watchlists_user_id (user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Create watchlist_sections table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS watchlist_sections (
+                    section_id VARCHAR(36) PRIMARY KEY,
+                    watchlist_id VARCHAR(36) NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    position INT NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (watchlist_id) REFERENCES watchlists(watchlist_id) ON DELETE CASCADE,
+                    INDEX idx_sections_watchlist_id (watchlist_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Create watchlist_items table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS watchlist_items (
+                    item_id VARCHAR(36) PRIMARY KEY,
+                    watchlist_id VARCHAR(36) NOT NULL,
+                    section_id VARCHAR(36) NULL,
+                    symbol VARCHAR(20) NOT NULL,
+                    asset_type ENUM('stock', 'crypto') NOT NULL,
+                    display_name VARCHAR(100) NULL,
+                    position INT NOT NULL DEFAULT 0,
+                    is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (watchlist_id) REFERENCES watchlists(watchlist_id) ON DELETE CASCADE,
+                    FOREIGN KEY (section_id) REFERENCES watchlist_sections(section_id) ON DELETE SET NULL,
+                    UNIQUE KEY unique_watchlist_symbol (watchlist_id, symbol),
+                    INDEX idx_items_watchlist_id (watchlist_id),
+                    INDEX idx_items_section_id (section_id),
+                    INDEX idx_items_symbol (symbol)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
+            # Create price_cache table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS price_cache (
+                    symbol VARCHAR(20) PRIMARY KEY,
+                    asset_type ENUM('stock', 'crypto') NOT NULL,
+                    price DECIMAL(18, 8) NULL,
+                    change_percent DECIMAL(10, 4) NULL,
+                    display_name VARCHAR(100) NULL,
+                    last_updated TIMESTAMP NULL,
+                    INDEX idx_price_cache_last_updated (last_updated)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             connection.commit()
             print("✓ Database schema initialized")
-            
+
         except Error as e:
             if connection:
                 connection.rollback()
@@ -1157,6 +1218,256 @@ class DatabaseManager:
             if connection and connection.is_connected():
                 cursor.close()
                 connection.close()
+
+    # ==================== Watchlist Methods ====================
+
+    def create_watchlist(self, watchlist_id, user_id, name='My Watchlist'):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO watchlists (watchlist_id, user_id, name) VALUES (%s, %s, %s)",
+                    (watchlist_id, user_id, name)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_watchlist(self, watchlist_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("SELECT * FROM watchlists WHERE watchlist_id = %s", (watchlist_id,))
+                return cursor.fetchone()
+        finally:
+            conn.close()
+
+    def list_watchlists(self, user_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute(
+                    "SELECT * FROM watchlists WHERE user_id = %s ORDER BY position, created_at",
+                    (user_id,)
+                )
+                return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def update_watchlist(self, watchlist_id, name):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE watchlists SET name = %s WHERE watchlist_id = %s",
+                    (name, watchlist_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def delete_watchlist(self, watchlist_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM watchlists WHERE watchlist_id = %s", (watchlist_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    # ── Section CRUD ─────────────────────────────────────────────
+
+    def create_section(self, section_id, watchlist_id, name, position=0):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO watchlist_sections (section_id, watchlist_id, name, position) VALUES (%s, %s, %s, %s)",
+                    (section_id, watchlist_id, name, position)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def list_sections(self, watchlist_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute(
+                    "SELECT * FROM watchlist_sections WHERE watchlist_id = %s ORDER BY position, created_at",
+                    (watchlist_id,)
+                )
+                return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def update_section(self, section_id, name):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE watchlist_sections SET name = %s WHERE section_id = %s",
+                    (name, section_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def delete_section(self, section_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM watchlist_sections WHERE section_id = %s", (section_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    # ── Item CRUD ────────────────────────────────────────────────
+
+    def add_watchlist_item(self, item_id, watchlist_id, symbol, asset_type, display_name=None, section_id=None):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO watchlist_items (item_id, watchlist_id, section_id, symbol, asset_type, display_name) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (item_id, watchlist_id, section_id, symbol, asset_type, display_name)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def remove_watchlist_item(self, item_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM watchlist_items WHERE item_id = %s", (item_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_watchlist_items(self, watchlist_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("""
+                    SELECT wi.*, ws.name AS section_name, ws.position AS section_position
+                    FROM watchlist_items wi
+                    LEFT JOIN watchlist_sections ws ON wi.section_id = ws.section_id
+                    WHERE wi.watchlist_id = %s
+                    ORDER BY ws.position, ws.created_at, wi.position, wi.created_at
+                """, (watchlist_id,))
+                return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def move_item_to_section(self, item_id, section_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE watchlist_items SET section_id = %s WHERE item_id = %s",
+                    (section_id, item_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def set_item_pinned(self, item_id, is_pinned):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE watchlist_items SET is_pinned = %s WHERE item_id = %s",
+                    (1 if is_pinned else 0, item_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_pinned_items(self, user_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("""
+                    SELECT wi.*
+                    FROM watchlist_items wi
+                    JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id
+                    WHERE wl.user_id = %s AND wi.is_pinned = 1
+                    ORDER BY wi.created_at
+                    LIMIT 3
+                """, (user_id,))
+                return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def count_pinned_items(self, user_id):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) AS cnt
+                    FROM watchlist_items wi
+                    JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id
+                    WHERE wl.user_id = %s AND wi.is_pinned = 1
+                """, (user_id,))
+                row = cursor.fetchone()
+                return row['cnt'] if row else 0
+        finally:
+            conn.close()
+
+    def get_all_watched_symbols(self):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("SELECT DISTINCT symbol, asset_type FROM watchlist_items")
+                return cursor.fetchall()
+        finally:
+            conn.close()
+
+    # ── Price Cache ──────────────────────────────────────────────
+
+    def upsert_price_cache(self, symbol, asset_type, price, change_percent, display_name=None):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO price_cache (symbol, asset_type, price, change_percent, display_name, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        price = VALUES(price),
+                        change_percent = VALUES(change_percent),
+                        display_name = COALESCE(VALUES(display_name), display_name),
+                        last_updated = NOW()
+                """, (symbol, asset_type, price, change_percent, display_name))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_cached_prices(self, symbols):
+        if not symbols:
+            return {}
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                placeholders = ','.join(['%s'] * len(symbols))
+                cursor.execute(
+                    f"SELECT * FROM price_cache WHERE symbol IN ({placeholders})",
+                    list(symbols)
+                )
+                rows = cursor.fetchall()
+                return {row['symbol']: row for row in rows}
+        finally:
+            conn.close()
+
+    def get_all_cached_prices(self):
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("SELECT * FROM price_cache")
+                rows = cursor.fetchall()
+                return {row['symbol']: row for row in rows}
+        finally:
+            conn.close()
 
     # ==================== CSV Import Logging ====================
 
