@@ -7,7 +7,7 @@ import sys
 import os
 from decimal import Decimal
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -134,6 +134,8 @@ class PortfolioService:
 
     # ==================== Holdings ====================
 
+    CACHE_TTL_MINUTES = 15
+
     def get_holdings(self, portfolio_id: str, with_prices: bool = True) -> List[Dict]:
         """
         Get all holdings for a portfolio.
@@ -162,29 +164,58 @@ class PortfolioService:
                 h['unrealized_gain_pct'] = None
             return holdings
 
-        # Group by asset type for efficient price fetching
+        # Group by asset type
         stocks = [h for h in holdings if h['asset_type'] == 'stock']
         cryptos = [h for h in holdings if h['asset_type'] == 'crypto']
+        stock_symbols = [h['symbol'] for h in stocks]
+        crypto_symbols = [h['symbol'] for h in cryptos]
+        all_symbols = stock_symbols + crypto_symbols
 
-        # Fetch stock prices
-        if stocks:
+        # --- Cache-first lookup ---
+        cached = self.db.get_cached_prices(all_symbols) if all_symbols else {}
+
+        def _is_fresh(row):
+            last = row.get('last_updated')
+            if not last:
+                return False
+            return datetime.utcnow() - last < timedelta(minutes=self.CACHE_TTL_MINUTES)
+
+        fresh_cache = {sym: row for sym, row in cached.items() if _is_fresh(row)}
+        stale_stocks = [s for s in stock_symbols if s not in fresh_cache]
+        stale_cryptos = [s for s in crypto_symbols if s not in fresh_cache]
+
+        # --- Fetch only stale/missing from providers ---
+        fetched_stock_prices: Dict[str, Decimal] = {}
+        if stale_stocks:
             stock_provider = self.provider_factory.get_provider('stock')
-            stock_symbols = [h['symbol'] for h in stocks]
-            stock_prices = stock_provider.get_prices_batch(stock_symbols)
-            for h in stocks:
-                price = stock_prices.get(h['symbol'])
-                h['current_price'] = price if price is not None else Decimal('0')
-                h['price_available'] = price is not None
+            fetched_stock_prices = stock_provider.get_prices_batch(stale_stocks) or {}
+            for symbol, price in fetched_stock_prices.items():
+                self.db.upsert_price_cache(symbol, 'stock', float(price), None, None)
 
-        # Fetch crypto prices
-        if cryptos:
+        fetched_crypto_prices: Dict[str, Decimal] = {}
+        if stale_cryptos:
             crypto_provider = self.provider_factory.get_provider('crypto')
-            crypto_symbols = [h['symbol'] for h in cryptos]
-            crypto_prices = crypto_provider.get_prices_batch(crypto_symbols)
-            for h in cryptos:
-                price = crypto_prices.get(h['symbol'])
-                h['current_price'] = price if price is not None else Decimal('0')
-                h['price_available'] = price is not None
+            fetched_crypto_prices = crypto_provider.get_prices_batch(stale_cryptos) or {}
+            for symbol, price in fetched_crypto_prices.items():
+                self.db.upsert_price_cache(symbol, 'crypto', float(price), None, None)
+
+        # --- Merge: cache wins for fresh, provider result for stale ---
+        price_map: Dict[str, Decimal] = {
+            sym: Decimal(str(row['price'])) for sym, row in fresh_cache.items()
+        }
+        price_map.update(fetched_stock_prices)
+        price_map.update(fetched_crypto_prices)
+
+        # Apply prices to holdings
+        for h in stocks:
+            price = price_map.get(h['symbol'])
+            h['current_price'] = price if price is not None else Decimal('0')
+            h['price_available'] = price is not None
+
+        for h in cryptos:
+            price = price_map.get(h['symbol'])
+            h['current_price'] = price if price is not None else Decimal('0')
+            h['price_available'] = price is not None
 
         # Calculate market value and gains for all holdings
         for h in holdings:

@@ -98,6 +98,8 @@ def login_required(f):
                     username = user.get('username', clerk_user_id)
                 session['user_id'] = clerk_user_id
                 session['username'] = username
+                # Warm price cache in background — fire and forget
+                threading.Thread(target=_warm_portfolio_cache, args=(clerk_user_id,), daemon=True).start()
                 get_or_create_session_id()
             return f(*args, **kwargs)
         app.logger.warning("Clerk auth failed: %s", request_state.reason)
@@ -197,6 +199,17 @@ def get_or_create_session_id():
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
     return session['session_id']
+
+
+def _warm_portfolio_cache(user_id):
+    """Background warm: pre-fetch prices for all user portfolios into price_cache."""
+    try:
+        svc = get_portfolio_service()
+        portfolios = svc.list_portfolios(user_id)
+        for p in portfolios:
+            svc.get_holdings(p['portfolio_id'], with_prices=True)
+    except Exception:
+        pass  # Never surface errors into login flow
 
 
 def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
