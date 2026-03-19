@@ -134,24 +134,33 @@ class PortfolioService:
 
     # ==================== Holdings ====================
 
-    def get_holdings(self, portfolio_id: str) -> List[Dict]:
+    def get_holdings(self, portfolio_id: str, with_prices: bool = True) -> List[Dict]:
         """
-        Get all holdings for a portfolio with current prices.
+        Get all holdings for a portfolio.
 
         Args:
             portfolio_id: Portfolio ID
+            with_prices: If True (default), fetch live prices and compute
+                         market value / P&L. If False, return DB data only
+                         (instant, no external API calls).
 
         Returns:
-            List of holding dicts with computed fields:
-            - current_price
-            - market_value
-            - unrealized_gain
-            - unrealized_gain_pct
+            List of holding dicts. When with_prices=True, each dict also has:
+            - current_price, market_value, unrealized_gain, unrealized_gain_pct
         """
         holdings = self.db.get_holdings(portfolio_id)
-        
+
         # Filter out holdings with zero quantity (closed positions)
         holdings = [h for h in holdings if h.get('total_quantity', Decimal('0')) > Decimal('0')]
+
+        if not with_prices:
+            for h in holdings:
+                h['price_available'] = False
+                h['current_price'] = None
+                h['market_value'] = None
+                h['unrealized_gain'] = None
+                h['unrealized_gain_pct'] = None
+            return holdings
 
         # Group by asset type for efficient price fetching
         stocks = [h for h in holdings if h['asset_type'] == 'stock']
@@ -185,7 +194,6 @@ class PortfolioService:
             total_cost_basis = h.get('total_cost_basis', Decimal('0'))
 
             if not price_available:
-                # Can't compute meaningful values without a real price
                 h['market_value'] = None
                 h['unrealized_gain'] = None
                 h['unrealized_gain_pct'] = None
@@ -386,25 +394,40 @@ class PortfolioService:
 
         # Add each transaction
         successful = 0
+        cash_delta = Decimal('0')
         for txn in result.transactions:
             try:
-                self.add_transaction(
-                    portfolio_id=portfolio_id,
-                    symbol=txn['symbol'],
-                    transaction_type=txn['transaction_type'],
-                    quantity=txn['quantity'],
-                    price_per_unit=txn['price_per_unit'],
-                    transaction_date=txn['transaction_date'],
-                    fees=txn['fees'],
-                    notes=txn.get('notes', ''),
-                )
-                successful += 1
+                if txn['transaction_type'] == 'cash_in':
+                    cash_delta += Decimal(str(txn['amount']))
+                    successful += 1
+                elif txn['transaction_type'] == 'cash_out':
+                    cash_delta -= Decimal(str(txn['amount']))
+                    successful += 1
+                else:
+                    self.add_transaction(
+                        portfolio_id=portfolio_id,
+                        symbol=txn['symbol'],
+                        transaction_type=txn['transaction_type'],
+                        quantity=txn['quantity'],
+                        price_per_unit=txn['price_per_unit'],
+                        transaction_date=txn['transaction_date'],
+                        fees=txn['fees'],
+                        notes=txn.get('notes', ''),
+                    )
+                    successful += 1
             except Exception as e:
                 result.errors.append({
                     'row': 'import',
                     'error': str(e),
                     'data': txn
                 })
+
+        # Apply cash delta if any cash rows were present
+        if cash_delta != Decimal('0'):
+            portfolio = self.db.get_portfolio(portfolio_id)
+            current_cash = Decimal(str(portfolio.get('cash_balance', 0) or 0))
+            new_balance = max(Decimal('0'), current_cash + cash_delta)
+            self.db.update_cash_balance(portfolio_id, float(new_balance))
 
         # Update counts
         result.success_count = successful
@@ -438,22 +461,25 @@ class PortfolioService:
 
     # ==================== Portfolio Summary ====================
 
-    def get_portfolio_summary(self, portfolio_id: str) -> Dict:
+    def get_portfolio_summary(self, portfolio_id: str, with_prices: bool = True) -> Dict:
         """
         Get portfolio summary with totals and allocation.
 
         Args:
             portfolio_id: Portfolio ID
+            with_prices: Whether to fetch live prices (default True).
+                         Pass False for an instant render using DB data only;
+                         price-dependent fields will be None.
 
         Returns:
             Summary dict with:
+            - prices_loaded: bool indicating whether live prices were fetched
             - total_cost_basis
-            - total_market_value
-            - total_unrealized_gain
-            - total_unrealized_gain_pct
+            - total_market_value (None when with_prices=False)
+            - total_unrealized_gain (None when with_prices=False)
+            - total_unrealized_gain_pct (None when with_prices=False)
             - holdings_count
-            - stock_value, crypto_value
-            - stock_allocation_pct, crypto_allocation_pct
+            - stock_allocation_pct, crypto_allocation_pct (None when with_prices=False)
             - track_cash, cash_balance, cash_value, cash_allocation_pct (when track_cash)
             - holdings (list)
         """
@@ -461,52 +487,55 @@ class PortfolioService:
         track_cash = portfolio.get('track_cash', False) if portfolio else False
         cash_balance = Decimal(str(portfolio.get('cash_balance', 0) or 0)) if portfolio else Decimal('0')
 
-        holdings = self.get_holdings(portfolio_id)
+        holdings = self.get_holdings(portfolio_id, with_prices=with_prices)
 
         total_cost_basis = sum(
             h.get('total_cost_basis', Decimal('0')) for h in holdings
         )
-        total_market_value = sum(
-            h.get('market_value') or Decimal('0') for h in holdings
-        )
-        if track_cash:
-            total_market_value += cash_balance
-        total_unrealized_gain = total_market_value - total_cost_basis
 
-        if total_cost_basis > 0:
-            total_unrealized_gain_pct = (total_unrealized_gain / total_cost_basis) * 100
+        if with_prices:
+            total_market_value = sum(
+                h.get('market_value') or Decimal('0') for h in holdings
+            )
+            if track_cash:
+                total_market_value += cash_balance
+            total_unrealized_gain = total_market_value - total_cost_basis
+            total_unrealized_gain_pct = (
+                (total_unrealized_gain / total_cost_basis) * 100
+                if total_cost_basis > 0 else Decimal('0')
+            )
+            stock_value = sum(
+                h.get('market_value') or Decimal('0')
+                for h in holdings if h['asset_type'] == 'stock'
+            )
+            crypto_value = sum(
+                h.get('market_value') or Decimal('0')
+                for h in holdings if h['asset_type'] == 'crypto'
+            )
+            cash_value = cash_balance if track_cash else Decimal('0')
+            if total_market_value > 0:
+                stock_allocation_pct = (stock_value / total_market_value) * 100
+                crypto_allocation_pct = (crypto_value / total_market_value) * 100
+                cash_allocation_pct = (cash_value / total_market_value) * 100 if track_cash else Decimal('0')
+            else:
+                stock_allocation_pct = crypto_allocation_pct = cash_allocation_pct = Decimal('0')
         else:
-            total_unrealized_gain_pct = Decimal('0')
-
-        # Allocation by asset type
-        stock_value = sum(
-            h.get('market_value') or Decimal('0')
-            for h in holdings if h['asset_type'] == 'stock'
-        )
-        crypto_value = sum(
-            h.get('market_value') or Decimal('0')
-            for h in holdings if h['asset_type'] == 'crypto'
-        )
-        cash_value = cash_balance if track_cash else Decimal('0')
-
-        if total_market_value > 0:
-            stock_allocation_pct = (stock_value / total_market_value) * 100
-            crypto_allocation_pct = (crypto_value / total_market_value) * 100
-            cash_allocation_pct = (cash_value / total_market_value) * 100 if track_cash else Decimal('0')
-        else:
-            stock_allocation_pct = Decimal('0')
-            crypto_allocation_pct = Decimal('0')
-            cash_allocation_pct = Decimal('0')
+            total_market_value = None
+            total_unrealized_gain = None
+            total_unrealized_gain_pct = None
+            stock_allocation_pct = None
+            crypto_allocation_pct = None
+            cash_value = cash_balance if track_cash else Decimal('0')
+            cash_allocation_pct = None
 
         result = {
             'portfolio_id': portfolio_id,
+            'prices_loaded': with_prices,
             'total_cost_basis': total_cost_basis,
             'total_market_value': total_market_value,
             'total_unrealized_gain': total_unrealized_gain,
             'total_unrealized_gain_pct': total_unrealized_gain_pct,
             'holdings_count': len(holdings),
-            'stock_value': stock_value,
-            'crypto_value': crypto_value,
             'stock_allocation_pct': stock_allocation_pct,
             'crypto_allocation_pct': crypto_allocation_pct,
             'holdings': holdings,
@@ -544,7 +573,7 @@ class PortfolioService:
         for p in portfolios:
             pid = p.get('portfolio_id')
             try:
-                summary = self.get_portfolio_summary(pid)
+                summary = self.get_portfolio_summary(pid, with_prices=False)
                 light = {
                     'total_market_value': summary['total_market_value'],
                     'total_cost_basis': summary['total_cost_basis'],
@@ -553,7 +582,6 @@ class PortfolioService:
                     'holdings_count': summary['holdings_count'],
                 }
                 p['summary'] = light
-                total_market_value += summary['total_market_value']
                 total_cost_basis += summary['total_cost_basis']
                 total_holdings_count += summary['holdings_count']
             except Exception:
@@ -568,17 +596,8 @@ class PortfolioService:
                 }
                 total_holdings_count += count
 
-        total_unrealized_gain = total_market_value - total_cost_basis
-        if total_cost_basis > 0:
-            total_unrealized_gain_pct = (total_unrealized_gain / total_cost_basis) * 100
-        else:
-            total_unrealized_gain_pct = Decimal('0')
-
         overall = {
-            'total_market_value': total_market_value,
             'total_cost_basis': total_cost_basis,
-            'total_unrealized_gain': total_unrealized_gain,
-            'total_unrealized_gain_pct': total_unrealized_gain_pct,
             'total_holdings_count': total_holdings_count,
         }
         return {'portfolios': portfolios, 'overall': overall}

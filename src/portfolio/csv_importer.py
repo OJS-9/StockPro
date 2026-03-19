@@ -79,6 +79,10 @@ class CSVImporter:
             'SELL': 'sell',
             'Buy': 'buy',
             'Sell': 'sell',
+            'cash_in': 'cash_in',
+            'cash_out': 'cash_out',
+            'CASH_IN': 'cash_in',
+            'CASH_OUT': 'cash_out',
         }
     }
 
@@ -152,8 +156,8 @@ class CSVImporter:
                 raw_type = row.get(mapping['type'], '').strip()
                 txn_type = type_map.get(raw_type)
 
-                if txn_type not in ('buy', 'sell'):
-                    # Skip non-buy/sell transactions (transfers, rewards, staking, etc.)
+                if txn_type is None:
+                    # Skip unknown types (transfers, rewards, staking, etc.)
                     continue
 
                 # Parse date
@@ -161,6 +165,23 @@ class CSVImporter:
                 if not date_str:
                     raise ValueError("Missing date")
                 txn_date = self._parse_date(date_str)
+
+                # Cash transactions only need an amount (quantity)
+                if txn_type in ('cash_in', 'cash_out'):
+                    amount = self._parse_decimal(row.get(mapping['quantity'], '0'))
+                    if amount <= 0:
+                        raise ValueError(f"Invalid cash amount: {amount}")
+                    transactions.append({
+                        'transaction_type': txn_type,
+                        'amount': amount,
+                        'transaction_date': txn_date,
+                        'notes': row.get(mapping.get('notes', ''), '') or '',
+                        'import_source': format_type,
+                    })
+                    continue
+
+                if txn_type not in ('buy', 'sell'):
+                    continue
 
                 # Parse numeric fields
                 quantity = self._parse_decimal(row.get(mapping['quantity'], '0'))

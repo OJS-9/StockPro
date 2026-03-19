@@ -4,6 +4,7 @@ Stock data provider using Alpha Vantage MCP.
 
 import os
 import sys
+import time
 from decimal import Decimal
 from typing import Dict, Optional
 
@@ -53,8 +54,12 @@ class StockDataProvider(BaseDataProvider):
 
             # Check for rate limit or error messages
             if isinstance(result, dict):
-                if 'Note' in result or 'Information' in result or 'Error Message' in result:
-                    print(f"Alpha Vantage API message for {symbol}: {result.get('Note') or result.get('Information') or result.get('Error Message')}")
+                if 'Note' in result or 'Information' in result:
+                    print(f"Alpha Vantage rate limit hit for {symbol}: {result.get('Note') or result.get('Information')}")
+                    return None
+                if 'Error Message' in result:
+                    print(f"Alpha Vantage error for {symbol}: {result.get('Error Message')}")
+                    return None
 
             # Handle CSV response format from Alpha Vantage MCP
             # Response: {"raw": "symbol,open,high,low,price,...\r\nAAPL,272.28,...\r\n"}
@@ -111,11 +116,16 @@ class StockDataProvider(BaseDataProvider):
 
         return None
 
+    # Minimum seconds between API calls (free tier: 5 req/min = 12s apart)
+    _BATCH_DELAY: float = float(os.getenv('ALPHA_VANTAGE_BATCH_DELAY_SECONDS', '12'))
+
     def get_prices_batch(self, symbols: list) -> Dict[str, Decimal]:
         """
         Get prices for multiple stocks.
 
-        Due to Alpha Vantage API rate limits, this fetches sequentially.
+        Fetches sequentially with a delay between calls to respect
+        Alpha Vantage free tier limits (5 requests/minute).
+        Cached symbols skip the delay.
 
         Args:
             symbols: List of stock ticker symbols
@@ -124,7 +134,12 @@ class StockDataProvider(BaseDataProvider):
             Dict mapping symbol to price
         """
         prices = {}
-        for symbol in symbols:
+        for i, symbol in enumerate(symbols):
+            # Skip delay if price is already cached
+            needs_api_call = self._get_cached_price(symbol) is None
+            if needs_api_call and i > 0:
+                time.sleep(self._BATCH_DELAY)
+
             price = self.get_current_price(symbol)
             if price is not None:
                 prices[symbol.upper()] = price

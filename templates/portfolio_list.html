@@ -41,20 +41,10 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
                     <div class="flex items-center gap-2 text-stone-400 mb-2">
-                        <span class="material-symbols-outlined text-lg">account_balance_wallet</span>
-                        <span class="text-sm">Total Value</span>
+                        <span class="material-symbols-outlined text-lg">payments</span>
+                        <span class="text-sm">Total Cost Basis</span>
                     </div>
-                    <p class="text-2xl font-display font-bold">${{ "%.2f"|format(overall.total_market_value|float) }}</p>
-                </div>
-                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
-                    <div class="flex items-center gap-2 text-stone-400 mb-2">
-                        <span class="material-symbols-outlined text-lg">trending_up</span>
-                        <span class="text-sm">Unrealized P&L</span>
-                    </div>
-                    <p class="text-2xl font-display font-bold {% if overall.total_unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
-                        {% if overall.total_unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(overall.total_unrealized_gain|float) }}
-                        <span class="text-sm font-normal">({{ "%.1f"|format(overall.total_unrealized_gain_pct|float) }}%)</span>
-                    </p>
+                    <p class="text-2xl font-display font-bold">${{ "%.2f"|format(overall.total_cost_basis|float) }}</p>
                 </div>
                 <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
                     <div class="flex items-center gap-2 text-stone-400 mb-2">
@@ -62,6 +52,13 @@
                         <span class="text-sm">Total Holdings</span>
                     </div>
                     <p class="text-2xl font-display font-bold">{{ overall.total_holdings_count }}</p>
+                </div>
+                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
+                    <div class="flex items-center gap-2 text-stone-400 mb-2">
+                        <span class="material-symbols-outlined text-lg">folder_open</span>
+                        <span class="text-sm">Portfolios</span>
+                    </div>
+                    <p class="text-2xl font-display font-bold">{{ portfolios|length }}</p>
                 </div>
             </div>
             {% endif %}
@@ -89,13 +86,9 @@
                             </td>
                             {% if p.summary %}
                             <td class="text-right px-5 py-4 text-white">${{ "%.2f"|format(p.summary.total_cost_basis|float) }}</td>
-                            <td class="text-right px-5 py-4 text-white">${{ "%.2f"|format(p.summary.total_market_value|float) }}</td>
-                            <td class="text-right px-5 py-4 {% if p.summary.total_unrealized_gain|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
-                                {% if p.summary.total_unrealized_gain|float >= 0 %}+{% endif %}${{ "%.2f"|format(p.summary.total_unrealized_gain|float) }}
-                            </td>
-                            <td class="text-right px-5 py-4 {% if p.summary.total_unrealized_gain_pct|float >= 0 %}text-accent-up{% else %}text-accent-down{% endif %}">
-                                {% if p.summary.total_unrealized_gain_pct|float >= 0 %}+{% endif %}{{ "%.1f"|format(p.summary.total_unrealized_gain_pct|float) }}%
-                            </td>
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
+                            <td class="text-right px-5 py-4 text-stone-500">—</td>
                             {% else %}
                             <td class="text-right px-5 py-4 text-stone-500">—</td>
                             <td class="text-right px-5 py-4 text-stone-500">—</td>

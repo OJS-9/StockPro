@@ -33,34 +33,6 @@
             </div>
             {% endif %}
 
-            <!-- Supported Formats -->
-            <div class="bg-surface-dark rounded-xl border border-border-dark p-6 mb-6">
-                <h2 class="font-display font-semibold text-lg mb-4">Supported Formats</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="p-4 bg-background-dark rounded-lg">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="material-symbols-outlined text-orange-400">currency_bitcoin</span>
-                            <span class="font-medium">Coinbase</span>
-                        </div>
-                        <p class="text-xs text-stone-400">Export from Coinbase transaction history</p>
-                    </div>
-                    <div class="p-4 bg-background-dark rounded-lg">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="material-symbols-outlined text-green-400">eco</span>
-                            <span class="font-medium">Robinhood</span>
-                        </div>
-                        <p class="text-xs text-stone-400">Export from Robinhood account statements</p>
-                    </div>
-                    <div class="p-4 bg-background-dark rounded-lg">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="material-symbols-outlined text-blue-400">table_chart</span>
-                            <span class="font-medium">Generic CSV</span>
-                        </div>
-                        <p class="text-xs text-stone-400">Columns: date, symbol, type, quantity, price</p>
-                    </div>
-                </div>
-            </div>
-
             <!-- Upload Form -->
             <form method="POST" action="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" enctype="multipart/form-data" class="bg-surface-dark rounded-xl border border-border-dark">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -95,16 +67,12 @@
                 </div>
             </form>
 
-            <!-- Generic CSV Format Info -->
-            <div class="mt-6 bg-surface-dark rounded-xl border border-border-dark p-6">
-                <h3 class="font-display font-semibold mb-4">Generic CSV Format</h3>
-                <p class="text-sm text-stone-400 mb-4">If you're creating your own CSV, use these column headers:</p>
-                <div class="bg-background-dark rounded-lg p-4 font-mono text-sm overflow-x-auto">
-                    <pre class="text-stone-300">date,symbol,type,quantity,price,fees,notes
-2024-01-15,AAPL,buy,10,185.50,0,Initial purchase
-2024-01-20,BTC,buy,0.5,42000.00,2.50,DCA
-2024-02-01,AAPL,sell,5,190.00,0,Partial exit</pre>
-                </div>
+            <!-- Download Template -->
+            <div class="mt-6 flex justify-end">
+                <button onclick="downloadTemplate()" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark text-stone-300 rounded-lg hover:border-primary hover:text-white transition-colors text-sm">
+                    <span class="material-symbols-outlined text-base">download</span>
+                    Download CSV Template
+                </button>
             </div>
         </div>
     </main>
@@ -146,5 +114,23 @@
             submitBtn.disabled = false;
         }
     });
+
+    function downloadTemplate() {
+        const csv = [
+            'date,symbol,type,quantity,price,fees,notes',
+            '2024-01-15,,cash_in,5000,,,Initial deposit',
+            '2024-01-15,AAPL,buy,10,185.50,0,Initial purchase',
+            '2024-01-20,BTC,buy,0.5,42000.00,2.50,DCA',
+            '2024-02-01,AAPL,sell,5,190.00,0,Partial exit',
+            '2024-02-01,,cash_out,500,,,Withdrawal'
+        ].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'portfolio_template.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
 </script>
 {% endblock %}

@@ -778,7 +778,7 @@ def portfolio_detail(portfolio_id: str):
     if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
         abort(404)
     try:
-        summary = portfolio_service.get_portfolio_summary(portfolio_id)
+        summary = portfolio_service.get_portfolio_summary(portfolio_id, with_prices=False)
         status_message = session.pop('status_message', None)
         return render_template(
             'portfolio.html',
@@ -987,6 +987,42 @@ def delete_transaction(portfolio_id: str, transaction_id: str):
         session['status_message'] = f'❌ Error: {str(e)}'
 
     return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
+
+
+@app.route('/api/portfolio/<portfolio_id>/prices')
+@login_required
+def portfolio_prices(portfolio_id):
+    """Return live prices and computed P&L for all holdings as JSON."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get('user_id') != session['user_id']:
+        return jsonify({'error': 'Not found'}), 404
+
+    summary = portfolio_service.get_portfolio_summary(portfolio_id, with_prices=True)
+
+    def to_float(v):
+        return float(v) if v is not None else None
+
+    holdings_out = []
+    for h in summary['holdings']:
+        holdings_out.append({
+            'symbol': h['symbol'],
+            'price_available': h.get('price_available', False),
+            'current_price': to_float(h.get('current_price')),
+            'market_value': to_float(h.get('market_value')),
+            'unrealized_gain': to_float(h.get('unrealized_gain')),
+            'unrealized_gain_pct': to_float(h.get('unrealized_gain_pct')),
+        })
+
+    return jsonify({
+        'holdings': holdings_out,
+        'total_market_value': to_float(summary.get('total_market_value')),
+        'total_unrealized_gain': to_float(summary.get('total_unrealized_gain')),
+        'total_unrealized_gain_pct': to_float(summary.get('total_unrealized_gain_pct')),
+        'stock_allocation_pct': to_float(summary.get('stock_allocation_pct')),
+        'crypto_allocation_pct': to_float(summary.get('crypto_allocation_pct')),
+        'cash_allocation_pct': to_float(summary.get('cash_allocation_pct')),
+    })
 
 
 @app.route('/api/portfolio/<portfolio_id>/history')
