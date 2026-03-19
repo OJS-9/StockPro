@@ -6,12 +6,20 @@ import os
 import sys
 import time
 from decimal import Decimal
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from .base_provider import BaseDataProvider
+
+
+MARKETWATCH_NIMBLE_AGENT_ID = os.getenv(
+    "NIMBLE_MARKETWATCH_INFO_AGENT_ID",
+    "marketwatch_info_2026_02_23_zpwkys0h_3859835d",
+)
+
+PRICE_FETCH_DEBUG = os.getenv("PRICE_FETCH_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
 
 
 class StockDataProvider(BaseDataProvider):
@@ -21,6 +29,7 @@ class StockDataProvider(BaseDataProvider):
         """Initialize stock data provider."""
         super().__init__()
         self._mcp_manager = None
+        self._nimble_client = None
 
     @property
     def mcp_manager(self):
@@ -30,12 +39,92 @@ class StockDataProvider(BaseDataProvider):
             self._mcp_manager = get_mcp_manager()
         return self._mcp_manager
 
+    @property
+    def nimble_client(self):
+        """Lazy-load Nimble SDK client (optional)."""
+        if self._nimble_client is not None:
+            return self._nimble_client
+        try:
+            from nimble_client import NimbleClient
+
+            self._nimble_client = NimbleClient()
+        except Exception:
+            # If Nimble isn't configured, keep going with Alpha Vantage.
+            self._nimble_client = None
+        return self._nimble_client
+
+    def _parse_decimal(self, value: Any) -> Optional[Decimal]:
+        """Parse a numeric-ish Nimble field into Decimal."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float, Decimal)):
+            return Decimal(str(value))
+
+        s = str(value).strip()
+        if not s:
+            return None
+
+        # Common formatting: "$1,234.56", "+12.3%", "-0.4 %"
+        s = s.replace("$", "").replace(",", "")
+        s = s.replace("%", "")
+        s = s.strip()
+
+        try:
+            return Decimal(s)
+        except Exception:
+            return None
+
+    def _get_price_with_change_from_nimble(self, symbol: str) -> dict:
+        """
+        Nimble-first lookup for current price (+ optional change%).
+
+        Returns:
+            {'price': Decimal|None, 'change_percent': Decimal|None}
+        """
+        result = {"price": None, "change_percent": None}
+
+        client = self.nimble_client
+        if not client:
+            return result
+
+        try:
+            # Your Nimble agent expects `ticker` as input (per provided schema screenshot).
+            parsed_list = client.run_agent(
+                MARKETWATCH_NIMBLE_AGENT_ID,
+                {"ticker": symbol.upper()},
+            )
+            if not parsed_list:
+                return result
+
+            item: Any = parsed_list[0] if isinstance(parsed_list, list) else parsed_list
+            if not isinstance(item, dict):
+                return result
+
+            result["price"] = self._parse_decimal(item.get("price"))
+
+            # Agent output key is `change` in your schema screenshot.
+            # Nimble sometimes returns percent without a trailing '%', so we parse as-is.
+            change_raw = item.get("change")
+            if change_raw is not None:
+                result["change_percent"] = self._parse_decimal(change_raw)
+
+            if PRICE_FETCH_DEBUG and result.get("price") is not None:
+                print(
+                    f"[price_debug] nimble hit for {symbol.upper()} "
+                    f"(price={result.get('price')}, change_percent={result.get('change_percent')})"
+                )
+            return result
+        except Exception:
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] nimble miss for {symbol.upper()}")
+            return result
+
     def get_current_price(self, symbol: str) -> Optional[Decimal]:
         """
-        Get current stock price from Alpha Vantage GLOBAL_QUOTE.
+        Get current stock price, preferring Nimble (MarketWatch agent) then Alpha Vantage.
 
-        Uses GLOBAL_QUOTE for real-time price data, with fallback to
-        COMPANY_OVERVIEW's 50DayMovingAverage if GLOBAL_QUOTE fails.
+        Uses Alpha Vantage for real-time price data, with fallback to
+        COMPANY_OVERVIEW's 50DayMovingAverage if needed.
 
         Args:
             symbol: Stock ticker symbol
@@ -47,6 +136,14 @@ class StockDataProvider(BaseDataProvider):
         cached = self._get_cached_price(symbol)
         if cached is not None:
             return cached
+
+        # Prefer Nimble (MarketWatch agent) if configured.
+        nimble_data = self._get_price_with_change_from_nimble(symbol)
+        if nimble_data.get("price") is not None:
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] get_current_price using nimble for {symbol.upper()}")
+            self._set_cached_price(symbol, nimble_data["price"])
+            return nimble_data["price"]
 
         # Try GLOBAL_QUOTE first (real-time price)
         try:
@@ -121,12 +218,23 @@ class StockDataProvider(BaseDataProvider):
 
     def get_price_with_change(self, symbol: str) -> dict:
         """
-        Get current price and 24h change% from Alpha Vantage GLOBAL_QUOTE.
+        Get current price and change% (preferring Nimble, falling back to Alpha Vantage).
 
         Returns:
             {'price': Decimal|None, 'change_percent': Decimal|None}
         """
-        result = {'price': None, 'change_percent': None}
+        result = {"price": None, "change_percent": None}
+
+        # Nimble-first for watchlist price display.
+        nimble_data = self._get_price_with_change_from_nimble(symbol)
+        if nimble_data.get("price") is not None:
+            # Cache Nimble's price immediately, but we may still need Alpha Vantage
+            # to fill in change_percent if Nimble's output doesn't include it.
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] get_price_with_change using nimble price for {symbol.upper()}")
+            self._set_cached_price(symbol, nimble_data["price"])
+            result = nimble_data
+
         try:
             raw = self.mcp_manager.get_global_quote(symbol)
             if 'raw' in raw:
@@ -137,22 +245,32 @@ class StockDataProvider(BaseDataProvider):
                     row = dict(zip(headers, values))
                     price_str = row.get('price', '').replace('%', '')
                     change_str = row.get('changePercent', '').replace('%', '')
-                    if price_str:
+                    if price_str and result["price"] is None:
                         result['price'] = Decimal(price_str)
                         self._set_cached_price(symbol, result['price'])
-                    if change_str:
+                    if change_str and result["change_percent"] is None:
+                        if PRICE_FETCH_DEBUG:
+                            print(f"[price_debug] get_price_with_change using AlphaVantage change% for {symbol.upper()}")
                         result['change_percent'] = Decimal(change_str)
             else:
                 quote = raw.get('Global Quote', raw)
                 price_str = (quote.get('05. price') or quote.get('price') or '').replace('%', '')
                 change_str = (quote.get('10. change percent') or quote.get('change percent') or '').replace('%', '')
-                if price_str:
+                if price_str and result["price"] is None:
                     result['price'] = Decimal(str(price_str))
                     self._set_cached_price(symbol, result['price'])
-                if change_str:
+                if change_str and result["change_percent"] is None:
+                    if PRICE_FETCH_DEBUG:
+                        print(f"[price_debug] get_price_with_change using AlphaVantage change% for {symbol.upper()}")
                     result['change_percent'] = Decimal(str(change_str))
         except Exception as e:
             print(f"get_price_with_change failed for {symbol}: {e}")
+
+        if PRICE_FETCH_DEBUG:
+            source = "nimble+alphavantage" if nimble_data.get("price") is not None and result["change_percent"] is not None else (
+                "nimble" if nimble_data.get("price") is not None else "alphavantage"
+            )
+            print(f"[price_debug] final source={source} for {symbol.upper()} result={result}")
         return result
 
     def get_prices_batch(self, symbols: list) -> Dict[str, Decimal]:

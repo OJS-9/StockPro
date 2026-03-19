@@ -149,14 +149,23 @@ class NimbleClient:
 
     def run_agent(self, agent_name: str, params: dict) -> list:
         """
-        Run a Nimble pre-built agent and return its parsed results list.
+        Run a Nimble pre-built agent and return its parsed results as a list.
 
         Args:
             agent_name: Agent ID (e.g. 'bloomberg_search_...')
             params: Input parameters matching the agent's input schema
 
         Returns:
-            List of result dicts, or empty list on failure
+            List of result dicts (or other serializable items), or empty list on failure.
+
+        Notes:
+            Nimble agent responses are not consistent across agents:
+            - Some return `data.parsing` as a list directly.
+            - Some return `data.parsing` as a dict where one value is the list.
+            - Some return `data.parsing` as a dict representing a single record
+              (e.g., fields like `price`, `change`, `ticker`).
+
+            This helper normalizes those shapes into a list.
         """
         payload = {"agent": agent_name, "params": params}
         try:
@@ -168,9 +177,31 @@ class NimbleClient:
                 )
                 resp.raise_for_status()
                 parsing = resp.json().get("data", {}).get("parsing", [])
-                # Some agents return {"articles": [...]} instead of a plain list
+
+                # Most common: already a list of records.
+                if isinstance(parsing, list):
+                    return parsing
+
+                # Dict shapes:
                 if isinstance(parsing, dict):
-                    parsing = next(iter(parsing.values()), [])
-                return parsing
+                    # Some agents wrap actual results under `parsed`.
+                    maybe_parsed = parsing.get("parsed")
+                    if isinstance(maybe_parsed, list):
+                        return maybe_parsed
+                    if isinstance(maybe_parsed, dict):
+                        return [maybe_parsed]
+                    if isinstance(maybe_parsed, str):
+                        return [maybe_parsed]
+
+                    # If exactly one dict value is a list, return that list.
+                    list_values = [v for v in parsing.values() if isinstance(v, list)]
+                    if len(list_values) == 1:
+                        return list_values[0]
+
+                    # Otherwise treat the dict as a single record.
+                    return [parsing]
+
+                # Fallback: wrap scalar into a list so callers can iterate safely.
+                return [parsing]
         except Exception:
             return []

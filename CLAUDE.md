@@ -60,7 +60,7 @@ src/
 └── data_providers/
     ├── __init__.py
     ├── base_provider.py           # Abstract provider with caching
-    ├── stock_provider.py          # Alpha Vantage stock prices
+    ├── stock_provider.py          # Nimble-first stock prices (MarketWatch) + Alpha Vantage fallback
     ├── crypto_provider.py         # CoinGecko crypto prices
     └── provider_factory.py        # Auto-detect stock vs crypto
 
@@ -181,6 +181,7 @@ Each subject carries a priority per trade type (1=high, 2=medium, 3=low). The Pl
 Tool outputs are truncated (max 5 series items, max 5 news items) before passing to agents.
 
 **Nimble SDK API** — web search (`POST /v1/search`), URL extraction (`POST /v1/extract`), and Perplexity synthesis (`POST /v1/agents/run` with `agent="perplexity"`). Exposed to specialized agents as `nimble_web_search`, `nimble_extract`, and `perplexity_research` tools. Requires `NIMBLE_API_KEY` env var.
+`NimbleClient.run_agent()` also normalizes Nimble’s inconsistent `data.parsing` shapes (list vs dict) into a consistent list for app consumption.
 
 **CoinGecko API** — crypto prices for portfolio module, 50+ symbol-to-ID mappings, batch price fetching.
 
@@ -345,7 +346,7 @@ Research depth scales with trade horizon:
 - All portfolio sub-routes are scoped to portfolio_id: `/portfolio/<id>/add`, `/portfolio/<id>/import`, `/portfolio/<id>/holding/<symbol>`, `/portfolio/<id>/transaction/<txn_id>/delete`
 - Cost basis: simple average method, applied chronologically
 - Asset type auto-detected from symbol (BTC, ETH, etc. → crypto)
-- Price providers: `StockDataProvider` (Alpha Vantage) / `CryptoDataProvider` (CoinGecko) via factory
+- Price providers: `StockDataProvider` (Nimble MarketWatch agent first, Alpha Vantage fallback) / `CryptoDataProvider` (CoinGecko) via factory
 - Database tables: `portfolios`, `holdings`, `transactions`, `csv_imports`
 
 ### Known Code Quality Issues
