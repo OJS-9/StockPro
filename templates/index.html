@@ -59,112 +59,77 @@
         </div>
     </div>
 
+    {% if pinned_tickers %}
     <section class="w-full max-w-[1280px] px-4 md:px-10 py-8 flex flex-col gap-8">
         <div class="flex items-center justify-between px-2">
             <div>
                 <h2 class="text-stone-900 dark:text-white text-3xl font-display font-extrabold leading-tight">Market Overview</h2>
-                <p class="text-stone-500 mt-1 font-body">Real-time performance of key indices.</p>
+                <p class="text-stone-500 mt-1 font-body">Real-time performance of your pinned tickers.</p>
             </div>
-            <button class="text-sm font-bold font-body text-primary hover:text-white transition-colors flex items-center gap-1">
-                View All Markets <span class="material-symbols-outlined text-sm">chevron_right</span>
-            </button>
+            <a href="{{ url_for('watchlist') }}" class="text-sm font-bold font-body text-primary hover:text-white transition-colors flex items-center gap-1 cursor-pointer">
+                View Entire Watchlist <span class="material-symbols-outlined text-sm">chevron_right</span>
+            </a>
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-white dark:bg-surface-dark rounded-3xl p-6 border border-stone-200 dark:border-border-dark flex flex-col justify-between h-64 relative overflow-hidden group hover:border-accent-up/50 transition-all duration-300 shadow-sm hover:shadow-xl">
-                <div class="absolute -right-10 -top-10 size-40 bg-accent-up/5 rounded-full blur-3xl group-hover:bg-accent-up/10 transition-colors"></div>
+            {% for ticker in pinned_tickers %}
+            {% set is_positive = ticker.change_percent is not none and ticker.change_percent >= 0 %}
+            {% set is_negative = ticker.change_percent is not none and ticker.change_percent < 0 %}
+            {% set is_crypto = ticker.asset_type == 'crypto' %}
+            <div class="bg-white dark:bg-surface-dark rounded-3xl p-6 border border-stone-200 dark:border-border-dark flex flex-col justify-between h-64 relative overflow-hidden group {{ 'hover:border-accent-down/50' if is_negative else 'hover:border-accent-up/50' }} transition-all duration-300 shadow-sm hover:shadow-xl">
+                <div class="absolute -right-10 -top-10 size-40 {{ 'bg-accent-down/5' if is_negative else 'bg-accent-up/5' }} rounded-full blur-3xl {{ 'group-hover:bg-accent-down/10' if is_negative else 'group-hover:bg-accent-up/10' }} transition-colors"></div>
                 <div class="flex justify-between items-start z-10">
                     <div class="flex items-center gap-3">
-                        <div class="size-12 rounded-xl bg-accent-up/10 flex items-center justify-center text-accent-up">
-                            <span class="material-symbols-outlined text-2xl">show_chart</span>
+                        <div class="size-12 rounded-xl {{ 'bg-orange-500/10' if is_crypto else ('bg-accent-down/10' if is_negative else 'bg-accent-up/10') }} flex items-center justify-center {{ 'text-orange-500' if is_crypto else ('text-accent-down' if is_negative else 'text-accent-up') }}">
+                            <span class="material-symbols-outlined text-2xl">{{ 'currency_bitcoin' if is_crypto else 'show_chart' }}</span>
                         </div>
                         <div>
-                            <h3 class="text-xl font-display font-bold dark:text-white">S&amp;P 500</h3>
-                            <p class="text-xs font-mono text-stone-500">SPY • ETF</p>
+                            <h3 class="text-xl font-display font-bold dark:text-white">{{ ticker.display_name }}</h3>
+                            <p class="text-xs font-mono text-stone-500">{{ ticker.symbol }} &bull; {{ 'CRYPTO' if is_crypto else 'STOCK' }}</p>
                         </div>
                     </div>
-                    <div class="bg-accent-up/10 text-accent-up px-3 py-1 rounded-lg font-bold text-sm flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">trending_up</span> +1.20%
+                    {% if ticker.change_percent is not none %}
+                    <div class="{{ 'bg-accent-down/10 text-accent-down' if is_negative else 'bg-accent-up/10 text-accent-up' }} px-3 py-1 rounded-lg font-bold text-sm flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">{{ 'trending_down' if is_negative else 'trending_up' }}</span>
+                        {{ '%+.2f'|format(ticker.change_percent|float) }}%
                     </div>
+                    {% else %}
+                    <div class="bg-stone-100 dark:bg-stone-800 text-stone-400 px-3 py-1 rounded-lg font-bold text-sm">--</div>
+                    {% endif %}
                 </div>
                 <div class="z-10 mt-auto">
-                    <p class="text-4xl font-display font-black text-stone-900 dark:text-white tabular-nums tracking-tight">412.34</p>
-                    <p class="text-stone-500 text-xs font-bold mt-1 uppercase tracking-wider">Market Price</p>
-                </div>
-                <div class="absolute bottom-0 left-0 right-0 h-24 opacity-30 group-hover:opacity-50 transition-opacity">
-                    <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 300 100">
-                        <defs>
-                            <linearGradient id="gradGreen" x1="0" x2="0" y1="0" y2="1">
-                                <stop offset="0%" stop-color="#22c55e" stop-opacity="0.5"></stop>
-                                <stop offset="100%" stop-color="#22c55e" stop-opacity="0"></stop>
-                            </linearGradient>
-                        </defs>
-                        <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10 V 100 H 0 Z" fill="url(#gradGreen)"></path>
-                        <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10" fill="none" stroke="#22c55e" stroke-width="3" vector-effect="non-scaling-stroke"></path>
-                    </svg>
-                </div>
-            </div>
-            <div class="bg-white dark:bg-surface-dark rounded-3xl p-6 border border-stone-200 dark:border-border-dark flex flex-col justify-between h-64 relative overflow-hidden group hover:border-accent-up/50 transition-all duration-300 shadow-sm hover:shadow-xl">
-                <div class="absolute -right-10 -top-10 size-40 bg-accent-up/5 rounded-full blur-3xl group-hover:bg-accent-up/10 transition-colors"></div>
-                <div class="flex justify-between items-start z-10">
-                    <div class="flex items-center gap-3">
-                        <div class="size-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                            <span class="material-symbols-outlined text-2xl">currency_bitcoin</span>
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-display font-bold dark:text-white">Bitcoin</h3>
-                            <p class="text-xs font-mono text-stone-500">BTC • CRYPTO</p>
-                        </div>
-                    </div>
-                    <div class="bg-accent-up/10 text-accent-up px-3 py-1 rounded-lg font-bold text-sm flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">trending_up</span> +2.45%
-                    </div>
-                </div>
-                <div class="z-10 mt-auto">
-                    <p class="text-4xl font-display font-black text-stone-900 dark:text-white tabular-nums tracking-tight">30,450</p>
+                    {% if ticker.price is not none %}
+                    <p class="text-4xl font-display font-black text-stone-900 dark:text-white tabular-nums tracking-tight">
+                        {% if ticker.price >= 1000 %}
+                            {{ '{:,.0f}'.format(ticker.price|float) }}
+                        {% else %}
+                            {{ '%.2f'|format(ticker.price|float) }}
+                        {% endif %}
+                    </p>
+                    {% else %}
+                    <p class="text-4xl font-display font-black text-stone-400 tabular-nums tracking-tight">--</p>
+                    {% endif %}
                     <p class="text-stone-500 text-xs font-bold mt-1 uppercase tracking-wider">USD Price</p>
                 </div>
                 <div class="absolute bottom-0 left-0 right-0 h-24 opacity-30 group-hover:opacity-50 transition-opacity">
+                    {% if is_negative %}
                     <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 300 100">
-                        <path d="M0 60 L 30 70 L 60 40 L 90 50 L 120 30 L 150 40 L 180 20 L 210 35 L 240 10 L 270 25 L 300 5 V 100 H 0 Z" fill="url(#gradGreen)"></path>
-                        <path d="M0 60 L 30 70 L 60 40 L 90 50 L 120 30 L 150 40 L 180 20 L 210 35 L 240 10 L 270 25 L 300 5" fill="none" stroke="#22c55e" stroke-linejoin="round" stroke-width="3" vector-effect="non-scaling-stroke"></path>
-                    </svg>
-                </div>
-            </div>
-            <div class="bg-white dark:bg-surface-dark rounded-3xl p-6 border border-stone-200 dark:border-border-dark flex flex-col justify-between h-64 relative overflow-hidden group hover:border-accent-down/50 transition-all duration-300 shadow-sm hover:shadow-xl">
-                <div class="absolute -right-10 -top-10 size-40 bg-accent-down/5 rounded-full blur-3xl group-hover:bg-accent-down/10 transition-colors"></div>
-                <div class="flex justify-between items-start z-10">
-                    <div class="flex items-center gap-3">
-                        <div class="size-12 rounded-xl bg-accent-down/10 flex items-center justify-center text-accent-down">
-                            <span class="material-symbols-outlined text-2xl">electric_car</span>
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-display font-bold dark:text-white">Tesla Inc.</h3>
-                            <p class="text-xs font-mono text-stone-500">TSLA • AUTO</p>
-                        </div>
-                    </div>
-                    <div class="bg-accent-down/10 text-accent-down px-3 py-1 rounded-lg font-bold text-sm flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">trending_down</span> -0.50%
-                    </div>
-                </div>
-                <div class="z-10 mt-auto">
-                    <p class="text-4xl font-display font-black text-stone-900 dark:text-white tabular-nums tracking-tight">165.08</p>
-                    <p class="text-stone-500 text-xs font-bold mt-1 uppercase tracking-wider">Last Close</p>
-                </div>
-                <div class="absolute bottom-0 left-0 right-0 h-24 opacity-30 group-hover:opacity-50 transition-opacity">
-                    <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 300 100">
-                        <defs>
-                            <linearGradient id="gradRed" x1="0" x2="0" y1="0" y2="1">
-                                <stop offset="0%" stop-color="#ef4444" stop-opacity="0.5"></stop>
-                                <stop offset="100%" stop-color="#ef4444" stop-opacity="0"></stop>
-                            </linearGradient>
-                        </defs>
-                        <path d="M0 20 C50 15, 100 30, 150 50 C200 70, 250 60, 300 80 V 100 H 0 Z" fill="url(#gradRed)"></path>
+                        <defs><linearGradient id="gradRed{{ loop.index }}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.5"></stop><stop offset="100%" stop-color="#ef4444" stop-opacity="0"></stop></linearGradient></defs>
+                        <path d="M0 20 C50 15, 100 30, 150 50 C200 70, 250 60, 300 80 V 100 H 0 Z" fill="url(#gradRed{{ loop.index }})"></path>
                         <path d="M0 20 C50 15, 100 30, 150 50 C200 70, 250 60, 300 80" fill="none" stroke="#ef4444" stroke-width="3" vector-effect="non-scaling-stroke"></path>
                     </svg>
+                    {% else %}
+                    <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 300 100">
+                        <defs><linearGradient id="gradGreen{{ loop.index }}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#22c55e" stop-opacity="0.5"></stop><stop offset="100%" stop-color="#22c55e" stop-opacity="0"></stop></linearGradient></defs>
+                        <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10 V 100 H 0 Z" fill="url(#gradGreen{{ loop.index }})"></path>
+                        <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10" fill="none" stroke="#22c55e" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+                    </svg>
+                    {% endif %}
                 </div>
             </div>
+            {% endfor %}
         </div>
     </section>
+    {% endif %}
 
     <section class="w-full max-w-[1280px] px-4 md:px-10 py-6 mb-20 flex flex-col gap-8">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
