@@ -1,4 +1,4 @@
-# StockIntel
+# StockPro
 
 An AI-powered multi-agent stock research platform that orchestrates specialized research agents, integrates financial data APIs with real-time web research, and provides an interactive chat interface for exploring investment opportunities. Includes a portfolio tracker for equities and crypto.
 
@@ -239,7 +239,7 @@ NIMBLE_TIMEOUT_SECONDS=30  # Request timeout for Nimble API calls (default 30)
 
 ## Auth
 
-Session-based auth. Routes: `/login` (GET/POST), `/register` (GET/POST), `/logout`, `/login/google` (redirect to Google), `/login/google/callback` (OAuth callback). Username/password and Google OAuth coexist; existing email accounts are linked when signing in with Google.
+Clerk-based auth with Flask session sync. Routes: `/sign-in`, `/sign-up`, `/sign-out`, `/auth/sso-callback`. The SSO callback route is required for "Continue with Google": after OAuth, Clerk redirects to `/auth/sso-callback`, where ClerkJS runs `handleRedirectCallback()` to set the `__session` cookie on the app origin, then the user is redirected to `/` (or `next`). Add the callback URL to Clerk Dashboard allowed redirect URLs if needed (e.g. `http://localhost:5000/auth/sso-callback`, `https://<domain>/auth/sso-callback`).
 
 ## MCP Configuration
 
@@ -297,7 +297,7 @@ Additional colors used directly via Tailwind utilities:
 
 **Chat bubbles** — Both user and AI: `bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl`. User avatar: `bg-primary/20 rounded-full`. AI avatar: `bg-surface-dark rounded-full` with `smart_toy` icon.
 
-**Header/Nav** — Sticky, backdrop blur (`bg-background-dark/95 backdrop-blur-md`), bottom border `border-b-border-dark`. Nav links use `hover:text-primary` transition.
+**Header/Nav** — Sticky, backdrop blur (`bg-background-dark/95 backdrop-blur-md`), bottom border `border-b-border-dark`. Nav links use `hover:text-primary` transition. On viewports below `md`, a hamburger button opens a slide-out drawer (right) with the same links and auth; close via overlay click, close button, Escape, or link click.
 
 **Hero search bar** — `bg-surface-dark/90 backdrop-blur-md border border-border-dark rounded-2xl` with `focus-within:ring-2 ring-primary/50`.
 

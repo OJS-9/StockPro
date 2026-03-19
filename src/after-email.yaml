@@ -1,0 +1,50 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img [ref=e6]
+    - generic [ref=e8]: StockIntel
+  - generic [ref=e9]:
+    - text: Loading...
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e14]:
+          - heading "Sign in to StockPro" [level=1] [ref=e15]
+          - paragraph [ref=e16]: Welcome back! Please sign in to continue
+        - generic [ref=e17]:
+          - button "Sign in with Google Continue with Google" [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]:
+              - img "Sign in with Google" [ref=e23]
+              - generic [ref=e24]: Continue with Google
+          - paragraph [ref=e27]: or
+          - generic [ref=e29]:
+            - generic [ref=e30]:
+              - generic [ref=e33]:
+                - generic [ref=e35]: Email address or username
+                - textbox "Email address or username" [active] [ref=e36]:
+                  - /placeholder: Enter email or username
+                  - text: test@test.com
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Password
+                    - generic:
+                      - textbox "Password":
+                        - /placeholder: Enter your password
+                      - button "Show password":
+                        - img
+            - button "Continue" [ref=e39] [cursor=pointer]:
+              - generic [ref=e40]:
+                - text: Continue
+                - img [ref=e41]
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - generic [ref=e45]: Don’t have an account?
+          - link "Sign up" [ref=e46] [cursor=pointer]:
+            - /url: http://127.0.0.1:5000/sign-up
+        - generic [ref=e48]:
+          - generic [ref=e50]:
+            - paragraph [ref=e51]: Secured by
+            - link "Clerk logo" [ref=e52] [cursor=pointer]:
+              - /url: https://go.clerk.com/components
+              - img [ref=e53]
+          - paragraph [ref=e58]: Development mode
