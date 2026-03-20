@@ -206,8 +206,29 @@ def _warm_portfolio_cache(user_id):
     try:
         svc = get_portfolio_service()
         portfolios = svc.list_portfolios(user_id)
+
+        stock_symbols, crypto_symbols = set(), set()
         for p in portfolios:
-            svc.get_holdings(p['portfolio_id'], with_prices=True)
+            holdings = svc.db.get_holdings(p['portfolio_id'])
+            for h in holdings:
+                if Decimal(str(h.get('total_quantity', 0))) > 0:
+                    if h['asset_type'] == 'crypto':
+                        crypto_symbols.add(h['symbol'])
+                    else:
+                        stock_symbols.add(h['symbol'])
+
+        if stock_symbols:
+            stock_provider = DataProviderFactory.get_provider('stock')
+            prices = stock_provider.get_prices_batch_warmup(list(stock_symbols))
+            for sym, price in prices.items():
+                svc.db.upsert_price_cache(sym, 'stock', float(price), None, None)
+
+        if crypto_symbols:
+            crypto_provider = DataProviderFactory.get_provider('crypto')
+            prices = crypto_provider.get_prices_batch(list(crypto_symbols))
+            for sym, price in prices.items():
+                svc.db.upsert_price_cache(sym, 'crypto', float(price), None, None)
+
     except Exception:
         pass  # Never surface errors into login flow
 

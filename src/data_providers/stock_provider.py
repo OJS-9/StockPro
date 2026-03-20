@@ -18,6 +18,11 @@ MARKETWATCH_NIMBLE_AGENT_ID = os.getenv(
     "NIMBLE_MARKETWATCH_INFO_AGENT_ID",
     "marketwatch_info_2026_02_23_zpwkys0h_3859835d",
 )
+SEEKINGALPHA_NIMBLE_AGENT_ID = os.getenv(
+    "NIMBLE_SEEKINGALPHA_AGENT_ID",
+    "seekingalpha_stock_symbol_2026_03_19_ar32nvos",
+)
+NIMBLE_WARMUP_TIMEOUT_SECONDS = float(os.getenv("NIMBLE_WARMUP_TIMEOUT_SECONDS", "120"))
 
 PRICE_FETCH_DEBUG = os.getenv("PRICE_FETCH_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
 
@@ -30,6 +35,17 @@ class StockDataProvider(BaseDataProvider):
         super().__init__()
         self._mcp_manager = None
         self._nimble_client = None
+        # { symbol: (change_percent, fetched_at) } — mirrors _price_cache TTL
+        self._change_cache: dict = {}
+
+    def _get_cached_change_percent(self, symbol: str) -> Optional[Decimal]:
+        entry = self._change_cache.get(symbol.upper())
+        if entry and (time.monotonic() - entry[1]) < self._CACHE_TTL:
+            return entry[0]
+        return None
+
+    def _set_cached_change_percent(self, symbol: str, change_percent: Decimal):
+        self._change_cache[symbol.upper()] = (change_percent, time.monotonic())
 
     @property
     def mcp_manager(self):
@@ -118,6 +134,126 @@ class StockDataProvider(BaseDataProvider):
             if PRICE_FETCH_DEBUG:
                 print(f"[price_debug] nimble miss for {symbol.upper()}")
             return result
+
+    def _get_price_from_seekingalpha(self, symbol: str) -> dict:
+        """SeekingAlpha Nimble agent price lookup."""
+        result = {"price": None, "change_percent": None}
+        client = self.nimble_client
+        if not client:
+            return result
+        try:
+            parsed_list = client.run_agent(
+                SEEKINGALPHA_NIMBLE_AGENT_ID,
+                {"ticker": symbol.upper()},
+            )
+            if not parsed_list:
+                return result
+            item = parsed_list[0] if isinstance(parsed_list, list) else parsed_list
+            if not isinstance(item, dict):
+                return result
+            result["price"] = self._parse_decimal(item.get("current_price"))
+            result["change_percent"] = self._parse_decimal(item.get("price_change_percent"))
+            if PRICE_FETCH_DEBUG and result.get("price") is not None:
+                print(
+                    f"[price_debug] seekingalpha hit for {symbol.upper()} "
+                    f"(price={result.get('price')}, change_percent={result.get('change_percent')})"
+                )
+            return result
+        except Exception:
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] seekingalpha miss for {symbol.upper()}")
+            return result
+
+    def _get_price_from_alpha_vantage(self, symbol: str) -> dict:
+        """Alpha Vantage GLOBAL_QUOTE lookup (no cache read/write — caller handles caching)."""
+        result = {"price": None, "change_percent": None}
+        try:
+            raw = self.mcp_manager.get_global_quote(symbol)
+            if isinstance(raw, dict):
+                if 'Note' in raw or 'Information' in raw or 'Error Message' in raw:
+                    return result
+            if 'raw' in raw:
+                lines = raw['raw'].strip().split('\n')
+                if len(lines) >= 2:
+                    headers = [h.strip() for h in lines[0].split(',')]
+                    values = [v.strip() for v in lines[1].split(',')]
+                    row = dict(zip(headers, values))
+                    price_str = row.get('price', '').replace('%', '')
+                    change_str = row.get('changePercent', '').replace('%', '')
+                    if price_str:
+                        result['price'] = Decimal(price_str)
+                    if change_str:
+                        result['change_percent'] = Decimal(change_str)
+            else:
+                quote = raw.get('Global Quote', raw)
+                price_str = (quote.get('05. price') or quote.get('price') or '').replace('%', '')
+                change_str = (quote.get('10. change percent') or quote.get('change percent') or '').replace('%', '')
+                if price_str:
+                    result['price'] = Decimal(str(price_str))
+                if change_str:
+                    result['change_percent'] = Decimal(str(change_str))
+        except Exception as e:
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] alpha vantage miss for {symbol.upper()}: {e}")
+        return result
+
+    def _fetch_price_nimble_with_av_fallback(self, symbol: str) -> dict:
+        """
+        Fire both Nimble agents concurrently. If neither returns a valid price
+        within NIMBLE_WARMUP_TIMEOUT_SECONDS, fall back to Alpha Vantage.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        client = self.nimble_client
+        if not client:
+            return self._get_price_from_alpha_vantage(symbol)
+
+        nimble_fns = [
+            self._get_price_with_change_from_nimble,   # MarketWatch
+            self._get_price_from_seekingalpha,          # SeekingAlpha
+        ]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = {pool.submit(fn, symbol): fn.__name__ for fn in nimble_fns}
+            try:
+                for fut in as_completed(futures, timeout=NIMBLE_WARMUP_TIMEOUT_SECONDS):
+                    result = fut.result()
+                    if result.get("price") is not None:
+                        if PRICE_FETCH_DEBUG:
+                            print(f"[price_debug] warmup nimble hit {symbol.upper()} via {futures[fut]}")
+                        return result
+            except TimeoutError:
+                if PRICE_FETCH_DEBUG:
+                    print(f"[price_debug] warmup nimble timeout for {symbol.upper()}, falling back to AV")
+
+        if PRICE_FETCH_DEBUG:
+            print(f"[price_debug] warmup nimble miss for {symbol.upper()}, falling back to AV")
+        return self._get_price_from_alpha_vantage(symbol)
+
+    def get_prices_batch_warmup(self, symbols: list) -> dict:
+        """
+        Warmup-optimised batch fetch. All symbols fire simultaneously —
+        each fires both Nimble agents concurrently, with AV as last resort.
+        Symbols with a fresh cache entry are skipped.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        if not symbols:
+            return {}
+
+        stale = [s for s in symbols if self._get_cached_price(s) is None]
+        if not stale:
+            return {}
+
+        prices = {}
+        with ThreadPoolExecutor(max_workers=len(stale)) as pool:
+            futures = {pool.submit(self._fetch_price_nimble_with_av_fallback, sym): sym for sym in stale}
+            for fut in as_completed(futures):
+                sym = futures[fut]
+                data = fut.result()
+                if data.get("price") is not None:
+                    prices[sym.upper()] = data["price"]
+                    self._set_cached_price(sym, data["price"])
+        return prices
 
     def get_current_price(self, symbol: str) -> Optional[Decimal]:
         """
@@ -223,18 +359,30 @@ class StockDataProvider(BaseDataProvider):
         Returns:
             {'price': Decimal|None, 'change_percent': Decimal|None}
         """
+        # Full cache hit — skip all API calls
+        cached_price = self._get_cached_price(symbol)
+        cached_change = self._get_cached_change_percent(symbol)
+        if cached_price is not None and cached_change is not None:
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] get_price_with_change full cache hit for {symbol.upper()}")
+            return {"price": cached_price, "change_percent": cached_change}
+
         result = {"price": None, "change_percent": None}
 
-        # Nimble-first for watchlist price display.
+        # Nimble-first: returns both price and change_percent for most symbols
         nimble_data = self._get_price_with_change_from_nimble(symbol)
         if nimble_data.get("price") is not None:
-            # Cache Nimble's price immediately, but we may still need Alpha Vantage
-            # to fill in change_percent if Nimble's output doesn't include it.
-            if PRICE_FETCH_DEBUG:
-                print(f"[price_debug] get_price_with_change using nimble price for {symbol.upper()}")
             self._set_cached_price(symbol, nimble_data["price"])
             result = nimble_data
+            if result.get("change_percent") is not None:
+                self._set_cached_change_percent(symbol, result["change_percent"])
+                if PRICE_FETCH_DEBUG:
+                    print(f"[price_debug] final source=nimble for {symbol.upper()} result={result}")
+                return result
+            if PRICE_FETCH_DEBUG:
+                print(f"[price_debug] get_price_with_change using nimble price for {symbol.upper()}, AV needed for change%")
 
+        # AV fallback: only reached if Nimble missed price or change_percent
         try:
             raw = self.mcp_manager.get_global_quote(symbol)
             if 'raw' in raw:
@@ -249,9 +397,8 @@ class StockDataProvider(BaseDataProvider):
                         result['price'] = Decimal(price_str)
                         self._set_cached_price(symbol, result['price'])
                     if change_str and result["change_percent"] is None:
-                        if PRICE_FETCH_DEBUG:
-                            print(f"[price_debug] get_price_with_change using AlphaVantage change% for {symbol.upper()}")
                         result['change_percent'] = Decimal(change_str)
+                        self._set_cached_change_percent(symbol, result["change_percent"])
             else:
                 quote = raw.get('Global Quote', raw)
                 price_str = (quote.get('05. price') or quote.get('price') or '').replace('%', '')
@@ -260,16 +407,13 @@ class StockDataProvider(BaseDataProvider):
                     result['price'] = Decimal(str(price_str))
                     self._set_cached_price(symbol, result['price'])
                 if change_str and result["change_percent"] is None:
-                    if PRICE_FETCH_DEBUG:
-                        print(f"[price_debug] get_price_with_change using AlphaVantage change% for {symbol.upper()}")
                     result['change_percent'] = Decimal(str(change_str))
+                    self._set_cached_change_percent(symbol, result["change_percent"])
         except Exception as e:
             print(f"get_price_with_change failed for {symbol}: {e}")
 
         if PRICE_FETCH_DEBUG:
-            source = "nimble+alphavantage" if nimble_data.get("price") is not None and result["change_percent"] is not None else (
-                "nimble" if nimble_data.get("price") is not None else "alphavantage"
-            )
+            source = "nimble+alphavantage" if nimble_data.get("price") is not None else "alphavantage"
             print(f"[price_debug] final source={source} for {symbol.upper()} result={result}")
         return result
 
