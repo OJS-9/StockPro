@@ -80,7 +80,8 @@ class PriceRefreshJob:
         stocks = [(sym, default_names.get(sym)) for sym, at in symbol_map.items() if at == 'stock']
         cryptos = [(sym, default_names.get(sym)) for sym, at in symbol_map.items() if at == 'crypto']
 
-        print(f"[price_refresh] Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos")
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[price_refresh] {ts} Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos")
 
         # Crypto: batch fetch with change%
         if cryptos:

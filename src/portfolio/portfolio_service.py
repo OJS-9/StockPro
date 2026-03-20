@@ -604,7 +604,7 @@ class PortfolioService:
         for p in portfolios:
             pid = p.get('portfolio_id')
             try:
-                summary = self.get_portfolio_summary(pid, with_prices=False)
+                summary = self.get_portfolio_summary(pid, with_prices=True)
                 light = {
                     'total_market_value': summary['total_market_value'],
                     'total_cost_basis': summary['total_cost_basis'],

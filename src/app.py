@@ -127,6 +127,14 @@ _MD_ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
 ]
 _MD_ALLOWED_ATTRS = {**bleach.sanitizer.ALLOWED_ATTRIBUTES, '*': ['class']}
 
+@app.template_filter('currency')
+def currency_filter(value):
+    try:
+        return "{:,.2f}".format(float(value))
+    except (ValueError, TypeError):
+        return "0.00"
+
+
 @app.template_filter('markdown')
 def markdown_filter(text):
     raw_html = md_lib.markdown(text or '', extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists'])

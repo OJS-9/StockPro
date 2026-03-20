@@ -36,7 +36,7 @@
 
             {% if summary %}
             <!-- Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 items-start">
                 <!-- Total Value -->
                 <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
                     <div class="flex items-center gap-2 text-stone-400 mb-2">
@@ -52,7 +52,7 @@
                         <span class="material-symbols-outlined text-lg">payments</span>
                         <span class="text-sm">Cost Basis</span>
                     </div>
-                    <p class="text-2xl font-display font-bold">${{ "%.2f"|format(summary.total_cost_basis|float) }}</p>
+                    <p class="text-2xl font-display font-bold">${{ summary.total_cost_basis|currency }}</p>
                 </div>
 
                 <!-- Unrealized Gain/Loss -->
@@ -117,7 +117,7 @@
                                 <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
-                                <td class="px-5 py-4 text-right font-mono font-semibold cursor-pointer cash-edit-cell" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ "%.2f"|format(summary.cash_balance|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono font-semibold cursor-pointer cash-edit-cell" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ summary.cash_balance|currency }}</td>
                                 <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
                             </tr>
@@ -136,7 +136,7 @@
                                     </div>
                                 </td>
                                 <td class="px-5 py-4 text-right font-mono">{{ "%.4f"|format(holding.total_quantity|float) }}</td>
-                                <td class="px-5 py-4 text-right font-mono">${{ "%.2f"|format(holding.average_cost|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono">${{ holding.average_cost|currency }}</td>
                                 <td class="px-5 py-4 text-right font-mono price-cell text-stone-500 animate-pulse">—</td>
                                 <td class="px-5 py-4 text-right font-mono font-semibold market-value-cell text-stone-500 animate-pulse">—</td>
                                 <td class="px-5 py-4 text-right font-mono pnl-cell text-stone-500 animate-pulse">—</td>
