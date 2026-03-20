@@ -233,26 +233,24 @@ class StockDataProvider(BaseDataProvider):
         """
         Warmup-optimised batch fetch. All symbols fire simultaneously —
         each fires both Nimble agents concurrently, with AV as last resort.
-        Symbols with a fresh cache entry are skipped.
+        Caller is responsible for freshness filtering (DB check).
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         if not symbols:
             return {}
 
-        stale = [s for s in symbols if self._get_cached_price(s) is None]
-        if not stale:
-            return {}
-
         prices = {}
-        with ThreadPoolExecutor(max_workers=len(stale)) as pool:
-            futures = {pool.submit(self._fetch_price_nimble_with_av_fallback, sym): sym for sym in stale}
+        with ThreadPoolExecutor(max_workers=len(symbols)) as pool:
+            futures = {pool.submit(self._fetch_price_nimble_with_av_fallback, sym): sym for sym in symbols}
             for fut in as_completed(futures):
                 sym = futures[fut]
                 data = fut.result()
                 if data.get("price") is not None:
-                    prices[sym.upper()] = data["price"]
-                    self._set_cached_price(sym, data["price"])
+                    prices[sym.upper()] = {
+                        "price": data["price"],
+                        "change_percent": data.get("change_percent"),
+                    }
         return prices
 
     def get_current_price(self, symbol: str) -> Optional[Decimal]:

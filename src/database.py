@@ -1467,6 +1467,21 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_watched_symbols_for_user(self, user_id):
+        """Return all watched symbols for a specific user."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute("""
+                    SELECT DISTINCT wi.symbol, wi.asset_type
+                    FROM watchlist_items wi
+                    JOIN watchlists w ON wi.watchlist_id = w.watchlist_id
+                    WHERE w.user_id = %s
+                """, (user_id,))
+                return cursor.fetchall()
+        finally:
+            conn.close()
+
     # ── Price Cache ──────────────────────────────────────────────
 
     def upsert_price_cache(self, symbol, asset_type, price, change_percent, display_name=None):

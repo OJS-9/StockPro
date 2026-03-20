@@ -4,13 +4,12 @@ Respects Alpha Vantage 5 calls/min rate limit by staggering stock fetches.
 """
 import sys
 import os
-import time
 import threading
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 REFRESH_INTERVAL = 900   # 15 minutes
-STOCK_CALL_DELAY = 13    # seconds between Alpha Vantage calls (5/min limit)
 
 DEFAULT_SYMBOLS = [
     ('SPY',  'stock',  'S&P 500'),
@@ -80,8 +79,21 @@ class PriceRefreshJob:
         stocks = [(sym, default_names.get(sym)) for sym, at in symbol_map.items() if at == 'stock']
         cryptos = [(sym, default_names.get(sym)) for sym, at in symbol_map.items() if at == 'crypto']
 
-        ts = time.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[price_refresh] {ts} Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos")
+        # Skip symbols already fresh in DB (< 15 min old) — single source of truth
+        all_syms = [s for s, _ in stocks] + [s for s, _ in cryptos]
+        cached = self.db.get_cached_prices(all_syms)
+        cutoff = datetime.now() - timedelta(minutes=15)
+
+        def _is_stale(sym):
+            row = cached.get(sym)
+            if not row or not row.get('last_updated'):
+                return True
+            return row['last_updated'] < cutoff
+
+        stocks  = [(s, n) for s, n in stocks  if _is_stale(s)]
+        cryptos = [(s, n) for s, n in cryptos if _is_stale(s)]
+
+        print(f"[price_refresh] Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos")
 
         # Crypto: batch fetch with change%
         if cryptos:
@@ -99,17 +111,19 @@ class PriceRefreshJob:
             except Exception as e:
                 print(f"[price_refresh] Crypto batch error: {e}")
 
-        # Stocks: sequential with delay
-        for i, (sym, display_name) in enumerate(stocks):
-            try:
-                provider, _ = self.provider_factory.get_provider_for_symbol(sym)
-                data = provider.get_price_with_change(sym)
-                if data.get('price') is not None:
-                    self.db.upsert_price_cache(sym, 'stock', data['price'], data.get('change_percent'), display_name)
-            except Exception as e:
-                print(f"[price_refresh] Stock {sym} error: {e}")
-            if i < len(stocks) - 1:
-                time.sleep(STOCK_CALL_DELAY)
+        # Concurrent batch fetch for stocks
+        if stocks:
+            stock_symbols = [s for s, _ in stocks]
+            stock_names   = {s: n for s, n in stocks}
+            provider, _   = self.provider_factory.get_provider_for_symbol('AAPL')
+            prices        = provider.get_prices_batch_warmup(stock_symbols)
+            for sym, data in prices.items():
+                self.db.upsert_price_cache(
+                    sym, 'stock',
+                    float(data["price"]),
+                    data.get("change_percent"),
+                    stock_names.get(sym),
+                )
 
 
 _refresh_job = None

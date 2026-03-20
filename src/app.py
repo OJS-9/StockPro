@@ -25,7 +25,7 @@ import bleach
 import markdown as md_lib
 from markupsafe import Markup
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from orchestrator_graph import create_session, OrchestratorSession
 from langsmith_service import create_emitter
@@ -210,30 +210,51 @@ def get_or_create_session_id():
 
 
 def _warm_portfolio_cache(user_id):
-    """Background warm: pre-fetch prices for all user portfolios into price_cache."""
+    """Background warm: pre-fetch prices for portfolio + watchlist into price_cache."""
     try:
         svc = get_portfolio_service()
-        portfolios = svc.list_portfolios(user_id)
 
+        # 1. Collect portfolio symbols
         stock_symbols, crypto_symbols = set(), set()
-        for p in portfolios:
-            holdings = svc.db.get_holdings(p['portfolio_id'])
-            for h in holdings:
+        for p in svc.list_portfolios(user_id):
+            for h in svc.db.get_holdings(p['portfolio_id']):
                 if Decimal(str(h.get('total_quantity', 0))) > 0:
                     if h['asset_type'] == 'crypto':
                         crypto_symbols.add(h['symbol'])
                     else:
                         stock_symbols.add(h['symbol'])
 
-        if stock_symbols:
-            stock_provider = DataProviderFactory.get_provider('stock')
-            prices = stock_provider.get_prices_batch_warmup(list(stock_symbols))
-            for sym, price in prices.items():
-                svc.db.upsert_price_cache(sym, 'stock', float(price), None, None)
+        # 2. Also collect watchlist symbols for this user (deduplicated into same sets)
+        for row in svc.db.get_watched_symbols_for_user(user_id):
+            if row['asset_type'] == 'crypto':
+                crypto_symbols.add(row['symbol'])
+            else:
+                stock_symbols.add(row['symbol'])
 
-        if crypto_symbols:
+        # 3. Check DB for already-fresh entries (15-min TTL) — skip those
+        all_symbols = list(stock_symbols | crypto_symbols)
+        cached = svc.db.get_cached_prices(all_symbols)
+        now = datetime.now()
+
+        def _is_fresh(sym):
+            row = cached.get(sym)
+            if not row or not row.get('last_updated'):
+                return False
+            return (now - row['last_updated']) < timedelta(minutes=15)
+
+        stale_stocks  = [s for s in stock_symbols  if not _is_fresh(s)]
+        stale_cryptos = [s for s in crypto_symbols if not _is_fresh(s)]
+
+        # 4. Fetch only stale symbols
+        if stale_stocks:
+            stock_provider = DataProviderFactory.get_provider('stock')
+            prices = stock_provider.get_prices_batch_warmup(stale_stocks)
+            for sym, data in prices.items():
+                svc.db.upsert_price_cache(sym, 'stock', float(data["price"]), data.get("change_percent"), None)
+
+        if stale_cryptos:
             crypto_provider = DataProviderFactory.get_provider('crypto')
-            prices = crypto_provider.get_prices_batch(list(crypto_symbols))
+            prices = crypto_provider.get_prices_batch(stale_cryptos)
             for sym, price in prices.items():
                 svc.db.upsert_price_cache(sym, 'crypto', float(price), None, None)
 
