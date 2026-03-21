@@ -289,24 +289,38 @@
 <!-- Popup Modal -->
 <div id="popup-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-surface-dark border border-border-dark rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="text-white text-lg font-display font-bold">A few quick questions</h3>
+        <div class="flex items-center justify-between mb-1">
+            <h3 id="popup-title" class="text-white text-lg font-display font-bold">Select research topics</h3>
             <button id="popup-close" class="text-stone-400 hover:text-white transition-colors">
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
+        <p id="popup-step-indicator" class="text-stone-500 text-xs font-mono mb-4">Step 1 of 2</p>
 
         <!-- Loading state -->
         <div id="popup-loading" class="flex items-center gap-3 py-6 text-stone-400">
             <span class="material-symbols-outlined animate-spin text-2xl">autorenew</span>
-            <span class="font-body">Preparing questions...</span>
+            <span class="font-body">Preparing...</span>
         </div>
 
-        <!-- Questions state -->
+        <!-- Step 1: Subject selection -->
+        <div id="popup-step-subjects" class="hidden flex flex-col gap-3">
+            <div id="subjects-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1"></div>
+            <div class="flex items-center justify-between pt-4 border-t border-border-dark mt-2">
+                <button id="popup-skip-subjects" class="text-stone-400 hover:text-white transition-colors text-sm font-body">Skip</button>
+                <button id="popup-next" class="h-10 px-6 bg-primary text-[#0c0a09] font-bold rounded-lg text-sm flex items-center gap-2 hover:brightness-110 transition-all">
+                    Next <span class="material-symbols-outlined text-base">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: Questions -->
         <div id="popup-questions" class="hidden flex flex-col gap-4">
             <div id="questions-list" class="flex flex-col gap-5"></div>
             <div class="flex items-center justify-between pt-4 border-t border-border-dark mt-2">
-                <button id="popup-skip" class="text-stone-400 hover:text-white transition-colors text-sm font-body">Skip all</button>
+                <button id="popup-back" class="text-stone-400 hover:text-white transition-colors text-sm font-body flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span> Back
+                </button>
                 <button id="popup-submit" class="h-10 px-6 bg-primary text-[#0c0a09] font-bold rounded-lg text-sm flex items-center gap-2 hover:brightness-110 transition-all">
                     Generate Report <span class="material-symbols-outlined text-base">arrow_forward</span>
                 </button>
@@ -329,16 +343,24 @@
     const form = document.getElementById('research-form');
     const backdrop = document.getElementById('popup-backdrop');
     const loadingEl = document.getElementById('popup-loading');
+    const subjectsEl = document.getElementById('popup-step-subjects');
+    const subjectsList = document.getElementById('subjects-list');
     const questionsEl = document.getElementById('popup-questions');
     const questionsList = document.getElementById('questions-list');
+    const popupTitle = document.getElementById('popup-title');
+    const stepIndicator = document.getElementById('popup-step-indicator');
     const closeBtn = document.getElementById('popup-close');
-    const skipBtn = document.getElementById('popup-skip');
+    const skipSubjectsBtn = document.getElementById('popup-skip-subjects');
+    const nextBtn = document.getElementById('popup-next');
+    const backBtn = document.getElementById('popup-back');
     const submitBtn = document.getElementById('popup-submit');
     const toast = document.getElementById('toast');
     const toastIcon = document.getElementById('toast-icon');
     const toastText = document.getElementById('toast-text');
 
     let currentQuestions = [];
+    let currentSubjects = [];
+    let currentSelectedIds = [];  // captured on Next click
     let currentSessionId = null;
     let pollInterval = null;
     let toastTimeout = null;
@@ -346,12 +368,36 @@
     function openPopup() {
         backdrop.classList.remove('hidden');
         loadingEl.classList.remove('hidden');
+        subjectsEl.classList.add('hidden');
         questionsEl.classList.add('hidden');
+        subjectsList.innerHTML = '';
         questionsList.innerHTML = '';
+        popupTitle.textContent = 'Select research topics';
+        stepIndicator.textContent = 'Step 1 of 2';
     }
 
     function closePopup() {
         backdrop.classList.add('hidden');
+    }
+
+    function renderSubjects(subjects) {
+        currentSubjects = subjects;
+        subjectsList.innerHTML = '';
+        subjects.forEach(function (s) {
+            const label = document.createElement('label');
+            label.className = 'flex items-start gap-3 cursor-pointer group';
+            const checked = s.priority === 1 ? 'checked' : '';
+            label.innerHTML =
+                '<input type="checkbox" data-id="' + escapeHtml(s.id) + '" class="mt-0.5 accent-primary" ' + checked + '>' +
+                '<div>' +
+                '<p class="text-white text-sm font-body font-medium group-hover:text-primary transition-colors">' + escapeHtml(s.name) + '</p>' +
+                '<p class="text-stone-400 text-xs font-body">' + escapeHtml(s.description) + '</p>' +
+                '</div>';
+            subjectsList.appendChild(label);
+        });
+
+        loadingEl.classList.add('hidden');
+        subjectsEl.classList.remove('hidden');
     }
 
     function renderQuestions(questions) {
@@ -375,7 +421,6 @@
             questionsList.appendChild(div);
         });
 
-        // Option pill selection logic
         questionsList.querySelectorAll('.option-pill').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 const group = btn.closest('[data-group]');
@@ -387,9 +432,24 @@
                 btn.classList.remove('border-border-dark', 'text-stone-300', 'bg-[#0c0a09]');
             });
         });
+    }
 
-        loadingEl.classList.add('hidden');
+    function goToStep2() {
+        // Capture checked subject IDs
+        currentSelectedIds = Array.from(subjectsList.querySelectorAll('input[type=checkbox]:checked'))
+            .map(function (cb) { return cb.getAttribute('data-id'); });
+
+        subjectsEl.classList.add('hidden');
         questionsEl.classList.remove('hidden');
+        popupTitle.textContent = 'A few quick questions';
+        stepIndicator.textContent = 'Step 2 of 2';
+    }
+
+    function goToStep1() {
+        questionsEl.classList.add('hidden');
+        subjectsEl.classList.remove('hidden');
+        popupTitle.textContent = 'Select research topics';
+        stepIndicator.textContent = 'Step 1 of 2';
     }
 
     function collectAnswers() {
@@ -400,7 +460,7 @@
     }
 
     function escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function showToast(type, text, reportId) {
@@ -420,7 +480,7 @@
         toast.classList.remove('hidden');
     }
 
-    async function submitAnswers() {
+    async function submitAnswers(selectedIds) {
         const answers = collectAnswers();
         closePopup();
         showToast('in_progress', 'Generating report...');
@@ -430,9 +490,10 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
-            questions: currentQuestions.map(function(q) { return typeof q === 'object' ? q.question : q; }),
-            answers: answers
-        })
+                    questions: currentQuestions.map(function(q) { return typeof q === 'object' ? q.question : q; }),
+                    answers: answers,
+                    selected_subject_ids: selectedIds && selectedIds.length ? selectedIds : null
+                })
             });
         } catch (e) {
             console.error('start_generation error', e);
@@ -475,13 +536,24 @@
             const resp = await fetch('/popup_start', { method: 'POST', body: formData });
             const data = await resp.json();
             if (data.session_id) currentSessionId = data.session_id;
-            if (data.questions && data.questions.length > 0) {
+            if (data.subjects && data.subjects.length > 0) {
+                renderSubjects(data.subjects);
+                if (data.questions && data.questions.length > 0) {
+                    renderQuestions(data.questions);
+                } else {
+                    currentQuestions = [];
+                }
+            } else if (data.questions && data.questions.length > 0) {
+                // No subjects (edge case) — skip straight to questions
                 renderQuestions(data.questions);
+                loadingEl.classList.add('hidden');
+                questionsEl.classList.remove('hidden');
+                popupTitle.textContent = 'A few quick questions';
+                stepIndicator.textContent = '';
             } else {
-                // No questions — go straight to generation
                 closePopup();
                 currentQuestions = [];
-                await submitAnswers();
+                await submitAnswers(null);
             }
         } catch (e) {
             closePopup();
@@ -493,11 +565,58 @@
     backdrop.addEventListener('click', function (e) {
         if (e.target === backdrop) closePopup();
     });
-    skipBtn.addEventListener('click', function () {
+
+    // Step 1: Skip — go straight to generation with all subjects (null)
+    skipSubjectsBtn.addEventListener('click', async function () {
+        currentSelectedIds = [];
         currentQuestions = [];
-        submitAnswers();
+        closePopup();
+        showToast('in_progress', 'Generating report...');
+        try {
+            await fetch('/start_generation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ questions: [], answers: [], selected_subject_ids: null })
+            });
+        } catch (e) {
+            console.error('start_generation error', e);
+        }
+        if (!currentSessionId) return;
+        pollInterval = setInterval(async function () {
+            try {
+                const resp = await fetch('/api/report_status/' + currentSessionId);
+                if (resp.status === 403) { clearInterval(pollInterval); return; }
+                const status = await resp.json();
+                if (status.status === 'ready') {
+                    clearInterval(pollInterval);
+                    showToast('ready', 'Report Ready — Click to view', status.report_id);
+                } else if (status.status === 'error') {
+                    clearInterval(pollInterval);
+                    toast.classList.add('hidden');
+                }
+            } catch (e) { /* ignore */ }
+        }, 3000);
     });
-    submitBtn.addEventListener('click', submitAnswers);
+
+    // Step 1: Next → go to questions
+    nextBtn.addEventListener('click', function () {
+        if (currentQuestions.length > 0) {
+            goToStep2();
+        } else {
+            // No questions — capture selection and submit directly
+            currentSelectedIds = Array.from(subjectsList.querySelectorAll('input[type=checkbox]:checked'))
+                .map(function (cb) { return cb.getAttribute('data-id'); });
+            submitAnswers(currentSelectedIds);
+        }
+    });
+
+    // Step 2: Back → return to subjects
+    backBtn.addEventListener('click', goToStep1);
+
+    // Step 2: Generate Report
+    submitBtn.addEventListener('click', function () {
+        submitAnswers(currentSelectedIds);
+    });
 })();
 </script>
 {% endblock %}

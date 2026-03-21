@@ -9,13 +9,25 @@ import os
 from typing import Dict, Any, List
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from research_plan import ResearchPlan
 from research_subjects import get_research_subject_by_id
 
 SYNTHESIS_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-2.5-pro")
 SYNTHESIS_MAX_OUTPUT_TOKENS = int(os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000"))
+
+_END_MARKER = "END_OF_REPORT"
+# Rough chars-per-token for Gemini (~4). If output >= 90% of the token limit, assume truncation.
+_TRUNCATION_THRESHOLD = 0.9
+
+
+def _is_truncated(text: str, max_tokens: int) -> bool:
+    """Return True if END_OF_REPORT is missing AND output length suggests the model hit its limit."""
+    if _END_MARKER in text:
+        return False
+    return (len(text) / 4) >= max_tokens * _TRUNCATION_THRESHOLD
+
 
 _TRADE_TYPE_FRAMING = {
     "Day Trade": "an actionable intraday/short-term briefing",
@@ -100,6 +112,7 @@ def _build_synthesis_prompt(
     trade_type: str,
     research_outputs: Dict[str, Dict[str, Any]],
     plan: ResearchPlan,
+    failed_subjects: List[str] = None,
 ) -> str:
     from date_utils import get_datetime_context_string
     datetime_context = get_datetime_context_string()
@@ -123,6 +136,20 @@ def _build_synthesis_prompt(
         prompt_parts += [
             "**User's stated goals / context (frame the report around this):**",
             plan.trade_context,
+            "",
+        ]
+
+    if failed_subjects:
+        failed_names = []
+        for sid in failed_subjects:
+            try:
+                failed_names.append(get_research_subject_by_id(sid).name)
+            except ValueError:
+                failed_names.append(sid)
+        prompt_parts += [
+            "**NOTE — Missing Research Sections:**",
+            f"The following subjects failed to complete and have NO data: {', '.join(failed_names)}.",
+            "For these sections, explicitly state 'Research unavailable for this section' — do not fabricate data.",
             "",
         ]
 
@@ -198,7 +225,8 @@ def synthesis_node(state: dict) -> dict:
 
     print(f"[SynthesisNode] Synthesizing {len(research_outputs)} research outputs for {ticker}...")
 
-    synthesis_prompt = _build_synthesis_prompt(ticker, trade_type, research_outputs, plan)
+    failed_subjects = state.get("failed_subjects", [])
+    synthesis_prompt = _build_synthesis_prompt(ticker, trade_type, research_outputs, plan, failed_subjects)
     system_instructions = _get_synthesis_instructions(ticker, trade_type, plan)
 
     llm = ChatGoogleGenerativeAI(
@@ -207,14 +235,70 @@ def synthesis_node(state: dict) -> dict:
         max_output_tokens=SYNTHESIS_MAX_OUTPUT_TOKENS,
     )
 
+    total_input_tok = 0
+    total_output_tok = 0
+
+    def _extract_usage(resp) -> tuple:
+        usage = getattr(resp, "usage_metadata", None) or {}
+        return usage.get("input_tokens", 0), usage.get("output_tokens", 0)
+
     try:
         response = llm.invoke(
             [SystemMessage(content=system_instructions), HumanMessage(content=synthesis_prompt)]
         )
+        i, o = _extract_usage(response)
+        total_input_tok += i
+        total_output_tok += o
+
         report_text = response.content or ""
-        print(f"[SynthesisNode] Report: {len(report_text)} chars")
-        return {"report_text": report_text}
+        print(f"[SynthesisNode] Report: {len(report_text)} chars, {i}/{o} tokens")
+
+        if _END_MARKER not in report_text:
+            if _is_truncated(report_text, SYNTHESIS_MAX_OUTPUT_TOKENS):
+                print("[SynthesisNode] Truncation detected — retrying with continuation prompt")
+                retry_response = llm.invoke([
+                    SystemMessage(content=system_instructions),
+                    HumanMessage(content=synthesis_prompt),
+                    AIMessage(content=report_text),
+                    HumanMessage(content=(
+                        "The previous response was cut off. Continue the report from where it stopped. "
+                        "Complete all remaining sections and end with: END_OF_REPORT"
+                    )),
+                ])
+                ri, ro = _extract_usage(retry_response)
+                total_input_tok += ri
+                total_output_tok += ro
+
+                combined = report_text + "\n" + (retry_response.content or "")
+                if _END_MARKER in combined:
+                    print(f"[SynthesisNode] Continuation successful: {len(combined)} chars")
+                    return {
+                        "report_text": combined,
+                        "actual_input_tokens": total_input_tok,
+                        "actual_output_tokens": total_output_tok,
+                    }
+                else:
+                    print("[SynthesisNode] Continuation did not complete report — flagging as incomplete")
+                    return {
+                        "report_text": "[INCOMPLETE REPORT — synthesis was truncated]\n\n" + report_text,
+                        "is_partial_report": True,
+                        "actual_input_tokens": total_input_tok,
+                        "actual_output_tokens": total_output_tok,
+                    }
+            else:
+                print(f"[SynthesisNode] END_OF_REPORT absent but output is short ({len(report_text)} chars) — proceeding")
+
+        return {
+            "report_text": report_text,
+            "actual_input_tokens": total_input_tok,
+            "actual_output_tokens": total_output_tok,
+        }
     except Exception as e:
         error_msg = f"Error synthesizing report: {e}"
         print(error_msg)
-        return {"report_text": error_msg}
+        return {
+            "report_text": error_msg,
+            "is_partial_report": True,
+            "actual_input_tokens": total_input_tok,
+            "actual_output_tokens": total_output_tok,
+        }

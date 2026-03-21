@@ -105,6 +105,8 @@ def specialized_node(state: dict) -> dict:
     plan = state["plan"]
     subject_id = state["subject_id"]
     emitter = state.get("emitter")
+    effective_max_turns = state.get("effective_max_turns", SPECIALIZED_MAX_TURNS)
+    effective_max_output_tokens = state.get("effective_max_output_tokens", SPECIALIZED_MAX_OUTPUT_TOKENS)
 
     try:
         subject = get_research_subject_by_id(subject_id)
@@ -134,7 +136,7 @@ def specialized_node(state: dict) -> dict:
     llm = ChatGoogleGenerativeAI(
         model=SPECIALIZED_MODEL,
         temperature=0.7,
-        max_output_tokens=SPECIALIZED_MAX_OUTPUT_TOKENS,
+        max_output_tokens=effective_max_output_tokens,
     )
 
     max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
@@ -150,11 +152,18 @@ def specialized_node(state: dict) -> dict:
             )
             result = agent.invoke(
                 {"messages": [HumanMessage(content=research_prompt)]},
-                config={"recursion_limit": SPECIALIZED_MAX_TURNS * 2},
+                config={"recursion_limit": int(effective_max_turns) * 2},
             )
             # Extract the last AI message as the research output.
             # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
             output_text = ""
+            input_tok = 0
+            output_tok = 0
+            for msg in result["messages"]:
+                usage = getattr(msg, "usage_metadata", None) or {}
+                input_tok += usage.get("input_tokens", 0)
+                output_tok += usage.get("output_tokens", 0)
+
             for msg in reversed(result["messages"]):
                 if hasattr(msg, "content") and msg.content and not getattr(msg, "tool_calls", None):
                     content = msg.content
@@ -167,16 +176,20 @@ def specialized_node(state: dict) -> dict:
                         output_text = str(content)
                     break
 
-            print(f"[SpecializedNode] {subject.name}: {len(output_text)} chars")
-            return {"research_outputs": {subject_id: {
-                "subject_id": subject_id,
-                "subject_name": subject.name,
-                "research_output": output_text,
-                "sources": [],
-                "ticker": ticker,
-                "trade_type": trade_type,
-                "focus_hint": focus_hint,
-            }}}
+            print(f"[SpecializedNode] {subject.name}: {len(output_text)} chars, {input_tok}/{output_tok} tokens")
+            return {
+                "research_outputs": {subject_id: {
+                    "subject_id": subject_id,
+                    "subject_name": subject.name,
+                    "research_output": output_text,
+                    "sources": [],
+                    "ticker": ticker,
+                    "trade_type": trade_type,
+                    "focus_hint": focus_hint,
+                }},
+                "actual_input_tokens": input_tok,
+                "actual_output_tokens": output_tok,
+            }
 
         except Exception as exc:
             last_exc = exc

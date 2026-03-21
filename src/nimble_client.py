@@ -141,7 +141,7 @@ class NimbleClient:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data["data"]["parsing"]["parsed"]["response"]
+                return data["data"]["parsing"]["answer"]
         except httpx.TimeoutException as e:
             return f"[Nimble Perplexity timeout] Exceeded {self.timeout:.0f}s: {e}"
         except Exception as e:

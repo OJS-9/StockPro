@@ -19,10 +19,14 @@ PLANNER_MODEL = os.getenv("PLANNER_MODEL", "gemini-2.5-flash")
 PLANNER_MAX_SUBJECTS = int(os.getenv("PLANNER_MAX_SUBJECTS", "8"))
 
 
-def _build_system_prompt(ticker: str, trade_type: str, eligible: List[ResearchSubject]) -> str:
+def _build_system_prompt(ticker: str, trade_type: str, eligible: List[ResearchSubject], locked: bool = False) -> str:
     subject_lines = "\n".join(
         f'  - "{s.id}": {s.name} — {s.description}' for s in eligible
     )
+    if locked:
+        subject_rule = "Use exactly these subjects in this order. Do not add or remove any."
+    else:
+        subject_rule = "Include ALL eligible subjects unless the user context makes one clearly irrelevant."
     return f"""You are a research planning assistant for a stock analysis platform.
 
 Your job is to select the most relevant research subjects for a {trade_type} analysis of {ticker},
@@ -43,7 +47,7 @@ and to write per-subject focus hints that reflect what the user actually cares a
 }}
 
 Rules:
-- Include ALL eligible subjects unless the user context makes one clearly irrelevant.
+- {subject_rule}
 - Order subjects by research importance for this specific situation.
 - Focus hints should be specific to user concerns; leave as "" when no particular focus applies.
 - trade_context is prose written for a synthesis agent, not bullet points.
@@ -147,7 +151,16 @@ def planner_node(state: dict) -> dict:
     eligible = get_research_subjects_for_trade_type(trade_type)
     eligible = eligible[:PLANNER_MAX_SUBJECTS]
 
-    system_prompt = _build_system_prompt(ticker, trade_type, eligible)
+    # Honour user's subject selection from popup
+    user_selected = state.get("user_selected_subjects")
+    if user_selected:
+        selected_set = set(user_selected)
+        eligible_filtered = [s for s in eligible if s.id in selected_set]
+        # Restore user's ordering
+        id_to_subject = {s.id: s for s in eligible_filtered}
+        eligible = [id_to_subject[sid] for sid in user_selected if sid in id_to_subject]
+
+    system_prompt = _build_system_prompt(ticker, trade_type, eligible, locked=bool(user_selected))
     user_prompt = _build_user_prompt(ticker, trade_type, conversation_context, eligible)
 
     llm = ChatGoogleGenerativeAI(
@@ -156,10 +169,16 @@ def planner_node(state: dict) -> dict:
         max_output_tokens=2000,
     )
 
+    input_tok = 0
+    output_tok = 0
     try:
         response = llm.invoke(
             [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
         )
+        usage = getattr(response, "usage_metadata", None) or {}
+        input_tok = usage.get("input_tokens", 0)
+        output_tok = usage.get("output_tokens", 0)
+
         raw_json = response.content
         # Strip markdown code fences if present
         if "```" in raw_json:
@@ -172,8 +191,42 @@ def planner_node(state: dict) -> dict:
         plan = _fallback_plan(ticker, trade_type, eligible)
 
     subject_names = ", ".join(plan.selected_subject_ids)
-    print(f"[PlannerNode] Plan: {len(plan.selected_subject_ids)} subjects — {subject_names}")
+    print(f"[PlannerNode] Plan: {len(plan.selected_subject_ids)} subjects — {subject_names}, {input_tok}/{output_tok} tokens")
     if emitter:
         emitter.emit(f"Researching: {subject_names}...")
 
-    return {"plan": plan}
+    # Compute budget settings here so _fan_out can read them from state
+    # (avoids InvalidUpdateError from parallel specialized_nodes all returning the same field)
+    from spend_budget import compute_effective_specialized_settings_from_plan, get_spend_budget_usd
+    import os as _os
+    spend_budget_usd = state.get("spend_budget_usd")
+    if spend_budget_usd is None:
+        spend_budget_usd = float("inf")
+    subject_ids = plan.selected_subject_ids[:int(_os.getenv("MAX_RESEARCH_SUBJECTS", "8"))]
+    try:
+        budget = compute_effective_specialized_settings_from_plan(
+            ticker=ticker,
+            trade_type=trade_type,
+            plan=plan,
+            selected_subject_ids=subject_ids,
+            spend_budget_usd=spend_budget_usd,
+        )
+    except Exception as exc:
+        print(f"[PlannerNode] Budget computation failed ({exc}); using defaults.")
+        budget = {
+            "effective_max_turns": int(_os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8")),
+            "effective_max_output_tokens": int(_os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")),
+            "estimated_spend_usd": None,
+            "budget_exhausted": False,
+        }
+    print(f"[PlannerNode] Budget: {budget}")
+
+    return {
+        "plan": plan,
+        "actual_input_tokens": input_tok,
+        "actual_output_tokens": output_tok,
+        "estimated_spend_usd": budget.get("estimated_spend_usd"),
+        "effective_max_turns": budget.get("effective_max_turns"),
+        "effective_max_output_tokens": budget.get("effective_max_output_tokens"),
+        "budget_exhausted": budget.get("budget_exhausted", False),
+    }

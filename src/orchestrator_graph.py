@@ -35,6 +35,7 @@ class OrchestratorSession:
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
+        self.pending_questions: List[Dict[str, Any]] = []
         self.conversation_history: List[Dict[str, str]] = []
         self._chat_agent = ReportChatAgent()
         self._emitter: Optional[StepEmitter] = None
@@ -73,6 +74,18 @@ class OrchestratorSession:
         session = self
 
         @tool
+        def ask_user_questions(questions: List[Dict[str, Any]]) -> str:
+            """
+            Ask the user clarifying questions before generating the report.
+            Call this ONCE at the start of a new research session with 1–3 multiple-choice questions.
+            Each question must have a 'question' key (string) and an 'options' key (list of 3–4 strings).
+            Example: [{"question": "What is your time horizon?", "options": ["1 day", "1 week", "1 month", "3+ months"]}]
+            Do NOT call this tool more than once per session.
+            """
+            session.pending_questions = questions
+            return "Questions captured. Waiting for user answers before generating the report."
+
+        @tool
         def generate_report() -> str:
             """
             Trigger report generation when you have gathered enough context from the user.
@@ -84,12 +97,15 @@ class OrchestratorSession:
                 if m.get("role") == "user"
             )
             try:
+                from spend_budget import get_spend_budget_usd
+
                 result = run_research(
                     ticker=ticker,
                     trade_type=trade_type,
                     conversation_context=context_str,
                     user_id=session.user_id,
                     emitter=session._emitter,
+                    spend_budget_usd=get_spend_budget_usd(session.user_id),
                 )
                 session.current_report_id = result.get("report_id", "")
                 session.last_report_text = result.get("report_text", "")
@@ -109,7 +125,7 @@ class OrchestratorSession:
 
         agent = create_react_agent(
             llm,
-            [generate_report],
+            [ask_user_questions, generate_report],
             prompt=system_instructions,
         )
 
@@ -151,10 +167,22 @@ class OrchestratorSession:
             print(f"[OrchestratorGraph] {error_msg}")
             return error_msg
 
-    def generate_report(self, context: str = "") -> str:
-        """Directly trigger report generation (used by background thread in app.py)."""
+    def generate_report(
+        self,
+        context: str = "",
+        selected_subjects: Optional[List[str]] = None,
+        spend_budget_usd: Optional[float] = None,
+    ) -> str:
+        """Directly trigger report generation (used by app.py background threads)."""
         if not self.current_ticker or not self.current_trade_type:
             return "Error: No active research session."
+
+        if spend_budget_usd is None:
+            # Budget enforcement defaults (disabled when not configured).
+            from spend_budget import get_spend_budget_usd
+
+            spend_budget_usd = get_spend_budget_usd(self.user_id)
+
         try:
             result = run_research(
                 ticker=self.current_ticker,
@@ -162,6 +190,8 @@ class OrchestratorSession:
                 conversation_context=context,
                 user_id=self.user_id,
                 emitter=self._emitter,
+                selected_subjects=selected_subjects,
+                spend_budget_usd=spend_budget_usd,
             )
             self.current_report_id = result.get("report_id", "")
             self.last_report_text = result.get("report_text", "")
@@ -185,7 +215,7 @@ class OrchestratorSession:
         self.current_ticker = None
         self.current_trade_type = None
         self.current_report_id = None
-        self.current_plan = None
+        self.pending_questions = []
         self._chat_agent.reset_conversation()
 
 

@@ -27,7 +27,7 @@ from markupsafe import Markup
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from orchestrator_graph import create_session, OrchestratorSession
+from orchestrator_graph import OrchestratorSession, create_session
 from langsmith_service import create_emitter
 from portfolio.portfolio_service import get_portfolio_service
 from portfolio.history_service import get_history_service
@@ -656,16 +656,32 @@ def popup_start():
     agent = initialize_session(session_id)
     agent.reset_conversation()
 
-    # Set agent state without making an LLM call
-    agent.current_ticker = ticker
-    agent.current_trade_type = trade_type
-
-    # Store for use in start_generation
     session['current_ticker'] = ticker
     session['current_trade_type'] = trade_type
 
-    questions = _fetch_clarifying_questions(ticker, trade_type)
-    return jsonify({'questions': questions, 'session_id': session_id})
+    # Let the orchestrator agent run one turn; it will call ask_user_questions tool
+    try:
+        agent.start_research(ticker, trade_type)
+    except Exception:
+        pass
+    questions = agent.pending_questions
+
+    # Fallback if agent did not call the tool or returned malformed data
+    if not isinstance(questions, list) or not questions:
+        questions = [{"question": f"What is your primary goal for researching {ticker}?",
+                      "options": ["Long-term investment", "Swing trade", "Day trade", "General analysis"]}]
+
+    from research_subjects import get_research_subjects_for_trade_type
+    subjects = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "description": s.description,
+            "priority": s.priority.get(trade_type, 99),
+        }
+        for s in get_research_subjects_for_trade_type(trade_type)
+    ]
+    return jsonify({'questions': questions, 'session_id': session_id, 'subjects': subjects})
 
 
 @app.route('/start_generation', methods=['POST'])
@@ -675,10 +691,16 @@ def start_generation():
     data = request.get_json(force=True) or {}
     questions = data.get('questions', [])
     answers = data.get('answers', [])
+    selected_subject_ids = data.get('selected_subject_ids') or None  # None = no user selection
 
     session_id = get_or_create_session_id()
     agent = initialize_session(session_id)
     agent.user_id = session.get('user_id')
+
+    # Snapshot budget input for the background thread.
+    from spend_budget import get_spend_budget_usd
+
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
 
     # Build context string from Q&A pairs
     lines = []
@@ -698,7 +720,11 @@ def start_generation():
         emitter = create_emitter()
         agent.set_emitter(emitter)
         try:
-            agent.generate_report(context=context_str)
+            agent.generate_report(
+                context=context_str,
+                selected_subjects=selected_subject_ids,
+                spend_budget_usd=spend_budget_usd,
+            )
             _generation_status[session_id] = {
                 'status': 'ready',
                 'report_id': agent.current_report_id,
