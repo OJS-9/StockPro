@@ -437,6 +437,7 @@ def continue_conversation():
     session_id = get_or_create_session_id()
     agent = initialize_session(session_id)
     agent.user_id = session.get('user_id')
+    agent.username = session.get('username')
 
     # Snapshot mutable session state so the background thread can read it safely
     previous_report_id = session.get('current_report_id')
@@ -696,6 +697,7 @@ def start_generation():
     session_id = get_or_create_session_id()
     agent = initialize_session(session_id)
     agent.user_id = session.get('user_id')
+    agent.username = session.get('username')
 
     # Snapshot budget input for the background thread.
     from spend_budget import get_spend_budget_usd
