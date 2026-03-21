@@ -77,30 +77,23 @@
                     </thead>
                     <tbody>
                         {% for p in portfolios %}
-                        <tr class="border-b border-border-dark last:border-b-0 hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('portfolio_detail', portfolio_id=p.portfolio_id) }}'">
+                        <tr class="border-b border-border-dark last:border-b-0 hover:bg-border-dark/50 transition-colors cursor-pointer" onclick="window.location='{{ url_for('portfolio_detail', portfolio_id=p.portfolio_id) }}'" data-portfolio-id="{{ p.portfolio_id }}">
                             <td class="px-5 py-4">
                                 <span class="font-display font-semibold text-primary hover:underline">{{ p.name }}</span>
                                 {% if p.description %}
                                 <p class="text-sm text-stone-500 truncate max-w-xs">{{ p.description }}</p>
                                 {% endif %}
                             </td>
-                            {% if p.summary %}
-                            <td class="text-right px-5 py-4 text-white">${{ p.summary.total_cost_basis|currency }}</td>
-                            {% if p.summary.total_market_value is not none %}
-                            <td class="text-right px-5 py-4 text-white">${{ p.summary.total_market_value|currency }}</td>
-                            <td class="text-right px-5 py-4 {{ 'text-green-500' if p.summary.total_unrealized_gain >= 0 else 'text-red-500' }}">${{ p.summary.total_unrealized_gain|currency }}</td>
-                            <td class="text-right px-5 py-4 {{ 'text-green-500' if p.summary.total_unrealized_gain_pct >= 0 else 'text-red-500' }}">{{ p.summary.total_unrealized_gain_pct|currency }}%</td>
-                            {% else %}
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            {% endif %}
-                            {% else %}
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            <td class="text-right px-5 py-4 text-stone-500">—</td>
-                            {% endif %}
+                            <td class="text-right px-5 py-4 text-white">${{ p.summary.total_cost_basis|currency if p.summary else '—' }}</td>
+                            <td class="text-right px-5 py-4 text-stone-400 price-col price-value">
+                                <span class="inline-block w-16 h-4 bg-border-dark rounded animate-pulse"></span>
+                            </td>
+                            <td class="text-right px-5 py-4 text-stone-400 price-col price-gain">
+                                <span class="inline-block w-16 h-4 bg-border-dark rounded animate-pulse"></span>
+                            </td>
+                            <td class="text-right px-5 py-4 text-stone-400 price-col price-gain-pct">
+                                <span class="inline-block w-12 h-4 bg-border-dark rounded animate-pulse"></span>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -191,6 +184,56 @@
         }
         check.addEventListener('change', toggle);
         toggle();
+    })();
+
+    // Async price loading for portfolio list
+    (function() {
+        var rows = document.querySelectorAll('tr[data-portfolio-id]');
+        if (!rows.length) return;
+
+        function fmt(n) {
+            return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        fetch('/api/portfolios/prices')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var map = {};
+                data.forEach(function(d) { map[d.portfolio_id] = d; });
+
+                rows.forEach(function(row) {
+                    var pid = row.getAttribute('data-portfolio-id');
+                    var d = map[pid];
+                    var valCell = row.querySelector('.price-value');
+                    var gainCell = row.querySelector('.price-gain');
+                    var gainPctCell = row.querySelector('.price-gain-pct');
+
+                    if (!d || d.total_market_value === null) {
+                        valCell.textContent = '—';
+                        gainCell.textContent = '—';
+                        gainPctCell.textContent = '—';
+                        return;
+                    }
+
+                    valCell.textContent = '$' + fmt(d.total_market_value);
+                    valCell.classList.remove('text-stone-400');
+                    valCell.classList.add('text-white');
+
+                    var gainPositive = d.total_unrealized_gain >= 0;
+                    gainCell.textContent = (gainPositive ? '$' : '-$') + fmt(Math.abs(d.total_unrealized_gain));
+                    gainCell.classList.remove('text-stone-400');
+                    gainCell.classList.add(gainPositive ? 'text-green-500' : 'text-red-500');
+
+                    gainPctCell.textContent = fmt(d.total_unrealized_gain_pct) + '%';
+                    gainPctCell.classList.remove('text-stone-400');
+                    gainPctCell.classList.add(gainPositive ? 'text-green-500' : 'text-red-500');
+                });
+            })
+            .catch(function() {
+                document.querySelectorAll('.price-col').forEach(function(el) {
+                    el.textContent = '—';
+                });
+            });
     })();
 
     // Portfolio tip: per-user keys so one account's dismiss doesn't affect another. X = this session; Don't Show Again = all sessions for this user.

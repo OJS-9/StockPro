@@ -604,25 +604,18 @@ class PortfolioService:
         for p in portfolios:
             pid = p.get('portfolio_id')
             try:
-                summary = self.get_portfolio_summary(pid, with_prices=True)
-                light = {
-                    'total_market_value': summary['total_market_value'],
+                summary = self.get_portfolio_summary(pid, with_prices=False)
+                p['summary'] = {
                     'total_cost_basis': summary['total_cost_basis'],
-                    'total_unrealized_gain': summary['total_unrealized_gain'],
-                    'total_unrealized_gain_pct': summary['total_unrealized_gain_pct'],
                     'holdings_count': summary['holdings_count'],
                 }
-                p['summary'] = light
                 total_cost_basis += summary['total_cost_basis']
                 total_holdings_count += summary['holdings_count']
             except Exception:
                 holdings = self.db.get_holdings(pid)
                 count = len(holdings)
                 p['summary'] = {
-                    'total_market_value': Decimal('0'),
                     'total_cost_basis': Decimal('0'),
-                    'total_unrealized_gain': Decimal('0'),
-                    'total_unrealized_gain_pct': Decimal('0'),
                     'holdings_count': count,
                 }
                 total_holdings_count += count

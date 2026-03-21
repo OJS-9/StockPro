@@ -53,7 +53,7 @@ class CryptoDataProvider(BaseDataProvider):
     def __init__(self):
         """Initialize crypto data provider."""
         super().__init__()
-        self._coin_list_cache = None
+        self._coin_list_cache = None  # in-process cache for the static CoinGecko coin list only
         self._session = requests.Session()
         self._session.headers.update({
             'Accept': 'application/json',
@@ -104,11 +104,6 @@ class CryptoDataProvider(BaseDataProvider):
         Returns:
             Current price in USD as Decimal, or None if unavailable
         """
-        # Return cached price if still fresh
-        cached = self._get_cached_price(symbol)
-        if cached is not None:
-            return cached
-
         coin_id = self._get_coin_id(symbol)
         if not coin_id:
             return None
@@ -126,9 +121,7 @@ class CryptoDataProvider(BaseDataProvider):
             if resp.ok:
                 data = resp.json()
                 if coin_id in data and 'usd' in data[coin_id]:
-                    price = Decimal(str(data[coin_id]['usd']))
-                    self._set_cached_price(symbol, price)
-                    return price
+                    return Decimal(str(data[coin_id]['usd']))
 
         except Exception as e:
             print(f"Error fetching crypto price for {symbol}: {e}")
@@ -178,9 +171,7 @@ class CryptoDataProvider(BaseDataProvider):
                 for coin_id, price_data in data.items():
                     symbol = id_to_symbol.get(coin_id)
                     if symbol and 'usd' in price_data:
-                        price = Decimal(str(price_data['usd']))
-                        prices[symbol] = price
-                        self._set_cached_price(symbol, price)
+                        prices[symbol] = Decimal(str(price_data['usd']))
 
                 return prices
 
@@ -225,7 +216,6 @@ class CryptoDataProvider(BaseDataProvider):
                         change = price_data.get('usd_24h_change')
                         change_decimal = Decimal(str(round(change, 4))) if change is not None else None
                         result[symbol] = {'price': price, 'change_percent': change_decimal}
-                        self._set_cached_price(symbol, price)
                 return result
         except Exception as e:
             print(f"Error fetching crypto prices with change: {e}")

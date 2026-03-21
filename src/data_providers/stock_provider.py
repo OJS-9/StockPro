@@ -4,7 +4,7 @@ Stock data provider using Alpha Vantage MCP.
 
 import os
 import sys
-import time
+import time  # used for batch delay sleep
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
@@ -35,17 +35,6 @@ class StockDataProvider(BaseDataProvider):
         super().__init__()
         self._mcp_manager = None
         self._nimble_client = None
-        # { symbol: (change_percent, fetched_at) } — mirrors _price_cache TTL
-        self._change_cache: dict = {}
-
-    def _get_cached_change_percent(self, symbol: str) -> Optional[Decimal]:
-        entry = self._change_cache.get(symbol.upper())
-        if entry and (time.monotonic() - entry[1]) < self._CACHE_TTL:
-            return entry[0]
-        return None
-
-    def _set_cached_change_percent(self, symbol: str, change_percent: Decimal):
-        self._change_cache[symbol.upper()] = (change_percent, time.monotonic())
 
     @property
     def mcp_manager(self):
@@ -267,16 +256,11 @@ class StockDataProvider(BaseDataProvider):
             Current price as Decimal, or None if unavailable
         """
         # Return cached price if still fresh
-        cached = self._get_cached_price(symbol)
-        if cached is not None:
-            return cached
-
         # Prefer Nimble (MarketWatch agent) if configured.
         nimble_data = self._get_price_with_change_from_nimble(symbol)
         if nimble_data.get("price") is not None:
             if PRICE_FETCH_DEBUG:
                 print(f"[price_debug] get_current_price using nimble for {symbol.upper()}")
-            self._set_cached_price(symbol, nimble_data["price"])
             return nimble_data["price"]
 
         # Try GLOBAL_QUOTE first (real-time price)
@@ -305,18 +289,14 @@ class StockDataProvider(BaseDataProvider):
                         price_idx = headers.index('price')
                         price_str = values[price_idx].replace('%', '')
                         if price_str:
-                            price = Decimal(price_str)
-                            self._set_cached_price(symbol, price)
-                            return price
+                            return Decimal(price_str)
 
             # Handle JSON response format (legacy/fallback)
             # GLOBAL_QUOTE returns data in "Global Quote" key
             quote = result.get('Global Quote', result)
             price_str = quote.get('05. price') or quote.get('price')
             if price_str:
-                price = Decimal(str(price_str))
-                self._set_cached_price(symbol, price)
-                return price
+                return Decimal(str(price_str))
 
         except Exception as e:
             print(f"GLOBAL_QUOTE failed for {symbol}: {e}")
@@ -326,9 +306,7 @@ class StockDataProvider(BaseDataProvider):
             result = self.mcp_manager.get_company_overview(symbol)
 
             if '50DayMovingAverage' in result and result['50DayMovingAverage']:
-                price = Decimal(str(result['50DayMovingAverage']))
-                self._set_cached_price(symbol, price)
-                return price
+                return Decimal(str(result['50DayMovingAverage']))
 
             # Try calculating from market cap as last resort
             if 'MarketCapitalization' in result and 'SharesOutstanding' in result:
@@ -338,9 +316,7 @@ class StockDataProvider(BaseDataProvider):
                     market_cap = Decimal(str(market_cap))
                     shares = Decimal(str(shares))
                     if shares > 0:
-                        price = market_cap / shares
-                        self._set_cached_price(symbol, price)
-                        return price
+                        return market_cap / shares
 
         except Exception as e:
             print(f"OVERVIEW fallback failed for {symbol}: {e}")
@@ -357,23 +333,13 @@ class StockDataProvider(BaseDataProvider):
         Returns:
             {'price': Decimal|None, 'change_percent': Decimal|None}
         """
-        # Full cache hit — skip all API calls
-        cached_price = self._get_cached_price(symbol)
-        cached_change = self._get_cached_change_percent(symbol)
-        if cached_price is not None and cached_change is not None:
-            if PRICE_FETCH_DEBUG:
-                print(f"[price_debug] get_price_with_change full cache hit for {symbol.upper()}")
-            return {"price": cached_price, "change_percent": cached_change}
-
         result = {"price": None, "change_percent": None}
 
         # Nimble-first: returns both price and change_percent for most symbols
         nimble_data = self._get_price_with_change_from_nimble(symbol)
         if nimble_data.get("price") is not None:
-            self._set_cached_price(symbol, nimble_data["price"])
             result = nimble_data
             if result.get("change_percent") is not None:
-                self._set_cached_change_percent(symbol, result["change_percent"])
                 if PRICE_FETCH_DEBUG:
                     print(f"[price_debug] final source=nimble for {symbol.upper()} result={result}")
                 return result
@@ -393,20 +359,16 @@ class StockDataProvider(BaseDataProvider):
                     change_str = row.get('changePercent', '').replace('%', '')
                     if price_str and result["price"] is None:
                         result['price'] = Decimal(price_str)
-                        self._set_cached_price(symbol, result['price'])
                     if change_str and result["change_percent"] is None:
                         result['change_percent'] = Decimal(change_str)
-                        self._set_cached_change_percent(symbol, result["change_percent"])
             else:
                 quote = raw.get('Global Quote', raw)
                 price_str = (quote.get('05. price') or quote.get('price') or '').replace('%', '')
                 change_str = (quote.get('10. change percent') or quote.get('change percent') or '').replace('%', '')
                 if price_str and result["price"] is None:
                     result['price'] = Decimal(str(price_str))
-                    self._set_cached_price(symbol, result['price'])
                 if change_str and result["change_percent"] is None:
                     result['change_percent'] = Decimal(str(change_str))
-                    self._set_cached_change_percent(symbol, result["change_percent"])
         except Exception as e:
             print(f"get_price_with_change failed for {symbol}: {e}")
 
@@ -431,11 +393,8 @@ class StockDataProvider(BaseDataProvider):
         """
         prices = {}
         for i, symbol in enumerate(symbols):
-            # Skip delay if price is already cached
-            needs_api_call = self._get_cached_price(symbol) is None
-            if needs_api_call and i > 0:
+            if i > 0:
                 time.sleep(self._BATCH_DELAY)
-
             price = self.get_current_price(symbol)
             if price is not None:
                 prices[symbol.upper()] = price

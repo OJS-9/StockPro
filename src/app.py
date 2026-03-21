@@ -1014,6 +1014,34 @@ def delete_transaction(portfolio_id: str, transaction_id: str):
     return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
 
+@app.route('/api/portfolios/prices')
+@login_required
+def portfolios_prices():
+    """Return live price summaries for all user portfolios (for async list page)."""
+    portfolio_service = get_portfolio_service()
+    portfolios = portfolio_service.list_portfolios(user_id=session['user_id'])
+
+    def to_float(v):
+        return float(v) if v is not None else None
+
+    result = []
+    for p in portfolios:
+        pid = p['portfolio_id']
+        try:
+            summary = portfolio_service.get_portfolio_summary(pid, with_prices=True)
+            result.append({
+                'portfolio_id': pid,
+                'total_market_value': to_float(summary.get('total_market_value')),
+                'total_unrealized_gain': to_float(summary.get('total_unrealized_gain')),
+                'total_unrealized_gain_pct': to_float(summary.get('total_unrealized_gain_pct')),
+            })
+        except Exception:
+            result.append({'portfolio_id': pid, 'total_market_value': None,
+                           'total_unrealized_gain': None, 'total_unrealized_gain_pct': None})
+
+    return jsonify(result)
+
+
 @app.route('/api/portfolio/<portfolio_id>/prices')
 @login_required
 def portfolio_prices(portfolio_id):
