@@ -2,8 +2,9 @@
 Portfolio value history service - computes monthly portfolio values.
 """
 
-import os
 import calendar
+import json
+import os
 import requests
 from decimal import Decimal
 from datetime import datetime, date
@@ -11,16 +12,45 @@ from typing import List, Dict, Optional
 
 from data_providers.crypto_provider import CryptoDataProvider
 
-_ALPHA_VANTAGE_URL = "https://www.alphavantage.co/query"
-
 # Module-level price cache: symbol -> {'prices': {date_str: float}, 'fetched_at': datetime}
 _price_cache: Dict[str, dict] = {}
-_CACHE_TTL_HOURS = 24
+_CACHE_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'price_history_cache.json')
 
 
 def _cache_valid(entry: dict) -> bool:
-    delta = datetime.utcnow() - entry['fetched_at']
-    return delta.total_seconds() < _CACHE_TTL_HOURS * 3600
+    fetched = entry['fetched_at']
+    today = datetime.utcnow()
+    return fetched.year == today.year and fetched.month == today.month
+
+
+def _load_disk_cache() -> None:
+    global _price_cache
+    try:
+        with open(_CACHE_FILE, 'r') as f:
+            raw = json.load(f)
+        for key, entry in raw.items():
+            _price_cache[key] = {
+                'prices': entry['prices'],
+                'fetched_at': datetime.fromisoformat(entry['fetched_at']),
+            }
+    except (FileNotFoundError, Exception):
+        pass
+
+
+def _save_disk_cache() -> None:
+    try:
+        os.makedirs(os.path.dirname(_CACHE_FILE), exist_ok=True)
+        serializable = {
+            key: {'prices': entry['prices'], 'fetched_at': entry['fetched_at'].isoformat()}
+            for key, entry in _price_cache.items()
+        }
+        with open(_CACHE_FILE, 'w') as f:
+            json.dump(serializable, f)
+    except Exception as e:
+        print(f"[history_service] failed to save disk cache: {e}")
+
+
+_load_disk_cache()
 
 
 def _month_end_dates(months: int) -> List[date]:
@@ -124,34 +154,24 @@ class PortfolioHistoryService:
         return float(qty)
 
     def _get_stock_prices(self, symbol: str) -> Dict[str, float]:
-        """Fetch monthly adjusted close prices from Alpha Vantage. Returns {YYYY-MM-DD: price}."""
+        """Fetch monthly adjusted close prices from Yahoo Finance. Returns {YYYY-MM-DD: price}."""
         global _price_cache
         cache_key = f"stock:{symbol}"
         if cache_key in _price_cache and _cache_valid(_price_cache[cache_key]):
             return _price_cache[cache_key]['prices']
 
-        api_key = os.getenv('ALPHA_VANTAGE_API_KEY', '')
-        if not api_key:
-            return {}
-
         try:
-            resp = requests.get(
-                _ALPHA_VANTAGE_URL,
-                params={
-                    'function': 'TIME_SERIES_MONTHLY_ADJUSTED',
-                    'symbol': symbol,
-                    'apikey': api_key,
-                },
-                timeout=15
-            )
-            if not resp.ok:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period='2y', interval='1mo', auto_adjust=True)
+            if hist.empty:
                 return {}
-            data = resp.json()
-            series = data.get('Monthly Adjusted Time Series', {})
-            prices = {k: float(v['5. adjusted close']) for k, v in series.items()}
+            prices = {d.strftime('%Y-%m-%d'): float(close) for d, close in hist['Close'].items()}
             _price_cache[cache_key] = {'prices': prices, 'fetched_at': datetime.utcnow()}
+            _save_disk_cache()
             return prices
-        except Exception:
+        except Exception as e:
+            print(f"[history_service] yfinance error for {symbol}: {e}")
             return {}
 
     def _get_crypto_prices(self, symbol: str) -> Dict[str, float]:
@@ -169,7 +189,7 @@ class PortfolioHistoryService:
         try:
             resp = requests.get(
                 f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart",
-                params={'vs_currency': 'usd', 'days': 400},
+                params={'vs_currency': 'usd', 'days': 365},
                 timeout=15
             )
             if not resp.ok:
@@ -181,6 +201,7 @@ class PortfolioHistoryService:
                 d = date.fromtimestamp(ts_ms / 1000)
                 prices[d.strftime('%Y-%m-%d')] = price
             _price_cache[cache_key] = {'prices': prices, 'fetched_at': datetime.utcnow()}
+            _save_disk_cache()
             return prices
         except Exception:
             return {}
