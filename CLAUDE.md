@@ -235,6 +235,7 @@ Optional:
 ```
 RESEARCH_MAX_WORKERS=3      # ThreadPoolExecutor concurrency
 PLANNER_MAX_SUBJECTS=8     # Max subjects shown to PlannerAgent
+QUALITY_GATE_MIN_OUTPUT_CHARS=200  # Min chars for a specialized output to pass quality gate (default 200)
 GOOGLE_CLIENT_ID=          # Google OAuth (Authlib). Redirect URI: .../login/google/callback
 GOOGLE_CLIENT_SECRET=      # From Google Cloud Console OAuth 2.0 credentials
 NIMBLE_API_KEY=            # Nimble web search + extraction. Get from app.nimbleway.com

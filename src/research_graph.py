@@ -10,6 +10,7 @@ runs as a separate, concurrent node invocation.
 
 import operator
 import os
+import re
 import uuid
 import math
 from typing import TypedDict, Dict, Any, Annotated, Optional, List
@@ -49,6 +50,8 @@ class ResearchState(TypedDict):
 
 
 _MAX_SUBJECTS = int(os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
+_MIN_OUTPUT_CHARS = int(os.getenv("QUALITY_GATE_MIN_OUTPUT_CHARS", "200"))
+_URL_RE = re.compile(r"https?://[^\s<>\"{}|\\^`\[\]]+")
 
 
 def _fan_out(state: ResearchState) -> List[Send]:
@@ -165,8 +168,13 @@ def quality_gate_node(state: ResearchState) -> dict:
     for sid, result in research_outputs.items():
         if result.get("error"):
             failed.append(sid)
+        elif len(result.get("research_output", "")) < _MIN_OUTPUT_CHARS:
+            char_count = len(result.get("research_output", ""))
+            print(f"[QualityGate] {sid}: output too short ({char_count} chars) — treating as failure")
+            failed.append(sid)
         else:
-            clean_outputs[sid] = result
+            urls = list(dict.fromkeys(_URL_RE.findall(result.get("research_output", ""))))
+            clean_outputs[sid] = {**result, "sources": urls}
 
     total = len(research_outputs)
     failed_count = len(failed)
