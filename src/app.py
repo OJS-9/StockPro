@@ -26,6 +26,7 @@ import markdown as md_lib
 from markupsafe import Markup
 from decimal import Decimal
 from datetime import datetime, timedelta
+from psycopg2.extras import RealDictCursor
 
 from orchestrator_graph import OrchestratorSession, create_session
 from langsmith_service import create_emitter
@@ -1458,7 +1459,7 @@ def watchlist_remove_item(item_id):
     db = get_database_manager()
     conn = db.get_connection()
     try:
-        with conn.cursor(dictionary=True) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT wi.watchlist_id, wl.user_id
                 FROM watchlist_items wi
@@ -1467,7 +1468,7 @@ def watchlist_remove_item(item_id):
             """, (item_id,))
             row = cur.fetchone()
     finally:
-        conn.close()
+        db._release(conn)
 
     if not row or row['user_id'] != session['user_id']:
         abort(403)
@@ -1486,7 +1487,7 @@ def watchlist_toggle_pin(item_id):
     db = get_database_manager()
     conn = db.get_connection()
     try:
-        with conn.cursor(dictionary=True) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT wi.watchlist_id, wi.is_pinned, wl.user_id
                 FROM watchlist_items wi
@@ -1495,7 +1496,7 @@ def watchlist_toggle_pin(item_id):
             """, (item_id,))
             row = cur.fetchone()
     finally:
-        conn.close()
+        db._release(conn)
 
     if not row or row['user_id'] != session['user_id']:
         abort(403)
@@ -1541,7 +1542,7 @@ def watchlist_rename_section(section_id):
     db = get_database_manager()
     conn = db.get_connection()
     try:
-        with conn.cursor(dictionary=True) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT ws.watchlist_id, wl.user_id
                 FROM watchlist_sections ws
@@ -1550,7 +1551,7 @@ def watchlist_rename_section(section_id):
             """, (section_id,))
             row = cur.fetchone()
     finally:
-        conn.close()
+        db._release(conn)
 
     if not row or row['user_id'] != session['user_id']:
         abort(403)
@@ -1570,7 +1571,7 @@ def watchlist_delete_section(section_id):
     db = get_database_manager()
     conn = db.get_connection()
     try:
-        with conn.cursor(dictionary=True) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT ws.watchlist_id, wl.user_id
                 FROM watchlist_sections ws
@@ -1579,7 +1580,7 @@ def watchlist_delete_section(section_id):
             """, (section_id,))
             row = cur.fetchone()
     finally:
-        conn.close()
+        db._release(conn)
 
     if not row or row['user_id'] != session['user_id']:
         abort(403)
