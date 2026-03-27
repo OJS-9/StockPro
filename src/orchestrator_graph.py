@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import create_react_agent
 
 from research_prompt import get_orchestration_instructions
@@ -31,6 +32,7 @@ class OrchestratorSession:
 
     def __init__(self, user_id: Optional[int] = None):
         self.user_id = user_id
+        self.username: Optional[str] = None
         self.current_ticker: Optional[str] = None
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
@@ -86,7 +88,7 @@ class OrchestratorSession:
             return "Questions captured. Waiting for user answers before generating the report."
 
         @tool
-        def generate_report() -> str:
+        def generate_report(config: RunnableConfig) -> str:
             """
             Trigger report generation when you have gathered enough context from the user.
             Call this after asking 1-2 relevant questions. Do NOT call immediately.
@@ -106,6 +108,8 @@ class OrchestratorSession:
                     user_id=session.user_id,
                     emitter=session._emitter,
                     spend_budget_usd=get_spend_budget_usd(session.user_id),
+                    parent_config=config,
+                    username=session.username,
                 )
                 session.current_report_id = result.get("report_id", "")
                 session.last_report_text = result.get("report_text", "")
@@ -192,6 +196,7 @@ class OrchestratorSession:
                 emitter=self._emitter,
                 selected_subjects=selected_subjects,
                 spend_budget_usd=spend_budget_usd,
+                username=self.username,
             )
             self.current_report_id = result.get("report_id", "")
             self.last_report_text = result.get("report_text", "")

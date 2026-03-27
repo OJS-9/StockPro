@@ -240,6 +240,8 @@ def run_research(
     emitter: Optional[StepEmitter] = None,
     selected_subjects: Optional[List[str]] = None,
     spend_budget_usd: Optional[float] = None,
+    parent_config: Optional[Dict[str, Any]] = None,
+    username: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute the full research pipeline.
@@ -272,8 +274,13 @@ def run_research(
         "actual_cost_usd": None,
     }
 
-    result = research_graph.invoke(
-        initial_state,
-        config={"configurable": {"thread_id": str(uuid.uuid4())}},
+    from langchain_core.runnables.config import merge_configs
+
+    run_name = f"{username} - {ticker.upper()} Research" if username else f"{ticker.upper()} Research"
+    invoke_config = merge_configs(
+        parent_config or {},
+        {"run_name": run_name, "configurable": {"thread_id": str(uuid.uuid4())}},
     )
+
+    result = research_graph.invoke(initial_state, config=invoke_config)
     return result
