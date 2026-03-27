@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ portfolio.name if portfolio else 'Portfolio' }} - StockIntel{% endblock %}
+{% block title %}{{ portfolio.name if portfolio else 'Portfolio' }} - StockPro{% endblock %}
 
 {% block content %}
 {% include '_nav.html' %}
@@ -8,173 +8,186 @@
     <!-- Main Content -->
     <main class="flex-1 px-6 py-8">
         <div class="max-w-7xl mx-auto">
-            <!-- Page Actions -->
+
+            <!-- Breadcrumb + Actions -->
             <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center gap-3">
-                    <a href="{{ url_for('portfolio') }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
-                        <span class="material-symbols-outlined">arrow_back</span>
-                    </a>
-                    <h1 class="text-2xl font-display font-bold">{{ portfolio.name if portfolio else 'Portfolio' }}</h1>
+                <div class="flex items-center gap-2">
+                    <a href="{{ url_for('portfolio') }}" class="text-zinc-500 text-sm hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors">Portfolios</a>
+                    <span class="material-symbols-outlined text-zinc-400" style="font-size:16px;">chevron_right</span>
+                    <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{{ portfolio.name if portfolio else 'Portfolio' }}</span>
                 </div>
-                <div class="flex items-center gap-3">
-                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
-                        <span class="material-symbols-outlined text-xl">add</span>
+                <div class="flex items-center gap-2">
+                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:16px;">add</span>
                         Add Transaction
                     </a>
-                    <a href="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" class="flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
-                        <span class="material-symbols-outlined text-xl">upload_file</span>
+                    <a href="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:16px;">upload_file</span>
                         Import CSV
                     </a>
                 </div>
             </div>
+
             <!-- Status Message -->
             {% if status_message %}
-            <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
-                <p class="text-sm">{{ status_message }}</p>
+            <div class="mb-6 p-4 rounded-lg border
+                {% if status_type == 'error' %}bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400
+                {% elif status_type == 'success' %}bg-green-600/10 border-green-500/30 text-green-700 dark:text-green-400
+                {% else %}bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300{% endif %}">
+                <div class="flex items-start gap-2">
+                    <span class="material-symbols-outlined text-base mt-0.5">
+                        {% if status_type == 'error' %}error{% elif status_type == 'success' %}check_circle{% else %}info{% endif %}
+                    </span>
+                    <p class="text-sm">{{ status_message }}</p>
+                </div>
             </div>
             {% endif %}
 
             {% if summary %}
-            <!-- Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 items-start">
-                <!-- Total Value -->
-                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
-                    <div class="flex items-center gap-2 text-stone-400 mb-2">
-                        <span class="material-symbols-outlined text-lg">account_balance_wallet</span>
-                        <span class="text-sm">Total Value</span>
+            <!-- Stat Strip -->
+            <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg mb-6 overflow-hidden shadow-card dark:shadow-none">
+                <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-zinc-200 dark:divide-zinc-800">
+                    <!-- Total Value -->
+                    <div class="px-5 py-4">
+                        <div class="flex items-center gap-1.5 text-zinc-500 mb-1.5">
+                            <span class="material-symbols-outlined" style="font-size:15px;">account_balance_wallet</span>
+                            <span class="text-xs font-medium uppercase tracking-wide">Total Value</span>
+                        </div>
+                        <p id="summary-total-value" class="text-xl font-semibold font-mono text-zinc-400 dark:text-zinc-600 animate-pulse">—</p>
                     </div>
-                    <p id="summary-total-value" class="text-2xl font-display font-bold text-stone-500 animate-pulse">—</p>
-                </div>
 
-                <!-- Cost Basis -->
-                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
-                    <div class="flex items-center gap-2 text-stone-400 mb-2">
-                        <span class="material-symbols-outlined text-lg">payments</span>
-                        <span class="text-sm">Cost Basis</span>
+                    <!-- Cost Basis -->
+                    <div class="px-5 py-4">
+                        <div class="flex items-center gap-1.5 text-zinc-500 mb-1.5">
+                            <span class="material-symbols-outlined" style="font-size:15px;">payments</span>
+                            <span class="text-xs font-medium uppercase tracking-wide">Cost Basis</span>
+                        </div>
+                        <p class="text-xl font-semibold font-mono text-zinc-950 dark:text-zinc-50">${{ summary.total_cost_basis|currency }}</p>
                     </div>
-                    <p class="text-2xl font-display font-bold">${{ summary.total_cost_basis|currency }}</p>
-                </div>
 
-                <!-- Unrealized Gain/Loss -->
-                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
-                    <div class="flex items-center gap-2 text-stone-400 mb-2">
-                        <span class="material-symbols-outlined text-lg">trending_up</span>
-                        <span class="text-sm">Unrealized P&L</span>
+                    <!-- Unrealized P&L -->
+                    <div class="px-5 py-4">
+                        <div class="flex items-center gap-1.5 text-zinc-500 mb-1.5">
+                            <span class="material-symbols-outlined" style="font-size:15px;">trending_up</span>
+                            <span class="text-xs font-medium uppercase tracking-wide">Unrealized P&amp;L</span>
+                        </div>
+                        <p id="summary-unrealized-gain" class="text-xl font-semibold font-mono text-zinc-400 dark:text-zinc-600 animate-pulse">—</p>
                     </div>
-                    <p id="summary-unrealized-gain" class="text-2xl font-display font-bold text-stone-500 animate-pulse">—</p>
-                </div>
 
-                <!-- Allocation -->
-                <div class="bg-surface-dark rounded-xl p-5 border border-border-dark">
-                    <div class="flex items-center gap-2 text-stone-400 mb-2">
-                        <span class="material-symbols-outlined text-lg">pie_chart</span>
-                        <span class="text-sm">Allocation</span>
+                    <!-- Allocation -->
+                    <div class="px-5 py-4">
+                        <div class="flex items-center gap-1.5 text-zinc-500 mb-1.5">
+                            <span class="material-symbols-outlined" style="font-size:15px;">pie_chart</span>
+                            <span class="text-xs font-medium uppercase tracking-wide">Allocation</span>
+                        </div>
+                        <div id="summary-allocation" class="text-zinc-400 dark:text-zinc-600 animate-pulse text-sm">—</div>
                     </div>
-                    <div id="summary-allocation" class="text-stone-500 animate-pulse text-sm">—</div>
                 </div>
             </div>
 
             <!-- Portfolio Value History Chart -->
-            <div class="bg-surface-dark rounded-3xl p-6 border border-border-dark mb-6">
-                <h2 class="font-display font-semibold text-lg mb-4">Portfolio Value</h2>
+            <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 mb-6 shadow-card dark:shadow-none">
+                <h2 class="font-semibold text-base text-zinc-950 dark:text-zinc-50 mb-4">Portfolio Value</h2>
                 <canvas id="historyChart" height="80"></canvas>
             </div>
 
             <!-- Holdings Table -->
-            <div class="bg-surface-dark rounded-xl border border-border-dark overflow-hidden">
-                <div class="px-5 py-4 border-b border-border-dark">
-                    <h2 class="font-display font-semibold text-lg">Holdings ({{ summary.holdings_count + (1 if summary.track_cash else 0) }})</h2>
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-card dark:shadow-none">
+                <div class="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+                    <h2 class="font-semibold text-base text-zinc-950 dark:text-zinc-50">Holdings ({{ summary.holdings_count + (1 if summary.track_cash else 0) }})</h2>
                 </div>
 
                 {% if holdings or summary.track_cash %}
                 <div class="overflow-x-auto">
                     <table class="w-full">
-                        <thead>
-                            <tr class="text-stone-400 text-sm border-b border-border-dark">
-                                <th class="text-left px-5 py-3 font-medium">Asset</th>
-                                <th class="text-right px-5 py-3 font-medium">Quantity</th>
-                                <th class="text-right px-5 py-3 font-medium">Avg Cost</th>
-                                <th class="text-right px-5 py-3 font-medium">Current Price</th>
-                                <th class="text-right px-5 py-3 font-medium">Market Value</th>
-                                <th class="text-right px-5 py-3 font-medium">P&L</th>
-                                <th class="text-right px-5 py-3 font-medium">P&L %</th>
+                        <thead class="bg-zinc-50 dark:bg-zinc-900">
+                            <tr class="border-b border-zinc-200 dark:border-zinc-800">
+                                <th class="text-left px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Asset</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Quantity</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Avg Cost</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Current Price</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Market Value</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">P&amp;L</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">P&amp;L %</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
                             {% if summary.track_cash %}
-                            <tr class="border-b border-border-dark bg-border-dark/30 hover:bg-border-dark/50 transition-colors" data-portfolio-id="{{ portfolio.portfolio_id }}">
+                            <tr class="hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" data-portfolio-id="{{ portfolio.portfolio_id }}">
                                 <td class="px-5 py-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-full flex items-center justify-center bg-stone-500/20 text-stone-400">
-                                            <span class="material-symbols-outlined">payments</span>
+                                        <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400">
+                                            <span class="material-symbols-outlined" style="font-size:18px;">payments</span>
                                         </div>
                                         <div>
-                                            <p class="font-semibold">CASH</p>
-                                            <p class="text-xs text-stone-400">Cash</p>
+                                            <p class="font-semibold text-sm text-zinc-950 dark:text-zinc-50">CASH</p>
+                                            <p class="text-xs text-zinc-400">Cash</p>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
-                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
-                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
-                                <td class="px-5 py-4 text-right font-mono font-semibold cursor-pointer cash-edit-cell" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ summary.cash_balance|currency }}</td>
-                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
-                                <td class="px-5 py-4 text-right font-mono text-stone-500">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm font-semibold cursor-pointer cash-edit-cell text-zinc-950 dark:text-zinc-50" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ summary.cash_balance|currency }}</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                             </tr>
                             {% endif %}
                             {% for holding in holdings %}
-                            <tr class="border-b border-border-dark hover:bg-border-dark/50 transition-colors cursor-pointer" data-symbol="{{ holding.symbol }}" onclick="window.location='{{ url_for('holding_detail', portfolio_id=portfolio.portfolio_id, symbol=holding.symbol) }}'">
+                            <tr class="hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer" data-symbol="{{ holding.symbol }}" onclick="window.location='{{ url_for('holding_detail', portfolio_id=portfolio.portfolio_id, symbol=holding.symbol) }}'">
                                 <td class="px-5 py-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-full flex items-center justify-center {% if holding.asset_type == 'crypto' %}bg-orange-500/20 text-orange-400{% else %}bg-blue-500/20 text-blue-400{% endif %}">
-                                            <span class="material-symbols-outlined">{% if holding.asset_type == 'crypto' %}currency_bitcoin{% else %}trending_up{% endif %}</span>
+                                        <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                                            <span class="material-symbols-outlined" style="font-size:18px;">{% if holding.asset_type == 'crypto' %}currency_bitcoin{% else %}trending_up{% endif %}</span>
                                         </div>
                                         <div>
-                                            <p class="font-semibold">{{ holding.symbol }}</p>
-                                            <p class="text-xs text-stone-400 capitalize">{{ holding.asset_type }}</p>
+                                            <p class="font-semibold text-sm text-zinc-950 dark:text-zinc-50">{{ holding.symbol }}</p>
+                                            <p class="text-xs text-zinc-400 capitalize">{{ holding.asset_type }}</p>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-5 py-4 text-right font-mono">{{ "%.4f"|format(holding.total_quantity|float) }}</td>
-                                <td class="px-5 py-4 text-right font-mono">${{ holding.average_cost|currency }}</td>
-                                <td class="px-5 py-4 text-right font-mono price-cell text-stone-500 animate-pulse">—</td>
-                                <td class="px-5 py-4 text-right font-mono font-semibold market-value-cell text-stone-500 animate-pulse">—</td>
-                                <td class="px-5 py-4 text-right font-mono pnl-cell text-stone-500 animate-pulse">—</td>
-                                <td class="px-5 py-4 text-right font-mono pnl-pct-cell text-stone-500 animate-pulse">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-700 dark:text-zinc-300">{{ "%.4f"|format(holding.total_quantity|float) }}</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm text-zinc-700 dark:text-zinc-300">${{ holding.average_cost|currency }}</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm price-cell text-zinc-400 animate-pulse">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm font-semibold market-value-cell text-zinc-400 animate-pulse">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm pnl-cell text-zinc-400 animate-pulse">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm pnl-pct-cell text-zinc-400 animate-pulse">—</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 {% else %}
-                <div class="px-5 py-12 text-center">
-                    <span class="material-symbols-outlined text-5xl text-stone-500 mb-4">inventory_2</span>
-                    <p class="text-stone-400 mb-4">No holdings yet</p>
-                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
-                        <span class="material-symbols-outlined">add</span>
+                <div class="px-5 py-16 text-center">
+                    <span class="material-symbols-outlined text-4xl text-zinc-300 dark:text-zinc-700 mb-3 block">inventory_2</span>
+                    <p class="text-sm text-zinc-500 mb-5">No holdings yet</p>
+                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:16px;">add</span>
                         Add your first transaction
                     </a>
                 </div>
                 {% endif %}
             </div>
+
             {% else %}
             <!-- Empty State -->
-            <div class="bg-surface-dark rounded-xl border border-border-dark px-5 py-12 text-center">
-                <span class="material-symbols-outlined text-5xl text-stone-500 mb-4">account_balance_wallet</span>
-                <h2 class="font-display font-semibold text-xl mb-2">Start tracking your portfolio</h2>
-                <p class="text-stone-400 mb-6">Add transactions to track your stocks and crypto holdings</p>
-                <div class="flex items-center justify-center gap-3">
-                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
-                        <span class="material-symbols-outlined">add</span>
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 px-5 py-16 text-center shadow-card dark:shadow-none">
+                <span class="material-symbols-outlined text-4xl text-zinc-300 dark:text-zinc-700 mb-3 block">account_balance_wallet</span>
+                <h2 class="font-semibold text-lg text-zinc-950 dark:text-zinc-50 mb-2">Start tracking your portfolio</h2>
+                <p class="text-sm text-zinc-500 mb-6">Add transactions to track your stocks and crypto holdings</p>
+                <div class="flex items-center justify-center gap-2">
+                    <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:16px;">add</span>
                         Add Transaction
                     </a>
-                    <a href="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-dark border border-border-dark rounded-lg hover:bg-border-dark transition-colors">
-                        <span class="material-symbols-outlined">upload_file</span>
+                    <a href="{{ url_for('import_csv', portfolio_id=portfolio.portfolio_id) }}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:16px;">upload_file</span>
                         Import CSV
                     </a>
                 </div>
             </div>
             {% endif %}
+
         </div>
     </main>
 
@@ -200,57 +213,60 @@
                 var pnlCell = row.querySelector('.pnl-cell');
                 var pnlPctCell = row.querySelector('.pnl-pct-cell');
                 [priceCell, mvCell, pnlCell, pnlPctCell].forEach(function (c) {
-                    c.classList.remove('animate-pulse', 'text-stone-500');
+                    c.classList.remove('animate-pulse', 'text-zinc-400');
                 });
                 if (!h.price_available) {
                     [priceCell, mvCell, pnlCell, pnlPctCell].forEach(function (c) {
-                        c.innerHTML = '<span class="text-stone-500 text-xs">N/A</span>';
+                        c.innerHTML = '<span class="text-zinc-400 text-xs">N/A</span>';
                     });
                     return;
                 }
                 priceCell.textContent = '$' + fmt(h.current_price, 2);
+                priceCell.classList.add('text-zinc-700', 'dark:text-zinc-300');
                 mvCell.textContent = '$' + fmt(h.market_value, 2);
+                mvCell.classList.add('text-zinc-950', 'dark:text-zinc-50');
                 var gain = h.unrealized_gain;
                 var gainPct = h.unrealized_gain_pct;
                 pnlCell.textContent = (gain >= 0 ? '+' : '') + '$' + fmt(gain, 2);
-                pnlCell.classList.add(gain >= 0 ? 'text-accent-up' : 'text-accent-down');
+                pnlCell.classList.add(gain >= 0 ? 'text-green-600' : 'text-red-600', gain >= 0 ? 'dark:text-green-500' : 'dark:text-red-500');
                 pnlPctCell.textContent = (gainPct >= 0 ? '+' : '') + fmt(gainPct, 1) + '%';
-                pnlPctCell.classList.add(gainPct >= 0 ? 'text-accent-up' : 'text-accent-down');
+                pnlPctCell.classList.add(gainPct >= 0 ? 'text-green-600' : 'text-red-600', gainPct >= 0 ? 'dark:text-green-500' : 'dark:text-red-500');
             });
-            // Update summary cards
+            // Update summary strip
             var totalVal = document.getElementById('summary-total-value');
             if (totalVal) {
-                totalVal.classList.remove('animate-pulse', 'text-stone-500');
+                totalVal.classList.remove('animate-pulse', 'text-zinc-400', 'dark:text-zinc-600');
+                totalVal.classList.add('text-zinc-950', 'dark:text-zinc-50');
                 totalVal.textContent = '$' + fmt(data.total_market_value, 2);
             }
             var unrealizedEl = document.getElementById('summary-unrealized-gain');
             if (unrealizedEl) {
-                unrealizedEl.classList.remove('animate-pulse', 'text-stone-500');
+                unrealizedEl.classList.remove('animate-pulse', 'text-zinc-400', 'dark:text-zinc-600');
                 var g = data.total_unrealized_gain;
                 var gp = data.total_unrealized_gain_pct;
                 unrealizedEl.textContent = (g >= 0 ? '+' : '') + '$' + fmt(g, 2) + ' (' + fmt(gp, 1) + '%)';
-                unrealizedEl.classList.add(g >= 0 ? 'text-accent-up' : 'text-accent-down');
+                unrealizedEl.classList.add(g >= 0 ? 'text-green-600' : 'text-red-600', g >= 0 ? 'dark:text-green-500' : 'dark:text-red-500');
             }
             var allocEl = document.getElementById('summary-allocation');
             if (allocEl) {
-                allocEl.classList.remove('animate-pulse', 'text-stone-500');
+                allocEl.classList.remove('animate-pulse', 'text-zinc-400', 'dark:text-zinc-600');
                 var hasCash = {{ 'true' if summary.track_cash else 'false' }};
                 allocEl.innerHTML =
-                    '<div class="flex items-center gap-4 flex-wrap">' +
-                    '<div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500"></span><span class="text-sm">Stocks ' + fmt(data.stock_allocation_pct, 0) + '%</span></div>' +
-                    '<div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-orange-500"></span><span class="text-sm">Crypto ' + fmt(data.crypto_allocation_pct, 0) + '%</span></div>' +
-                    (hasCash ? '<div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-stone-400"></span><span class="text-sm">Cash ' + fmt(data.cash_allocation_pct || 0, 0) + '%</span></div>' : '') +
+                    '<div class="flex items-center gap-3 flex-wrap">' +
+                    '<div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-zinc-950 dark:bg-zinc-50 inline-block"></span><span class="text-xs text-zinc-700 dark:text-zinc-300">Stocks ' + fmt(data.stock_allocation_pct, 0) + '%</span></div>' +
+                    '<div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-zinc-500 inline-block"></span><span class="text-xs text-zinc-700 dark:text-zinc-300">Crypto ' + fmt(data.crypto_allocation_pct, 0) + '%</span></div>' +
+                    (hasCash ? '<div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600 inline-block"></span><span class="text-xs text-zinc-700 dark:text-zinc-300">Cash ' + fmt(data.cash_allocation_pct || 0, 0) + '%</span></div>' : '') +
                     '</div>';
             }
         })
         .catch(function () {
             ['summary-total-value', 'summary-unrealized-gain', 'summary-allocation'].forEach(function (id) {
                 var el = document.getElementById(id);
-                if (el) { el.classList.remove('animate-pulse'); el.innerHTML = '<span class="text-stone-500 text-xs">N/A</span>'; }
+                if (el) { el.classList.remove('animate-pulse'); el.innerHTML = '<span class="text-zinc-400 text-xs">N/A</span>'; }
             });
             document.querySelectorAll('.price-cell, .market-value-cell, .pnl-cell, .pnl-pct-cell').forEach(function (c) {
                 c.classList.remove('animate-pulse');
-                c.innerHTML = '<span class="text-stone-500 text-xs">N/A</span>';
+                c.innerHTML = '<span class="text-zinc-400 text-xs">N/A</span>';
             });
         });
 }());
@@ -292,13 +308,13 @@
                     },
                     scales: {
                         x: {
-                            grid: { color: '#292524' },
-                            ticks: { color: '#78716c' }
+                            grid: { color: document.documentElement.classList.contains('dark') ? '#27272a' : '#e4e4e7' },
+                            ticks: { color: '#71717a' }
                         },
                         y: {
-                            grid: { color: '#292524' },
+                            grid: { color: document.documentElement.classList.contains('dark') ? '#27272a' : '#e4e4e7' },
                             ticks: {
-                                color: '#78716c',
+                                color: '#71717a',
                                 callback: function (v) {
                                     return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
                                 }
@@ -309,7 +325,7 @@
             });
         })
         .catch(function () {
-            document.getElementById('historyChart').parentElement.innerHTML = '<p class="text-stone-500 text-sm text-center py-8">Could not load chart data</p>';
+            document.getElementById('historyChart').parentElement.innerHTML = '<p class="text-zinc-400 text-sm text-center py-8">Could not load chart data</p>';
         });
 }());
 
@@ -332,7 +348,7 @@
         var input = document.createElement('input');
         input.type = 'text';
         input.value = current;
-        input.className = 'w-24 px-2 py-1 bg-background-dark border border-primary rounded text-right font-mono text-white focus:outline-none focus:ring-1 focus:ring-primary';
+        input.className = 'w-24 px-2 py-1 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-600 rounded-md text-right font-mono text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-400';
         input.style.fontSize = 'inherit';
         function save() {
             var val = parseCash(input.value);

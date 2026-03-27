@@ -1,30 +1,63 @@
 <div id="nav-wrapper">
-<header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-stone-200 dark:border-b-border-dark bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md px-4 sm:px-10 py-3">
-    <div class="flex items-center gap-4 text-stone-900 dark:text-white">
-        <a href="{{ url_for('index') }}" class="flex items-center gap-4">
-            <div class="size-8 text-primary">
+<header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md px-4 sm:px-10 py-3">
+    <div class="flex items-center gap-3 text-zinc-950 dark:text-zinc-50">
+        <a href="{{ url_for('index') }}" class="flex items-center gap-3">
+            <div class="size-7 text-zinc-950 dark:text-zinc-50">
                 <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                     <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
                 </svg>
             </div>
-            <h2 class="text-stone-900 dark:text-white text-xl font-bold leading-tight tracking-[-0.015em] font-display">StockIntel</h2>
+            <span class="text-lg font-semibold leading-tight tracking-[-0.015em]">StockPro</span>
         </a>
     </div>
     <div class="hidden md:flex flex-1 justify-end gap-8">
-        <div class="flex items-center gap-9">
-            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint == 'index' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('index') }}">Markets</a>
-            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint == 'report_history' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('report_history') }}">Reports</a>
-            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint in ['chat', 'continue_conversation', 'chat_with_report'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('chat') }}">AI Agent</a>
-            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint in ['portfolio', 'portfolio_detail', 'add_transaction', 'import_csv', 'holding_detail', 'delete_transaction', 'create_portfolio_route'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('portfolio') }}">Portfolio</a>
-            <a class="{{ 'text-primary text-sm font-bold' if request.endpoint in ['watchlist', 'watchlist_create', 'watchlist_rename', 'watchlist_delete', 'watchlist_add_symbol', 'watchlist_remove_item', 'watchlist_toggle_pin', 'watchlist_create_section', 'watchlist_rename_section', 'watchlist_delete_section'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal" href="{{ url_for('watchlist') }}">Watchlist</a>
-        </div>
-        <div class="flex gap-2 items-center">
-            {% if current_user.is_authenticated %}
-            <span class="flex items-center text-stone-900 dark:text-stone-300 text-sm font-medium px-3">{{ current_user.username }}</span>
-            <button onclick="handleSignOut()" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
-                <span class="truncate">Sign Out</span>
+        <nav class="flex items-center gap-8">
+            {% set nav_items = [
+                ('index', 'Markets', ['index']),
+                ('report_history', 'Reports', ['report_history']),
+                ('chat', 'AI Agent', ['chat', 'continue_conversation', 'chat_with_report']),
+                ('portfolio', 'Portfolio', ['portfolio', 'portfolio_detail', 'add_transaction', 'import_csv', 'holding_detail', 'delete_transaction', 'create_portfolio_route']),
+                ('watchlist', 'Watchlist', ['watchlist', 'watchlist_create', 'watchlist_rename', 'watchlist_delete', 'watchlist_add_symbol', 'watchlist_remove_item', 'watchlist_toggle_pin', 'watchlist_create_section', 'watchlist_rename_section', 'watchlist_delete_section'])
+            ] %}
+            {% for route, label, endpoints in nav_items %}
+            <a class="relative text-sm pb-0.5 {{ 'text-zinc-950 dark:text-zinc-50 font-semibold' if request.endpoint in endpoints else 'text-zinc-500 dark:text-zinc-400 font-medium hover:text-zinc-950 dark:hover:text-zinc-50' }} transition-colors" href="{{ url_for(route) }}">
+                {{ label }}
+                {% if request.endpoint in endpoints %}
+                <span class="absolute bottom-0 left-0 right-0 h-[2px] bg-zinc-950 dark:bg-zinc-50 rounded-full"></span>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </nav>
+        <div class="flex gap-3 items-center">
+            <button onclick="toggleTheme()" class="p-2 rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
+                <span class="material-symbols-outlined dark:block hidden" style="font-size:18px">light_mode</span>
+                <span class="material-symbols-outlined dark:hidden block" style="font-size:18px">dark_mode</span>
             </button>
+            {% if current_user.is_authenticated %}
+            <div class="relative" id="avatar-dropdown-wrapper">
+                <button id="avatar-btn" class="size-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-semibold text-xs flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                    {{ current_user.username[:2] | upper }}
+                </button>
+                <div id="avatar-dropdown" class="hidden absolute right-0 top-full mt-2 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-card-lg py-1.5 z-50">
+                    <span class="block px-3 py-1.5 text-xs text-zinc-500">{{ current_user.username }}</span>
+                    <div class="border-t border-zinc-200 dark:border-zinc-800 my-1"></div>
+                    <button onclick="handleSignOut()" class="w-full text-left px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Sign Out</button>
+                </div>
+            </div>
             <script>
+                (function () {
+                    var btn = document.getElementById('avatar-btn');
+                    var dropdown = document.getElementById('avatar-dropdown');
+                    if (btn && dropdown) {
+                        btn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            dropdown.classList.toggle('hidden');
+                        });
+                        document.addEventListener('click', function () {
+                            dropdown.classList.add('hidden');
+                        });
+                    }
+                })();
                 async function handleSignOut() {
                     if (window.Clerk) {
                         await window.Clerk.load();
@@ -34,49 +67,49 @@
                 }
             </script>
             {% else %}
-            <a href="{{ url_for('sign_up') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-primary text-[#0c0a09] text-sm font-bold leading-normal tracking-[0.015em] hover:brightness-110 transition-all">
-                <span class="truncate">Sign Up</span>
-            </a>
-            <a href="{{ url_for('sign_in') }}" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
-                <span class="truncate">Sign In</span>
-            </a>
+            <a href="{{ url_for('sign_in') }}" class="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 font-medium transition-colors">Sign In</a>
+            <a href="{{ url_for('sign_up') }}" class="inline-flex items-center justify-center px-3 py-1.5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">Sign Up</a>
             {% endif %}
         </div>
     </div>
-    <div class="md:hidden text-stone-900 dark:text-white">
-        <button type="button" id="mobile-menu-btn" aria-expanded="false" aria-controls="mobile-menu-panel" class="p-1 rounded-lg hover:bg-stone-200 dark:hover:bg-surface-dark transition-colors">
-            <span class="material-symbols-outlined cursor-pointer" aria-hidden="true">menu</span>
+    <div class="md:hidden flex items-center gap-2">
+        <button onclick="toggleTheme()" class="p-2 rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
+            <span class="material-symbols-outlined dark:block hidden" style="font-size:18px">light_mode</span>
+            <span class="material-symbols-outlined dark:hidden block" style="font-size:18px">dark_mode</span>
+        </button>
+        <button type="button" id="mobile-menu-btn" aria-expanded="false" aria-controls="mobile-menu-panel" class="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+            <span class="material-symbols-outlined" aria-hidden="true" style="font-size:22px">menu</span>
         </button>
     </div>
 </header>
 
-<div id="mobile-menu-overlay" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm hidden" aria-hidden="true"></div>
-<div id="mobile-menu-panel" role="dialog" aria-label="Mobile menu" aria-hidden="true" class="fixed top-0 right-0 z-50 h-full w-64 max-w-[85vw] bg-surface-dark border-l border-border-dark shadow-xl flex flex-col transition-transform duration-200 ease-out -translate-x-full hidden">
-    <div class="flex items-center justify-between p-4 border-b border-border-dark">
-        <span class="text-sm font-bold font-display text-stone-900 dark:text-white">Menu</span>
-        <button type="button" id="mobile-menu-close" class="p-2 rounded-lg text-stone-900 dark:text-white hover:bg-stone-200 dark:hover:bg-surface-dark transition-colors" aria-label="Close menu">
-            <span class="material-symbols-outlined">close</span>
+<div id="mobile-menu-overlay" class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm hidden" aria-hidden="true"></div>
+<div id="mobile-menu-panel" role="dialog" aria-label="Mobile menu" aria-hidden="true" class="fixed top-0 right-0 z-50 h-full w-64 max-w-[85vw] bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col transition-transform duration-200 ease-out -translate-x-full hidden">
+    <div class="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+        <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Menu</span>
+        <button type="button" id="mobile-menu-close" class="p-2 rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Close menu">
+            <span class="material-symbols-outlined" style="font-size:20px">close</span>
         </button>
     </div>
     <nav class="flex flex-col gap-1 p-4" aria-label="Main">
-        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint == 'index' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('index') }}">Markets</a>
-        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint == 'report_history' else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('report_history') }}">Reports</a>
-        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint in ['chat', 'continue_conversation', 'chat_with_report'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('chat') }}">AI Agent</a>
-        <a class="mobile-menu-link {{ 'text-primary text-sm font-bold' if request.endpoint in ['portfolio', 'add_transaction', 'import_csv', 'holding_detail'] else 'text-stone-900 dark:text-white hover:text-primary transition-colors text-sm font-medium' }} leading-normal py-3 px-2 rounded-lg" href="{{ url_for('portfolio') }}">Portfolio</a>
+        {% set mobile_nav = [
+            ('index', 'Markets', ['index']),
+            ('report_history', 'Reports', ['report_history']),
+            ('chat', 'AI Agent', ['chat', 'continue_conversation', 'chat_with_report']),
+            ('portfolio', 'Portfolio', ['portfolio', 'portfolio_detail', 'add_transaction', 'import_csv', 'holding_detail']),
+            ('watchlist', 'Watchlist', ['watchlist', 'watchlist_create', 'watchlist_rename', 'watchlist_delete', 'watchlist_add_symbol', 'watchlist_remove_item', 'watchlist_toggle_pin'])
+        ] %}
+        {% for route, label, endpoints in mobile_nav %}
+        <a class="mobile-menu-link text-sm py-2.5 px-3 rounded-md {{ 'text-zinc-950 dark:text-zinc-50 font-semibold bg-zinc-100 dark:bg-zinc-800' if request.endpoint in endpoints else 'text-zinc-600 dark:text-zinc-400 font-medium hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/50' }} transition-colors" href="{{ url_for(route) }}">{{ label }}</a>
+        {% endfor %}
     </nav>
-    <div class="mt-auto p-4 border-t border-border-dark flex flex-col gap-2">
+    <div class="mt-auto p-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2">
         {% if current_user.is_authenticated %}
-        <span class="text-stone-900 dark:text-stone-300 text-sm font-medium px-2 py-1">{{ current_user.username }}</span>
-        <a href="{{ url_for('sign_out') }}" class="mobile-menu-link flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
-            <span class="truncate">Logout</span>
-        </a>
+        <span class="text-zinc-500 text-sm font-medium px-2 py-1">{{ current_user.username }}</span>
+        <a href="{{ url_for('sign_out') }}" class="mobile-menu-link flex items-center justify-center px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-medium rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">Sign Out</a>
         {% else %}
-        <a href="{{ url_for('register') }}" class="mobile-menu-link flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-primary text-[#0c0a09] text-sm font-bold leading-normal tracking-[0.015em] hover:brightness-110 transition-all">
-            <span class="truncate">Sign Up</span>
-        </a>
-        <a href="{{ url_for('login') }}" class="mobile-menu-link flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-stone-200 dark:bg-surface-dark text-stone-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-all">
-            <span class="truncate">Login</span>
-        </a>
+        <a href="{{ url_for('sign_up') }}" class="mobile-menu-link flex items-center justify-center px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">Sign Up</a>
+        <a href="{{ url_for('sign_in') }}" class="mobile-menu-link flex items-center justify-center px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-medium rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">Sign In</a>
         {% endif %}
     </div>
 </div>

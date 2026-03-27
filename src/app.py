@@ -66,6 +66,22 @@ from flask_limiter.util import get_remote_address
 limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 
+def flash_status(message: str, status_type: str = 'info'):
+    """Set a status message and type in the session for the next page render.
+    status_type: 'success', 'error', or 'info'
+    """
+    session['status_message'] = message
+    session['status_type'] = status_type
+
+
+def pop_status():
+    """Pop status_message and status_type from the session, returning a dict."""
+    return {
+        'status_message': session.pop('status_message', None),
+        'status_type': session.pop('status_type', 'info'),
+    }
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -391,11 +407,11 @@ def start_research():
     
     # Validate input
     if not ticker:
-        session['status_message'] = '❌ Please enter a stock ticker.'
+        flash_status('Please enter a stock ticker.', 'error')
         return redirect(url_for('index'))
     
     if not trade_type:
-        session['status_message'] = '❌ Please select a trade type.'
+        flash_status('Please select a trade type.', 'error')
         return redirect(url_for('index'))
     
     ticker = ticker.upper()
@@ -416,10 +432,10 @@ def start_research():
         session['conversation_history'] = conversation_history
         session['current_ticker'] = ticker
         session['current_trade_type'] = trade_type
-        session['status_message'] = f'✅ Research started for {ticker} ({trade_type})'
+        flash_status(f'Research started for {ticker} ({trade_type})', 'success')
         
     except Exception as e:
-        session['status_message'] = f'❌ Error: {str(e)}'
+        flash_status(f'Error: {str(e)}', 'error')
         session['conversation_history'] = []
     
     return redirect(url_for('chat'))
@@ -559,7 +575,7 @@ def generate_report():
                 context += f"User: {msg.get('content', '')}\n"
         
         # Generate report
-        session['status_message'] = '🔄 Generating report... This may take a few minutes.'
+        flash_status('Generating report... This may take a few minutes.', 'info')
         session['conversation_history'] = conversation_history  # Preserve history
         session.modified = True
         
@@ -569,7 +585,7 @@ def generate_report():
         # Store report in session
         session['current_report_id'] = report_id
         session['report_text'] = report_text
-        session['status_message'] = f'✅ Report generated successfully! Report ID: {report_id[:8]}...'
+        flash_status(f'Report generated successfully! Report ID: {report_id[:8]}...', 'success')
         
         # Add full report to conversation
         report_preview = f"# Research Report\n\n{report_text}"
@@ -580,7 +596,7 @@ def generate_report():
         session['conversation_history'] = conversation_history
         
     except Exception as e:
-        session['status_message'] = f'❌ Error generating report: {str(e)}'
+        flash_status(f'Error generating report: {str(e)}', 'error')
     
     return redirect(url_for('chat'))
 
@@ -593,11 +609,11 @@ def chat_report():
     
     # Validate input
     if not question:
-        session['status_message'] = '⚠️ Please enter a question.'
+        flash_status('Please enter a question.', 'info')
         return redirect(url_for('index'))
     
     if 'current_report_id' not in session:
-        session['status_message'] = '❌ No report available. Please generate a report first.'
+        flash_status('No report available. Please generate a report first.', 'error')
         return redirect(url_for('index'))
     
     try:
@@ -613,10 +629,10 @@ def chat_report():
         chat_history.append({"role": "user", "content": question})
         chat_history.append({"role": "assistant", "content": answer})
         session['chat_history'] = chat_history
-        session['status_message'] = '✅ Answer received'
+        flash_status('Answer received', 'success')
         
     except Exception as e:
-        session['status_message'] = f'❌ Error: {str(e)}'
+        flash_status(f'Error: {str(e)}', 'error')
     
     return redirect(url_for('index'))
 
@@ -628,7 +644,7 @@ def clear_conversation():
     session['conversation_history'] = []
     session['current_ticker'] = ''
     session['current_trade_type'] = 'Investment'
-    session['status_message'] = 'Conversation cleared. Ready for new research.'
+    flash_status('Conversation cleared. Ready for new research.', 'info')
 
     # Optionally reset agent
     session_id = get_or_create_session_id()
@@ -757,12 +773,12 @@ def portfolio():
     """Portfolio list page."""
     portfolio_service = get_portfolio_service()
     data = portfolio_service.get_portfolios_with_summaries(user_id=session['user_id'])
-    status_message = session.pop('status_message', None)
+    status = pop_status()
     return render_template(
         'portfolio_list.html',
         portfolios=data['portfolios'],
         overall=data['overall'],
-        status_message=status_message,
+        **status,
         user_id=session.get('user_id', '')
     )
 
@@ -773,7 +789,7 @@ def create_portfolio_route():
     """Create a new portfolio."""
     name = request.form.get('name', '').strip()
     if not name:
-        session['status_message'] = '❌ Portfolio name is required'
+        flash_status('Portfolio name is required', 'error')
         return redirect(url_for('portfolio'))
     track_cash = request.form.get('track_cash') == 'on'
     cash_balance = 0.0
@@ -828,22 +844,22 @@ def portfolio_detail(portfolio_id: str):
         abort(404)
     try:
         summary = portfolio_service.get_portfolio_summary(portfolio_id, with_prices=False)
-        status_message = session.pop('status_message', None)
+        status = pop_status()
         return render_template(
             'portfolio.html',
             portfolio=portfolio_data,
             summary=summary,
             holdings=summary['holdings'],
-            status_message=status_message
+            **status
         )
     except Exception as e:
-        session['status_message'] = f'❌ Error loading portfolio: {str(e)}'
+        flash_status(f'Error loading portfolio: {str(e)}', 'error')
         return render_template(
             'portfolio.html',
             portfolio=portfolio_data,
             summary=None,
             holdings=[],
-            status_message=session.pop('status_message', None)
+            **pop_status()
         )
 
 
@@ -894,16 +910,16 @@ def add_transaction(portfolio_id: str):
                 asset_type=asset_type if asset_type else None,
             )
 
-            session['status_message'] = f'✅ Transaction added: {transaction_type.upper()} {quantity} {symbol}'
+            flash_status(f'Transaction added: {transaction_type.upper()} {quantity} {symbol}', 'success')
 
         except Exception as e:
-            session['status_message'] = f'❌ Error: {str(e)}'
+            flash_status(f'Error: {str(e)}', 'error')
 
         return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
     # GET request - show form
-    status_message = session.pop('status_message', None)
-    return render_template('add_transaction.html', portfolio=portfolio_data, status_message=status_message)
+    status = pop_status()
+    return render_template('add_transaction.html', portfolio=portfolio_data, **status)
 
 
 @app.route('/portfolio/<portfolio_id>/import', methods=['GET', 'POST'])
@@ -936,20 +952,20 @@ def import_csv(portfolio_id: str):
             )
 
             if result.error_count > 0:
-                session['status_message'] = f'⚠️ Imported {result.success_count} transactions, {result.error_count} errors'
+                flash_status(f'Imported {result.success_count} transactions, {result.error_count} errors', 'info')
                 session['import_errors'] = result.errors[:10]
             else:
-                session['status_message'] = f'✅ Successfully imported {result.success_count} transactions'
+                flash_status(f'Successfully imported {result.success_count} transactions', 'success')
 
         except Exception as e:
-            session['status_message'] = f'❌ Import failed: {str(e)}'
+            flash_status(f'Import failed: {str(e)}', 'error')
 
         return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
     # GET request - show import form
-    status_message = session.pop('status_message', None)
+    status = pop_status()
     import_errors = session.pop('import_errors', None)
-    return render_template('import_csv.html', portfolio=portfolio_data, status_message=status_message, import_errors=import_errors)
+    return render_template('import_csv.html', portfolio=portfolio_data, **status, import_errors=import_errors)
 
 
 @app.route('/portfolio/<portfolio_id>/holding/<symbol>')
@@ -965,11 +981,11 @@ def holding_detail(portfolio_id: str, symbol: str):
         holding = portfolio_service.get_holding(portfolio_id, symbol)
 
         if not holding:
-            session['status_message'] = f'⚠️ Holding not found: {symbol}'
+            flash_status(f'Holding not found: {symbol}', 'info')
             return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         if holding.get('total_quantity', Decimal('0')) <= Decimal('0'):
-            session['status_message'] = f'⚠️ {symbol} is a closed position with no remaining quantity.'
+            flash_status(f'{symbol} is a closed position with no remaining quantity.', 'info')
             return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         transactions = portfolio_service.get_transactions(holding['holding_id'])
@@ -987,18 +1003,18 @@ def holding_detail(portfolio_id: str, symbol: str):
         else:
             holding['unrealized_gain_pct'] = Decimal('0')
 
-        status_message = session.pop('status_message', None)
+        status = pop_status()
 
         return render_template(
             'holding_detail.html',
             portfolio=portfolio_data,
             holding=holding,
             transactions=transactions,
-            status_message=status_message
+            **status
         )
 
     except Exception as e:
-        session['status_message'] = f'❌ Error: {str(e)}'
+        flash_status(f'Error: {str(e)}', 'error')
         return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
 
@@ -1011,24 +1027,24 @@ def delete_transaction(portfolio_id: str, transaction_id: str):
 
         txn = portfolio_service.get_transaction(transaction_id)
         if not txn:
-            session['status_message'] = '❌ Transaction not found'
+            flash_status('Transaction not found', 'error')
             return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         holding = portfolio_service.get_holding_by_id(txn['holding_id'])
         if not holding or holding.get('portfolio_id') != portfolio_id:
-            session['status_message'] = '❌ Transaction not found'
+            flash_status('Transaction not found', 'error')
             return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
         portfolio = portfolio_service.get_portfolio(holding['portfolio_id'])
         if not portfolio or portfolio.get('user_id') != session['user_id']:
-            session['status_message'] = '❌ Not authorized'
+            flash_status('Not authorized', 'error')
             return redirect(url_for('portfolio'))
 
         symbol = holding['symbol']
         if portfolio_service.delete_transaction(transaction_id):
-            session['status_message'] = '✅ Transaction deleted'
+            flash_status('Transaction deleted', 'success')
         else:
-            session['status_message'] = '❌ Failed to delete transaction'
+            flash_status('Failed to delete transaction', 'error')
 
         if symbol:
             return redirect(url_for('holding_detail', portfolio_id=portfolio_id, symbol=symbol))
@@ -1037,7 +1053,7 @@ def delete_transaction(portfolio_id: str, transaction_id: str):
         from werkzeug.exceptions import HTTPException
         if isinstance(e, HTTPException):
             raise
-        session['status_message'] = f'❌ Error: {str(e)}'
+        flash_status(f'Error: {str(e)}', 'error')
 
     return redirect(url_for('portfolio_detail', portfolio_id=portfolio_id))
 
@@ -1323,11 +1339,11 @@ def chat_with_report(report_id):
                            f"Feel free to ask me any questions about this analysis!"
             }
         ]
-        session['status_message'] = f'Report loaded: {report["ticker"]}'
+        flash_status(f'Report loaded: {report["ticker"]}', 'success')
 
         return redirect(url_for('chat'))
     except Exception as e:
-        session['status_message'] = f'Error loading report: {str(e)}'
+        flash_status(f'Error loading report: {str(e)}', 'error')
         return redirect(url_for('report_history'))
 
 
@@ -1355,19 +1371,19 @@ def watchlist():
             if wl and wl['user_id'] == user_id:
                 active_watchlist = watchlist_svc.get_watchlist_with_items(active_watchlist_id)
 
-        status_message = session.pop('status_message', None)
+        status = pop_status()
         return render_template(
             'watchlist.html',
             watchlists=watchlists,
             active_watchlist=active_watchlist,
-            status_message=status_message
+            **status
         )
     except Exception as e:
         return render_template(
             'watchlist.html',
             watchlists=[],
             active_watchlist=None,
-            status_message=f'Error loading watchlist: {str(e)}'
+            status_message=f'Error loading watchlist: {str(e)}', status_type='error'
         )
 
 
@@ -1378,10 +1394,10 @@ def watchlist_create():
     try:
         watchlist_svc = get_watchlist_service()
         wl_id = watchlist_svc.create_watchlist(session['user_id'], name)
-        session['status_message'] = f'Watchlist "{name}" created'
+        flash_status(f'Watchlist "{name}" created', 'success')
         return redirect(url_for('watchlist', wl=wl_id))
     except Exception as e:
-        session['status_message'] = f'Error: {str(e)}'
+        flash_status(f'Error: {str(e)}', 'error')
         return redirect(url_for('watchlist'))
 
 
@@ -1395,7 +1411,7 @@ def watchlist_rename(watchlist_id):
     name = request.form.get('name', '').strip()
     if name:
         watchlist_svc.rename_watchlist(watchlist_id, name)
-        session['status_message'] = f'Renamed to "{name}"'
+        flash_status(f'Renamed to "{name}"', 'success')
     return redirect(url_for('watchlist', wl=watchlist_id))
 
 
@@ -1407,7 +1423,7 @@ def watchlist_delete(watchlist_id):
     if not wl or wl['user_id'] != session['user_id']:
         abort(403)
     watchlist_svc.delete_watchlist(watchlist_id)
-    session['status_message'] = 'Watchlist deleted'
+    flash_status('Watchlist deleted', 'success')
     return redirect(url_for('watchlist'))
 
 
@@ -1421,15 +1437,15 @@ def watchlist_add_symbol(watchlist_id):
     symbol = request.form.get('symbol', '').strip().upper()
     section_id = request.form.get('section_id') or None
     if not symbol:
-        session['status_message'] = 'Symbol is required'
+        flash_status('Symbol is required', 'error')
         return redirect(url_for('watchlist', wl=watchlist_id))
     try:
         watchlist_svc.add_symbol(watchlist_id, symbol, section_id)
-        session['status_message'] = f'{symbol} added to watchlist'
+        flash_status(f'{symbol} added to watchlist', 'success')
     except ValueError as e:
-        session['status_message'] = str(e)
+        flash_status(str(e), 'error')
     except Exception as e:
-        session['status_message'] = f'Error adding {symbol}: {str(e)}'
+        flash_status(f'Error adding {symbol}: {str(e)}', 'error')
     return redirect(url_for('watchlist', wl=watchlist_id))
 
 
@@ -1458,7 +1474,7 @@ def watchlist_remove_item(item_id):
 
     watchlist_id = row['watchlist_id']
     watchlist_svc.remove_symbol(item_id)
-    session['status_message'] = 'Symbol removed'
+    flash_status('Symbol removed', 'success')
     return redirect(url_for('watchlist', wl=watchlist_id))
 
 
@@ -1490,12 +1506,12 @@ def watchlist_toggle_pin(item_id):
     try:
         if row['is_pinned']:
             watchlist_svc.unpin_item(item_id)
-            session['status_message'] = 'Unpinned from homepage'
+            flash_status('Unpinned from homepage', 'success')
         else:
             watchlist_svc.pin_item(user_id, item_id)
-            session['status_message'] = 'Pinned to homepage'
+            flash_status('Pinned to homepage', 'success')
     except ValueError as e:
-        session['status_message'] = str(e)
+        flash_status(str(e), 'error')
 
     return redirect(url_for('watchlist', wl=watchlist_id))
 
@@ -1511,9 +1527,9 @@ def watchlist_create_section(watchlist_id):
     if name:
         try:
             watchlist_svc.create_section(watchlist_id, name)
-            session['status_message'] = f'Section "{name}" created'
+            flash_status(f'Section "{name}" created', 'success')
         except Exception as e:
-            session['status_message'] = f'Error creating section: {str(e)}'
+            flash_status(f'Error creating section: {str(e)}', 'error')
     return redirect(url_for('watchlist', wl=watchlist_id))
 
 
@@ -1542,7 +1558,7 @@ def watchlist_rename_section(section_id):
     name = request.form.get('name', '').strip()
     if name:
         watchlist_svc.rename_section(section_id, name)
-        session['status_message'] = f'Section renamed to "{name}"'
+        flash_status(f'Section renamed to "{name}"', 'success')
     return redirect(url_for('watchlist', wl=row['watchlist_id']))
 
 
@@ -1569,7 +1585,7 @@ def watchlist_delete_section(section_id):
         abort(403)
 
     watchlist_svc.delete_section(section_id)
-    session['status_message'] = 'Section deleted'
+    flash_status('Section deleted', 'success')
     return redirect(url_for('watchlist', wl=row['watchlist_id']))
 
 

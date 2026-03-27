@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}StockIntel - Signing you in{% endblock %}
+{% block title %}StockPro - Signing you in{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex items-center justify-center bg-background-dark">
+{% include '_nav.html' %}
+<div class="min-h-[calc(100vh-57px)] flex items-center justify-center">
     <div class="flex flex-col items-center gap-4">
-        <span class="material-symbols-outlined text-4xl text-primary animate-pulse">sync</span>
-        <p class="text-stone-400 font-body">Completing sign-in…</p>
+        <span class="material-symbols-outlined text-4xl text-zinc-400 animate-pulse">sync</span>
+        <p class="text-zinc-500 text-sm">Completing sign-in…</p>
     </div>
 </div>
 <script>

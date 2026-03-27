@@ -1,82 +1,133 @@
 {% extends "base.html" %}
 
-{% block title %}{{ report.ticker }} Report - StockIntel{% endblock %}
+{% block title %}{{ report.ticker }} Report - StockPro{% endblock %}
 
 {% block extra_head %}
 <style>
+    .markdown-content {
+        color-scheme: light dark;
+    }
+
     .markdown-content h1 {
         font-size: 1.75rem;
-        font-weight: 800;
+        font-weight: 700;
         margin-top: 2rem;
         margin-bottom: 1rem;
         padding-bottom: 0.5rem;
-        border-bottom: 1px solid #292524;
+        border-bottom: 1px solid;
+        border-color: #e4e4e7;
     }
+
+    @media (prefers-color-scheme: dark) {
+        .markdown-content h1 {
+            border-color: #27272a;
+        }
+    }
+
+    .dark .markdown-content h1 {
+        border-color: #27272a;
+    }
+
     .markdown-content h2 {
         font-size: 1.5rem;
         font-weight: 700;
         margin-top: 1.75rem;
         margin-bottom: 0.75rem;
     }
+
     .markdown-content h3 {
         font-size: 1.25rem;
         font-weight: 600;
         margin-top: 1.5rem;
         margin-bottom: 0.5rem;
     }
+
     .markdown-content p {
         margin-bottom: 1rem;
         line-height: 1.75;
     }
-    .markdown-content ul, .markdown-content ol {
+
+    .markdown-content ul,
+    .markdown-content ol {
         margin-bottom: 1rem;
         padding-left: 1.5rem;
     }
+
     .markdown-content li {
         margin-bottom: 0.5rem;
     }
+
     .markdown-content strong {
         font-weight: 600;
-        color: #d6d3d1;
+        color: inherit;
     }
+
     .markdown-content blockquote {
-        border-left: 3px solid #d6d3d1;
+        border-left: 3px solid #d4d4d8;
         padding-left: 1rem;
         margin: 1rem 0;
-        color: #a8a29e;
+        color: #71717a;
         font-style: italic;
     }
+
+    .dark .markdown-content blockquote {
+        border-left-color: #3f3f46;
+    }
+
     .markdown-content code {
-        background: #1c1917;
+        background: #f4f4f5;
         padding: 0.2em 0.4em;
         border-radius: 0.25rem;
         font-size: 0.875em;
         font-family: ui-monospace, monospace;
     }
+
+    .dark .markdown-content code {
+        background: #18181b;
+    }
+
     .markdown-content pre {
-        background: #1c1917;
+        background: #f4f4f5;
         padding: 1rem;
-        border-radius: 0.75rem;
+        border-radius: 0.5rem;
         overflow-x: auto;
         margin: 1rem 0;
     }
+
+    .dark .markdown-content pre {
+        background: #18181b;
+    }
+
     .markdown-content pre code {
         background: none;
         padding: 0;
     }
+
     .markdown-content table {
         width: 100%;
         border-collapse: collapse;
         margin: 1rem 0;
     }
-    .markdown-content th, .markdown-content td {
-        border: 1px solid #292524;
+
+    .markdown-content th,
+    .markdown-content td {
+        border: 1px solid #e4e4e7;
         padding: 0.75rem;
         text-align: left;
     }
+
+    .dark .markdown-content th,
+    .dark .markdown-content td {
+        border-color: #27272a;
+    }
+
     .markdown-content th {
-        background: #1c1917;
+        background: #f4f4f5;
         font-weight: 600;
+    }
+
+    .dark .markdown-content th {
+        background: #18181b;
     }
 </style>
 {% endblock %}
@@ -86,31 +137,31 @@
 
 <main class="flex-1 flex flex-col w-full max-w-4xl mx-auto px-4 md:px-10 py-8 pb-32">
     <!-- Back Link -->
-    <a href="{{ url_for('report_history') }}" class="inline-flex items-center gap-2 text-stone-500 hover:text-primary transition-colors text-sm mb-6">
+    <a href="{{ url_for('report_history') }}" class="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm mb-6">
         <span class="material-symbols-outlined text-lg">arrow_back</span>
         Back to Reports
     </a>
 
     <!-- Report Header -->
-    <div class="bg-white dark:bg-surface-dark rounded-3xl p-8 border border-stone-200 dark:border-border-dark mb-8">
+    <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-8 border border-zinc-200 dark:border-zinc-800 mb-8">
         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
             <div class="flex items-start gap-4">
-                <div class="size-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span class="text-primary font-display font-bold text-2xl">{{ report.ticker[:3] }}</span>
+                <div class="size-16 rounded-lg bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <span class="text-zinc-950 dark:text-zinc-50 font-semibold text-2xl">{{ report.ticker[:3] }}</span>
                 </div>
                 <div>
-                    <h1 class="text-3xl font-display font-extrabold text-stone-900 dark:text-white mb-2">{{ report.ticker }}</h1>
+                    <h1 class="text-3xl font-semibold text-zinc-950 dark:text-zinc-50 mb-2">{{ report.ticker }}</h1>
                     <div class="flex flex-wrap items-center gap-3">
-                        <span class="px-3 py-1 bg-primary/10 text-primary rounded-lg text-sm font-bold">{{ report.trade_type }}</span>
-                        <span class="text-stone-500 text-sm flex items-center gap-1">
+                        <span class="px-3 py-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 rounded-lg text-sm font-semibold">{{ report.trade_type }}</span>
+                        <span class="text-zinc-500 text-sm flex items-center gap-1">
                             <span class="material-symbols-outlined text-sm">schedule</span>
                             {{ report.created_at.strftime('%B %d, %Y at %I:%M %p') if report.created_at else 'Unknown date' }}
                         </span>
                     </div>
                 </div>
             </div>
-            <div class="flex items-center gap-2 text-xs text-stone-500 font-mono">
-                <span class="px-3 py-1.5 bg-stone-100 dark:bg-background-dark rounded-lg">
+            <div class="flex items-center gap-2 text-xs text-zinc-500 font-mono">
+                <span class="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
                     ID: {{ report.report_id[:8] }}...
                 </span>
             </div>
@@ -118,28 +169,28 @@
     </div>
 
     <!-- Report Content -->
-    <article class="bg-white dark:bg-surface-dark rounded-3xl p-8 md:p-10 border border-stone-200 dark:border-border-dark">
-        <div class="markdown-content text-stone-300">{{ report.report_text | markdown }}</div>
+    <article class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-8 md:p-10 border border-zinc-200 dark:border-zinc-800">
+        <div class="markdown-content text-zinc-950 dark:text-zinc-50">{{ report.report_text | markdown }}</div>
     </article>
 </main>
 
 <!-- Sticky Action Bar -->
-<div class="fixed bottom-0 left-0 right-0 bg-background-dark/95 backdrop-blur-md border-t border-border-dark py-4 px-4 md:px-10 z-40">
+<div class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 py-4 px-4 md:px-10 z-40">
     <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-3">
         <a href="{{ url_for('download_report_pdf', report_id=report.report_id) }}"
-           class="flex items-center gap-2 px-6 py-3 bg-primary text-background-dark font-bold rounded-xl hover:brightness-110 transition-all">
+           class="flex items-center gap-2 px-6 py-3 bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 font-semibold rounded-lg hover:opacity-90 transition-all">
             <span class="material-symbols-outlined">download</span>
             Download PDF
         </a>
 
         <button onclick="copyShareLink()" id="copy-link-btn"
-                class="flex items-center gap-2 px-6 py-3 bg-surface-dark border border-border-dark text-white font-bold rounded-xl hover:border-primary/50 transition-all">
+                class="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 font-semibold rounded-lg hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
             <span class="material-symbols-outlined" id="copy-icon">link</span>
             <span id="copy-text">Copy Link</span>
         </button>
 
         <a href="{{ url_for('chat_with_report', report_id=report.report_id) }}"
-           class="flex items-center gap-2 px-6 py-3 bg-surface-dark border border-border-dark text-white font-bold rounded-xl hover:border-primary/50 transition-all">
+           class="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 font-semibold rounded-lg hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
             <span class="material-symbols-outlined">chat</span>
             Ask Questions
         </a>
@@ -157,13 +208,13 @@
             // Show success state
             icon.textContent = 'check';
             text.textContent = 'Copied!';
-            btn.classList.add('border-accent-up');
+            btn.classList.add('border-green-500');
 
             // Reset after 2 seconds
             setTimeout(() => {
                 icon.textContent = 'link';
                 text.textContent = 'Copy Link';
-                btn.classList.remove('border-accent-up');
+                btn.classList.remove('border-green-500');
             }, 2000);
         }).catch(err => {
             console.error('Failed to copy:', err);
