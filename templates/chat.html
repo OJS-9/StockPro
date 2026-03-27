@@ -3,21 +3,21 @@
 {% block content %}
 {% include '_nav.html' %}
 
-<main class="flex-1 flex flex-col w-full max-w-6xl mx-auto px-4 py-6">
+<main class="flex-1 flex flex-col w-full max-w-4xl mx-auto px-4 py-6">
     <div class="flex-1 overflow-y-auto mb-4 space-y-6 pb-4" id="chat-messages">
         {% if not conversation_history or conversation_history|length == 0 %}
         <!-- AI Greeting Message -->
         <div class="flex items-start gap-3">
-            <div class="flex-shrink-0 size-8 rounded-full bg-surface-dark flex items-center justify-center">
-                <span class="material-symbols-outlined text-white text-xl">smart_toy</span>
+            <div class="flex-shrink-0 size-7 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                <span class="material-symbols-outlined text-zinc-500 text-base">smart_toy</span>
             </div>
             <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-sm font-bold text-white">StockIntel AI</span>
-                    <span class="text-xs text-stone-500">10:02 AM</span>
+                <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">StockPro AI</span>
+                    <span class="text-xs text-zinc-400">10:02 AM</span>
                 </div>
-                <div class="bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl">
-                    <p class="text-white text-sm leading-relaxed">
+                <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg rounded-tl-sm px-4 py-3 max-w-3xl">
+                    <p class="text-zinc-700 dark:text-zinc-300 text-sm leading-relaxed">
                         Hello! I'm your advanced market research assistant. I can analyze real-time stock data, summarize complex financial reports, or visualize market trends for you. Try asking: 'Analyze NVDA performance' or 'What's happening with Crypto today?'
                     </p>
                 </div>
@@ -30,32 +30,32 @@
                 <div class="flex items-start gap-3 justify-end">
                     <div class="flex-1 flex justify-end">
                         <div class="max-w-3xl">
-                            <div class="flex items-center gap-2 mb-1 justify-end">
-                                <span class="text-xs text-stone-500">10:02 AM</span>
-                                <span class="text-sm font-bold text-white">You</span>
+                            <div class="flex items-center gap-2 mb-1.5 justify-end">
+                                <span class="text-xs text-zinc-400">10:02 AM</span>
+                                <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">You</span>
                             </div>
-                            <div class="bg-surface-dark rounded-2xl px-4 py-3">
-                                <p class="text-white text-sm leading-relaxed">{{ message.content }}</p>
+                            <div class="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg rounded-tr-sm px-4 py-3">
+                                <p class="text-zinc-800 dark:text-zinc-200 text-sm leading-relaxed">{{ message.content }}</p>
                             </div>
                         </div>
                     </div>
-                    <div class="flex-shrink-0 size-8 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span class="material-symbols-outlined text-white text-xl">person</span>
+                    <div class="flex-shrink-0 size-7 rounded-md bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-zinc-500 text-base">person</span>
                     </div>
                 </div>
                 {% else %}
                 <!-- AI Message -->
                 <div class="flex items-start gap-3">
-                    <div class="flex-shrink-0 size-8 rounded-full bg-surface-dark flex items-center justify-center">
-                        <span class="material-symbols-outlined text-white text-xl">smart_toy</span>
+                    <div class="flex-shrink-0 size-7 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-zinc-500 text-base">smart_toy</span>
                     </div>
                     <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="text-sm font-bold text-white">StockIntel AI</span>
-                            <span class="text-xs text-stone-500">10:02 AM</span>
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">StockPro AI</span>
+                            <span class="text-xs text-zinc-400">10:02 AM</span>
                         </div>
-                        <div class="bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl">
-                            <div class="text-white text-sm leading-relaxed markdown-content" data-markdown="{{ message.content | e }}"></div>
+                        <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg rounded-tl-sm px-4 py-3 max-w-3xl">
+                            <div class="text-zinc-700 dark:text-zinc-300 text-sm leading-relaxed markdown-content" data-markdown="{{ message.content | e }}"></div>
                         </div>
                     </div>
                 </div>
@@ -63,31 +63,28 @@
             {% endfor %}
         {% endif %}
     </div>
-    
+
     <!-- Input Field -->
-    <div class="sticky bottom-0 bg-background-dark pt-4 pb-2">
-        <form method="POST" action="{{ url_for('continue_conversation') }}" class="flex items-center gap-2 bg-surface-dark rounded-2xl p-2 border border-border-dark">
+    <div class="sticky bottom-0 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 px-0 py-4">
+        <form method="POST" action="{{ url_for('continue_conversation') }}" class="flex items-center gap-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="button" class="flex-shrink-0 size-10 flex items-center justify-center text-stone-400 hover:text-white transition-colors">
-                <span class="material-symbols-outlined text-2xl">add</span>
-            </button>
-            <input 
-                type="text" 
+            <input
+                type="text"
                 name="user_response"
                 id="user_response"
-                placeholder="Ask about stocks, markets, or news..." 
-                class="flex-1 bg-transparent border-none text-white placeholder:text-stone-500 focus:ring-0 focus:outline-none text-sm"
+                placeholder="Ask about stocks, markets, or news..."
+                class="flex-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-colors"
                 required
             />
-            <button 
-                type="submit" 
-                class="flex-shrink-0 size-10 rounded-full bg-primary hover:bg-white text-background-dark flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+            <button
+                type="submit"
+                class="flex-shrink-0 size-9 rounded-md bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 flex items-center justify-center hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors active:scale-95"
             >
-                <span class="material-symbols-outlined text-xl">arrow_upward</span>
+                <span class="material-symbols-outlined text-base">arrow_upward</span>
             </button>
         </form>
-        <p class="text-xs text-stone-500 text-center mt-2">
-            StockIntel AI can make mistakes. Verify important financial data.
+        <p class="text-xs text-zinc-400 text-center mt-2">
+            StockPro AI can make mistakes. Verify important financial data.
         </p>
     </div>
 </main>
@@ -140,7 +137,7 @@
             const submitButton = form.querySelector('button[type="submit"]');
             const originalButtonContent = submitButton.innerHTML;
             submitButton.disabled = true;
-            submitButton.innerHTML = '<span class="material-symbols-outlined text-xl animate-spin">sync</span>';
+            submitButton.innerHTML = '<span class="material-symbols-outlined text-base animate-spin">sync</span>';
             input.disabled = true;
             input.value = '';
 
@@ -247,7 +244,7 @@
             }
         });
     });
-    
+
     // Helper function to scroll to bottom
     function scrollToBottom() {
         const chatMessages = document.getElementById('chat-messages');
@@ -258,7 +255,7 @@
             });
         }
     }
-    
+
     // Create user message element
     function createUserMessage(content) {
         const div = document.createElement('div');
@@ -267,50 +264,50 @@
         div.innerHTML = `
             <div class="flex-1 flex justify-end">
                 <div class="max-w-3xl">
-                    <div class="flex items-center gap-2 mb-1 justify-end">
-                        <span class="text-xs text-stone-500">${timeString}</span>
-                        <span class="text-sm font-bold text-white">You</span>
+                    <div class="flex items-center gap-2 mb-1.5 justify-end">
+                        <span class="text-xs text-zinc-400">${timeString}</span>
+                        <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">You</span>
                     </div>
-                    <div class="bg-surface-dark rounded-2xl px-4 py-3">
-                        <p class="text-white text-sm leading-relaxed">${escapeHtml(content)}</p>
+                    <div class="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg rounded-tr-sm px-4 py-3">
+                        <p class="text-zinc-800 dark:text-zinc-200 text-sm leading-relaxed">${escapeHtml(content)}</p>
                     </div>
                 </div>
             </div>
-            <div class="flex-shrink-0 size-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span class="material-symbols-outlined text-white text-xl">person</span>
+            <div class="flex-shrink-0 size-7 rounded-md bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center">
+                <span class="material-symbols-outlined text-zinc-500 text-base">person</span>
             </div>
         `;
         return div;
     }
-    
+
     // Create assistant message element
     function createAssistantMessage(content) {
         const div = document.createElement('div');
         div.className = 'flex items-start gap-3';
         const timeString = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
+
         // Render and sanitize markdown
         const markdownContent = typeof marked !== 'undefined'
             ? DOMPurify.sanitize(marked.parse(content))
             : escapeHtml(content);
-        
+
         div.innerHTML = `
-            <div class="flex-shrink-0 size-8 rounded-full bg-surface-dark flex items-center justify-center">
-                <span class="material-symbols-outlined text-white text-xl">smart_toy</span>
+            <div class="flex-shrink-0 size-7 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                <span class="material-symbols-outlined text-zinc-500 text-base">smart_toy</span>
             </div>
             <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-sm font-bold text-white">StockIntel AI</span>
-                    <span class="text-xs text-stone-500">${timeString}</span>
+                <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">StockPro AI</span>
+                    <span class="text-xs text-zinc-400">${timeString}</span>
                 </div>
-                <div class="bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl">
-                    <div class="text-white text-sm leading-relaxed markdown-content">${markdownContent}</div>
+                <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg rounded-tl-sm px-4 py-3 max-w-3xl">
+                    <div class="text-zinc-700 dark:text-zinc-300 text-sm leading-relaxed markdown-content">${markdownContent}</div>
                 </div>
             </div>
         `;
         return div;
     }
-    
+
     // Create working bubble with spinner — updated in real time via SSE steps
     function createWorkingBubble(initialMessage) {
         const div = document.createElement('div');
@@ -318,18 +315,18 @@
         div.id = 'working-bubble';
         const timeString = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         div.innerHTML = `
-            <div class="flex-shrink-0 size-8 rounded-full bg-surface-dark flex items-center justify-center">
-                <span class="material-symbols-outlined text-white text-xl">smart_toy</span>
+            <div class="flex-shrink-0 size-7 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                <span class="material-symbols-outlined text-zinc-500 text-base">smart_toy</span>
             </div>
             <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-sm font-bold text-white">StockIntel AI</span>
-                    <span class="text-xs text-stone-500">${timeString}</span>
+                <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">StockPro AI</span>
+                    <span class="text-xs text-zinc-400">${timeString}</span>
                 </div>
-                <div class="bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl">
+                <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg rounded-tl-sm px-4 py-3 max-w-3xl">
                     <div class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-stone-400 text-base animate-spin">autorenew</span>
-                        <span class="animate-pulse text-stone-400 text-sm" id="working-step-text">${escapeHtml(initialMessage)}</span>
+                        <span class="material-symbols-outlined text-zinc-400 text-base animate-spin">autorenew</span>
+                        <span class="animate-pulse text-zinc-500 text-sm" id="working-step-text">${escapeHtml(initialMessage)}</span>
                     </div>
                 </div>
             </div>
@@ -341,24 +338,24 @@
         const el = div.querySelector('#working-step-text');
         if (el) el.textContent = message;
     }
-    
+
     // Create error message element
     function createErrorMessage(content) {
         const div = document.createElement('div');
         div.className = 'flex items-start gap-3';
         div.innerHTML = `
-            <div class="flex-shrink-0 size-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                <span class="material-symbols-outlined text-red-400 text-xl">error</span>
+            <div class="flex-shrink-0 size-7 rounded-md bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
+                <span class="material-symbols-outlined text-red-500 text-base">error</span>
             </div>
             <div class="flex-1">
-                <div class="bg-red-500/10 rounded-2xl px-4 py-3 max-w-3xl border border-red-500/20">
-                    <p class="text-red-400 text-sm leading-relaxed">${escapeHtml(content)}</p>
+                <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-lg rounded-tl-sm px-4 py-3 max-w-3xl">
+                    <p class="text-red-600 dark:text-red-400 text-sm leading-relaxed">${escapeHtml(content)}</p>
                 </div>
             </div>
         `;
         return div;
     }
-    
+
     // Escape HTML to prevent XSS
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -372,155 +369,207 @@
     .markdown-content {
         line-height: 1.7;
     }
-    
+
     .markdown-content h1,
     .markdown-content h2,
     .markdown-content h3,
     .markdown-content h4,
     .markdown-content h5,
     .markdown-content h6 {
-        color: #ffffff;
-        font-weight: 700;
-        margin-top: 1.5em;
-        margin-bottom: 0.75em;
+        color: inherit;
+        font-weight: 600;
+        margin-top: 1.25em;
+        margin-bottom: 0.5em;
         line-height: 1.3;
     }
-    
+
     .markdown-content h1 {
-        font-size: 1.5em;
-        border-bottom: 1px solid #292524;
-        padding-bottom: 0.5em;
-    }
-    
-    .markdown-content h2 {
-        font-size: 1.3em;
-        border-bottom: 1px solid #292524;
+        font-size: 1.2em;
+        border-bottom: 1px solid #e4e4e7;
         padding-bottom: 0.4em;
     }
-    
+
+    @media (prefers-color-scheme: dark) {
+        .markdown-content h1,
+        .markdown-content h2 {
+            border-bottom-color: #27272a;
+        }
+    }
+
+    .dark .markdown-content h1,
+    .dark .markdown-content h2 {
+        border-bottom-color: #27272a;
+    }
+
+    .markdown-content h2 {
+        font-size: 1.1em;
+        border-bottom: 1px solid #e4e4e7;
+        padding-bottom: 0.3em;
+    }
+
     .markdown-content h3 {
-        font-size: 1.15em;
+        font-size: 1.0em;
     }
-    
+
     .markdown-content h4 {
-        font-size: 1.05em;
+        font-size: 0.95em;
     }
-    
+
     .markdown-content p {
-        margin-bottom: 1em;
+        margin-bottom: 0.85em;
     }
-    
+
     .markdown-content ul,
     .markdown-content ol {
-        margin: 1em 0;
+        margin: 0.85em 0;
         padding-left: 1.5em;
     }
-    
+
     .markdown-content li {
-        margin: 0.5em 0;
+        margin: 0.35em 0;
     }
-    
+
     .markdown-content ul {
         list-style-type: disc;
     }
-    
+
     .markdown-content ol {
         list-style-type: decimal;
     }
-    
+
     .markdown-content code {
-        background-color: #0c0a09;
-        color: #22c55e;
-        padding: 0.2em 0.4em;
+        background-color: #f4f4f5;
+        color: #18181b;
+        padding: 0.15em 0.35em;
         border-radius: 0.25rem;
         font-family: 'Courier New', monospace;
-        font-size: 0.9em;
-        border: 1px solid #292524;
+        font-size: 0.875em;
+        border: 1px solid #e4e4e7;
     }
-    
+
+    .dark .markdown-content code {
+        background-color: #18181b;
+        color: #a1a1aa;
+        border-color: #3f3f46;
+    }
+
     .markdown-content pre {
-        background-color: #0c0a09;
-        border: 1px solid #292524;
+        background-color: #f4f4f5;
+        border: 1px solid #e4e4e7;
         border-radius: 0.5rem;
         padding: 1em;
         overflow-x: auto;
-        margin: 1em 0;
+        margin: 0.85em 0;
     }
-    
+
+    .dark .markdown-content pre {
+        background-color: #18181b;
+        border-color: #3f3f46;
+    }
+
     .markdown-content pre code {
         background-color: transparent;
-        color: #d6d3d1;
+        color: inherit;
         padding: 0;
         border: none;
         display: block;
         white-space: pre;
     }
-    
+
     .markdown-content blockquote {
-        border-left: 4px solid #d6d3d1;
+        border-left: 3px solid #d4d4d8;
         padding-left: 1em;
-        margin: 1em 0;
-        color: #a8a29e;
+        margin: 0.85em 0;
+        color: #71717a;
         font-style: italic;
     }
-    
+
+    .dark .markdown-content blockquote {
+        border-left-color: #52525b;
+        color: #a1a1aa;
+    }
+
     .markdown-content table {
         width: 100%;
         border-collapse: collapse;
-        margin: 1em 0;
-        border: 1px solid #292524;
+        margin: 0.85em 0;
+        border: 1px solid #e4e4e7;
+        font-size: 0.875em;
     }
-    
+
+    .dark .markdown-content table {
+        border-color: #3f3f46;
+    }
+
     .markdown-content th,
     .markdown-content td {
-        padding: 0.75em;
+        padding: 0.6em 0.75em;
         text-align: left;
-        border: 1px solid #292524;
+        border: 1px solid #e4e4e7;
     }
-    
+
+    .dark .markdown-content th,
+    .dark .markdown-content td {
+        border-color: #3f3f46;
+    }
+
     .markdown-content th {
-        background-color: #1c1917;
+        background-color: #f4f4f5;
         font-weight: 600;
-        color: #ffffff;
     }
-    
+
+    .dark .markdown-content th {
+        background-color: #27272a;
+    }
+
     .markdown-content td {
-        background-color: #0c0a09;
+        background-color: transparent;
     }
-    
+
     .markdown-content a {
-        color: #22c55e;
+        color: #3f3f46;
         text-decoration: underline;
-        transition: color 0.2s;
+        text-underline-offset: 2px;
+        transition: color 0.15s;
     }
-    
+
+    .dark .markdown-content a {
+        color: #a1a1aa;
+    }
+
     .markdown-content a:hover {
-        color: #16a34a;
+        color: #18181b;
     }
-    
+
+    .dark .markdown-content a:hover {
+        color: #e4e4e7;
+    }
+
     .markdown-content hr {
         border: none;
-        border-top: 1px solid #292524;
-        margin: 2em 0;
+        border-top: 1px solid #e4e4e7;
+        margin: 1.5em 0;
     }
-    
+
+    .dark .markdown-content hr {
+        border-top-color: #3f3f46;
+    }
+
     .markdown-content strong {
-        font-weight: 700;
-        color: #ffffff;
+        font-weight: 600;
     }
-    
+
     .markdown-content em {
         font-style: italic;
     }
-    
+
     .markdown-content img {
         max-width: 100%;
         height: auto;
-        border-radius: 0.5rem;
-        margin: 1em 0;
+        border-radius: 0.375rem;
+        margin: 0.85em 0;
     }
 </style>
 
 {% include '_footer.html' %}
 {% endblock %}
-

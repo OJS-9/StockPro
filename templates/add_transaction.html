@@ -1,166 +1,119 @@
 {% extends "base.html" %}
 
-{% block title %}Add Transaction - StockIntel{% endblock %}
+{% block title %}Add Transaction - StockPro{% endblock %}
 
 {% block content %}
 {% include '_nav.html' %}
 
-    <!-- Main Content -->
-    <main class="flex-1 px-6 py-8">
+    <main class="flex-1 px-4 md:px-8 py-8">
         <div class="max-w-3xl mx-auto">
-            <div class="flex items-center gap-3 mb-6">
-                <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="flex items-center text-stone-400 hover:text-white transition-colors">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                </a>
-                <h1 class="text-2xl font-display font-bold">Add Transaction</h1>
+            <div class="flex items-center gap-2 text-sm text-zinc-500 mb-6">
+                <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors">{{ portfolio.name }}</a>
+                <span class="material-symbols-outlined text-sm">chevron_right</span>
+                <span class="text-zinc-950 dark:text-zinc-50">Add Transaction</span>
             </div>
-            <!-- Status Message -->
+
             {% if status_message %}
-            <div class="mb-6 p-4 rounded-lg {% if '❌' in status_message %}bg-red-500/20 border border-red-500/50{% elif '⚠️' in status_message %}bg-yellow-500/20 border border-yellow-500/50{% else %}bg-green-500/20 border border-green-500/50{% endif %}">
-                <p class="text-sm">{{ status_message }}</p>
+            <div class="mb-6 flex items-start gap-3 {{ 'bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400' if status_type == 'error' else ('bg-green-600/10 border border-green-600/25 text-green-700 dark:text-green-400' if status_type == 'success' else 'bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300') }} rounded-lg px-4 py-3 text-sm">
+                <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">{{ 'error' if status_type == 'error' else ('check_circle' if status_type == 'success' else 'info') }}</span>
+                <p>{{ status_message }}</p>
             </div>
             {% endif %}
 
-            <!-- Form -->
-            <form method="POST" action="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="bg-surface-dark rounded-xl border border-border-dark">
+            <form method="POST" action="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}" class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-card dark:shadow-none">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="p-6 space-y-6">
-                    <!-- Symbol & Asset Type -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="symbol" class="block text-sm font-medium text-stone-300 mb-2">Symbol *</label>
-                            <input
-                                type="text"
-                                id="symbol"
-                                name="symbol"
-                                required
-                                placeholder="AAPL, BTC, ETH..."
-                                class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500 uppercase"
-                            />
-                            <p class="mt-1 text-xs text-stone-500">Crypto symbols auto-detected (BTC, ETH, SOL, etc.)</p>
+                        <div class="space-y-1.5">
+                            <label for="symbol" class="block text-xs font-medium text-zinc-500">Symbol *</label>
+                            <input type="text" id="symbol" name="symbol" required placeholder="AAPL, BTC, ETH..."
+                                class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all uppercase"/>
+                            <p class="text-xs text-zinc-400">Crypto symbols auto-detected (BTC, ETH, SOL, etc.)</p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-stone-300 mb-2">Asset Type</label>
-                            <div class="flex gap-4 py-3">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="asset_type" value="stock" class="w-4 h-4 text-primary focus:ring-primary bg-background-dark border-border-dark">
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-medium text-zinc-500">Asset Type</label>
+                            <div class="flex gap-4 py-2">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                    <input type="radio" name="asset_type" value="stock" class="w-4 h-4 text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400 bg-white dark:bg-zinc-950 border-zinc-300 dark:border-zinc-600">
                                     <span>Stock</span>
                                 </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="asset_type" value="crypto" class="w-4 h-4 text-primary focus:ring-primary bg-background-dark border-border-dark">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                    <input type="radio" name="asset_type" value="crypto" class="w-4 h-4 text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400 bg-white dark:bg-zinc-950 border-zinc-300 dark:border-zinc-600">
                                     <span>Crypto</span>
                                 </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="asset_type" value="" checked class="w-4 h-4 text-primary focus:ring-primary bg-background-dark border-border-dark">
-                                    <span class="text-stone-400">Auto-detect</span>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                    <input type="radio" name="asset_type" value="" checked class="w-4 h-4 text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400 bg-white dark:bg-zinc-950 border-zinc-300 dark:border-zinc-600">
+                                    <span class="text-zinc-400">Auto-detect</span>
                                 </label>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Transaction Type -->
                     <div>
-                        <label class="block text-sm font-medium text-stone-300 mb-2">Transaction Type *</label>
+                        <label class="block text-xs font-medium text-zinc-500 mb-1.5">Transaction Type *</label>
                         <div class="grid grid-cols-2 gap-4">
                             <label class="relative">
                                 <input type="radio" name="transaction_type" value="buy" required class="peer sr-only">
-                                <div class="flex items-center justify-center gap-2 px-4 py-3 bg-background-dark border border-border-dark rounded-lg cursor-pointer peer-checked:border-accent-up peer-checked:bg-accent-up/10 transition-colors">
-                                    <span class="material-symbols-outlined text-accent-up">add_circle</span>
+                                <div class="flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md cursor-pointer peer-checked:border-green-600 dark:peer-checked:border-green-500 peer-checked:bg-green-600/5 transition-colors text-sm">
+                                    <span class="material-symbols-outlined text-green-600 dark:text-green-500 text-lg">add_circle</span>
                                     <span class="font-medium">Buy</span>
                                 </div>
                             </label>
                             <label class="relative">
                                 <input type="radio" name="transaction_type" value="sell" required class="peer sr-only">
-                                <div class="flex items-center justify-center gap-2 px-4 py-3 bg-background-dark border border-border-dark rounded-lg cursor-pointer peer-checked:border-accent-down peer-checked:bg-accent-down/10 transition-colors">
-                                    <span class="material-symbols-outlined text-accent-down">remove_circle</span>
+                                <div class="flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md cursor-pointer peer-checked:border-red-600 dark:peer-checked:border-red-500 peer-checked:bg-red-500/5 transition-colors text-sm">
+                                    <span class="material-symbols-outlined text-red-600 dark:text-red-500 text-lg">remove_circle</span>
                                     <span class="font-medium">Sell</span>
                                 </div>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Quantity & Price -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="quantity" class="block text-sm font-medium text-stone-300 mb-2">Quantity *</label>
-                            <input
-                                type="number"
-                                id="quantity"
-                                name="quantity"
-                                required
-                                step="0.00000001"
-                                min="0"
-                                placeholder="0.00"
-                                class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500"
-                            />
+                        <div class="space-y-1.5">
+                            <label for="quantity" class="block text-xs font-medium text-zinc-500">Quantity *</label>
+                            <input type="number" id="quantity" name="quantity" required step="0.00000001" min="0" placeholder="0.00"
+                                class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
                         </div>
-                        <div>
-                            <label for="price" class="block text-sm font-medium text-stone-300 mb-2">Price per Unit *</label>
+                        <div class="space-y-1.5">
+                            <label for="price" class="block text-xs font-medium text-zinc-500">Price per Unit *</label>
                             <div class="relative">
-                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-stone-500">$</span>
-                                <input
-                                    type="number"
-                                    id="price"
-                                    name="price"
-                                    required
-                                    step="0.00000001"
-                                    min="0"
-                                    placeholder="0.00"
-                                    class="w-full pl-8 pr-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500"
-                                />
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                                <input type="number" id="price" name="price" required step="0.00000001" min="0" placeholder="0.00"
+                                    class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md pl-7 pr-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Date & Fees -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="date" class="block text-sm font-medium text-stone-300 mb-2">Date *</label>
-                            <input
-                                type="date"
-                                id="date"
-                                name="date"
-                                required
-                                class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white"
-                            />
+                        <div class="space-y-1.5">
+                            <label for="date" class="block text-xs font-medium text-zinc-500">Date *</label>
+                            <input type="date" id="date" name="date" required
+                                class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
                         </div>
-                        <div>
-                            <label for="fees" class="block text-sm font-medium text-stone-300 mb-2">Fees (optional)</label>
+                        <div class="space-y-1.5">
+                            <label for="fees" class="block text-xs font-medium text-zinc-500">Fees (optional)</label>
                             <div class="relative">
-                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-stone-500">$</span>
-                                <input
-                                    type="number"
-                                    id="fees"
-                                    name="fees"
-                                    step="0.01"
-                                    min="0"
-                                    placeholder="0.00"
-                                    class="w-full pl-8 pr-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500"
-                                />
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                                <input type="number" id="fees" name="fees" step="0.01" min="0" placeholder="0.00"
+                                    class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md pl-7 pr-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Notes -->
-                    <div>
-                        <label for="notes" class="block text-sm font-medium text-stone-300 mb-2">Notes (optional)</label>
-                        <textarea
-                            id="notes"
-                            name="notes"
-                            rows="2"
-                            placeholder="Add any notes about this transaction..."
-                            class="w-full px-4 py-3 bg-background-dark border border-border-dark rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-stone-500 resize-none"
-                        ></textarea>
+                    <div class="space-y-1.5">
+                        <label for="notes" class="block text-xs font-medium text-zinc-500">Notes (optional)</label>
+                        <textarea id="notes" name="notes" rows="2" placeholder="Add any notes about this transaction..."
+                            class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all resize-none"></textarea>
                     </div>
                 </div>
 
-                <!-- Form Actions -->
-                <div class="px-6 py-4 bg-background-dark/50 border-t border-border-dark flex items-center justify-end gap-3">
-                    <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="px-4 py-2 text-stone-400 hover:text-white transition-colors">
+                <div class="px-6 py-4 bg-zinc-100/50 dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-end gap-3 rounded-b-lg">
+                    <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 font-medium transition-colors">
                         Cancel
                     </a>
-                    <button type="submit" class="flex items-center gap-2 px-6 py-2 bg-accent-up text-background-dark rounded-lg hover:bg-green-400 transition-colors font-medium">
-                        <span class="material-symbols-outlined">add</span>
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                        <span class="material-symbols-outlined text-sm">add</span>
                         Add Transaction
                     </button>
                 </div>
@@ -171,7 +124,6 @@
 {% include '_footer.html' %}
 
 <script>
-    // Set default date to today
     document.getElementById('date').valueAsDate = new Date();
 </script>
 {% endblock %}

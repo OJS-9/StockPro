@@ -4,24 +4,24 @@
 {% include '_nav.html' %}
 
 <main class="flex-1 flex flex-col items-center w-full">
-    <div class="w-full max-w-[1280px] px-4 md:px-10 py-8">
+    <div class="w-full max-w-5xl px-4 md:px-8 py-8">
 
         {% if status_message %}
-        <div class="mb-6 px-4 py-3 rounded-xl border text-sm font-body
-            {{ 'bg-accent-up/10 border-accent-up/30 text-accent-up' if status_message.startswith('Error') or status_message.startswith('You already') else 'bg-surface-dark border-border-dark text-stone-300' }}">
-            {{ status_message }}
+        <div class="mb-6 flex items-start gap-3 {{ 'bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400' if status_type == 'error' else ('bg-green-600/10 border border-green-600/25 text-green-700 dark:text-green-400' if status_type == 'success' else 'bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300') }} rounded-lg px-4 py-3 text-sm">
+            <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">{{ 'error' if status_type == 'error' else ('check_circle' if status_type == 'success' else 'info') }}</span>
+            <p>{{ status_message }}</p>
         </div>
         {% endif %}
 
-        <!-- Page header + watchlist tabs -->
+        <!-- Page header + create watchlist form -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <h1 class="text-white text-3xl font-display font-extrabold">Watchlist</h1>
+            <h1 class="text-zinc-950 dark:text-zinc-50 text-2xl font-semibold">Watchlist</h1>
             <form method="post" action="{{ url_for('watchlist_create') }}" class="flex items-center gap-2">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" placeholder="New watchlist name..." required
-                    class="bg-surface-dark border border-border-dark text-white text-sm rounded-xl px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none placeholder:text-stone-500 w-44">
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 w-48">
                 <button type="submit"
-                    class="px-4 py-2 bg-primary text-background-dark text-sm font-bold rounded-xl hover:brightness-110 transition-all cursor-pointer">
+                    class="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
                     New Watchlist
                 </button>
             </form>
@@ -32,8 +32,8 @@
         <div class="flex flex-wrap gap-2 mb-6">
             {% for wl in watchlists %}
             <a href="{{ url_for('watchlist', wl=wl.watchlist_id) }}"
-                class="px-4 py-2 rounded-xl text-sm font-bold font-body transition-colors cursor-pointer
-                    {{ 'bg-primary text-background-dark' if active_watchlist and wl.watchlist_id == active_watchlist.watchlist_id else 'bg-surface-dark border border-border-dark text-stone-300 hover:border-primary/50 hover:text-white' }}">
+                class="px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer
+                    {{ 'bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900' if active_watchlist and wl.watchlist_id == active_watchlist.watchlist_id else 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700' }}">
                 {{ wl.name }}
             </a>
             {% endfor %}
@@ -43,40 +43,40 @@
         {% if active_watchlist %}
 
         <!-- Active watchlist header: rename + delete -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 p-4 bg-surface-dark rounded-2xl border border-border-dark">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
             <form method="post" action="{{ url_for('watchlist_rename', watchlist_id=active_watchlist.watchlist_id) }}" class="flex items-center gap-2 flex-1 min-w-0">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" value="{{ active_watchlist.name }}" required
-                    class="bg-background-dark border border-border-dark text-white text-sm rounded-xl px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none w-48">
-                <button type="submit" class="px-3 py-2 bg-surface-dark border border-border-dark text-stone-300 text-sm rounded-xl hover:text-white hover:border-white/20 transition-colors cursor-pointer">
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none w-48">
+                <button type="submit" class="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer">
                     Rename
                 </button>
             </form>
             <form method="post" action="{{ url_for('watchlist_delete', watchlist_id=active_watchlist.watchlist_id) }}"
                 onsubmit="return confirm('Delete this watchlist and all its symbols?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="px-3 py-2 text-accent-down text-sm font-bold rounded-xl border border-accent-down/30 hover:bg-accent-down/10 transition-colors cursor-pointer">
+                <button type="submit" class="px-3 py-2 text-red-600 dark:text-red-500 text-sm font-semibold rounded-md border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer">
                     Delete Watchlist
                 </button>
             </form>
         </div>
 
         <!-- Add symbol bar -->
-        <div class="mb-6 p-4 bg-surface-dark rounded-2xl border border-border-dark">
+        <div class="mb-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
             <form method="post" action="{{ url_for('watchlist_add_symbol', watchlist_id=active_watchlist.watchlist_id) }}" class="flex flex-wrap items-center gap-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="symbol" placeholder="Add symbol (e.g. AAPL, ETH)" required
-                    class="bg-background-dark border border-border-dark text-white text-sm rounded-xl px-4 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none placeholder:text-stone-500 uppercase w-56"
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-4 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 uppercase w-56"
                     style="text-transform:uppercase">
                 {% if active_watchlist.sections %}
-                <select name="section_id" class="bg-background-dark border border-border-dark text-stone-300 text-sm rounded-xl px-3 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none">
+                <select name="section_id" class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none">
                     <option value="">No section</option>
                     {% for sec in active_watchlist.sections %}
                     <option value="{{ sec.section_id }}">{{ sec.name }}</option>
                     {% endfor %}
                 </select>
                 {% endif %}
-                <button type="submit" class="px-5 py-2 bg-primary text-background-dark text-sm font-bold rounded-xl hover:brightness-110 transition-all cursor-pointer">
+                <button type="submit" class="px-5 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
                     Add
                 </button>
             </form>
@@ -85,53 +85,53 @@
         <!-- Unsectioned items -->
         {% if active_watchlist.unsectioned_items %}
         <div class="mb-6">
-            <div class="bg-surface-dark rounded-2xl border border-border-dark overflow-hidden">
-                <table class="w-full text-sm font-body">
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-border-dark text-stone-500 text-xs uppercase tracking-wider">
-                            <th class="px-4 py-3 text-left font-bold">Symbol</th>
-                            <th class="px-4 py-3 text-right font-bold tabular-nums">Price</th>
-                            <th class="px-4 py-3 text-right font-bold">Change</th>
-                            <th class="px-4 py-3 text-right font-bold">Actions</th>
+                        <tr class="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs uppercase tracking-wider">
+                            <th class="px-4 py-3 text-left font-semibold">Symbol</th>
+                            <th class="px-4 py-3 text-right font-semibold tabular-nums">Price</th>
+                            <th class="px-4 py-3 text-right font-semibold">Change</th>
+                            <th class="px-4 py-3 text-right font-semibold">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in active_watchlist.unsectioned_items %}
-                        <tr class="border-b border-border-dark last:border-0 hover:bg-stone-800/30 transition-colors">
+                        <tr class="border-b border-zinc-200 dark:border-zinc-800 last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
-                                    <div class="size-8 rounded-lg {{ 'bg-orange-500/10 text-orange-500' if item.asset_type == 'crypto' else 'bg-accent-up/10 text-accent-up' }} flex items-center justify-center">
+                                    <div class="size-8 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center">
                                         <span class="material-symbols-outlined text-base">{{ 'currency_bitcoin' if item.asset_type == 'crypto' else 'show_chart' }}</span>
                                     </div>
                                     <div>
-                                        <p class="text-white font-bold font-display">{{ item.symbol }}</p>
-                                        <p class="text-stone-500 text-xs">{{ item.display_name or item.symbol }}</p>
+                                        <p class="text-zinc-950 dark:text-zinc-50 font-semibold">{{ item.symbol }}</p>
+                                        <p class="text-zinc-400 text-xs">{{ item.display_name or item.symbol }}</p>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums text-white font-bold font-display">
+                            <td class="px-4 py-3 text-right tabular-nums text-zinc-950 dark:text-zinc-50 font-semibold">
                                 {% if item.price is not none %}
                                     {% if item.price >= 1000 %}{{ '{:,.0f}'.format(item.price|float) }}{% else %}{{ '%.2f'|format(item.price|float) }}{% endif %}
                                 {% else %}
-                                    <span class="text-stone-500">--</span>
+                                    <span class="text-zinc-400">--</span>
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums">
                                 {% if item.change_percent is not none %}
-                                <span class="{{ 'text-accent-up' if item.change_percent >= 0 else 'text-accent-down' }} font-bold">
+                                <span class="{{ 'text-green-600 dark:text-green-500' if item.change_percent >= 0 else 'text-red-600 dark:text-red-500' }} font-semibold">
                                     {{ '%+.2f'|format(item.change_percent|float) }}%
                                 </span>
                                 {% else %}
-                                <span class="text-stone-500">--</span>
+                                <span class="text-zinc-400">--</span>
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right">
-                                <div class="flex items-center justify-end gap-2">
+                                <div class="flex items-center justify-end gap-1">
                                     <!-- Pin toggle -->
                                     <form method="post" action="{{ url_for('watchlist_toggle_pin', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="{{ 'Unpin from homepage' if item.is_pinned else 'Pin to homepage' }}"
-                                            class="p-1.5 rounded-lg {{ 'bg-primary/20 text-primary' if item.is_pinned else 'text-stone-500 hover:text-primary hover:bg-primary/10' }} transition-colors cursor-pointer">
+                                            class="p-1.5 rounded-md {{ 'text-zinc-950 dark:text-zinc-50' if item.is_pinned else 'text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800' }} transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">{{ 'push_pin' if item.is_pinned else 'keep' }}</span>
                                         </button>
                                     </form>
@@ -139,7 +139,7 @@
                                     <form method="post" action="{{ url_for('watchlist_remove_item', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="Remove"
-                                            class="p-1.5 rounded-lg text-stone-500 hover:text-accent-down hover:bg-accent-down/10 transition-colors cursor-pointer">
+                                            class="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">close</span>
                                         </button>
                                     </form>
@@ -160,74 +160,74 @@
                 <form method="post" action="{{ url_for('watchlist_rename_section', section_id=section.section_id) }}" class="flex items-center gap-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="text" name="name" value="{{ section.name }}" required
-                        class="bg-transparent border-b border-border-dark text-white text-base font-display font-bold focus:outline-none focus:border-primary/60 w-40">
-                    <button type="submit" class="text-stone-500 hover:text-stone-300 transition-colors text-xs cursor-pointer">
+                        class="bg-transparent border-b border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm font-semibold focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-500 w-40">
+                    <button type="submit" class="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors text-xs cursor-pointer">
                         <span class="material-symbols-outlined text-sm">edit</span>
                     </button>
                 </form>
                 <form method="post" action="{{ url_for('watchlist_delete_section', section_id=section.section_id) }}"
                     onsubmit="return confirm('Delete section &quot;{{ section.name }}&quot;? Items will become unsectioned.')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="p-1 text-stone-500 hover:text-accent-down transition-colors cursor-pointer">
+                    <button type="submit" class="p-1 text-zinc-400 hover:text-red-600 dark:hover:text-red-500 transition-colors cursor-pointer">
                         <span class="material-symbols-outlined text-sm">delete</span>
                     </button>
                 </form>
             </div>
 
             {% if section.section_items %}
-            <div class="bg-surface-dark rounded-2xl border border-border-dark overflow-hidden">
-                <table class="w-full text-sm font-body">
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-border-dark text-stone-500 text-xs uppercase tracking-wider">
-                            <th class="px-4 py-3 text-left font-bold">Symbol</th>
-                            <th class="px-4 py-3 text-right font-bold tabular-nums">Price</th>
-                            <th class="px-4 py-3 text-right font-bold">Change</th>
-                            <th class="px-4 py-3 text-right font-bold">Actions</th>
+                        <tr class="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs uppercase tracking-wider">
+                            <th class="px-4 py-3 text-left font-semibold">Symbol</th>
+                            <th class="px-4 py-3 text-right font-semibold tabular-nums">Price</th>
+                            <th class="px-4 py-3 text-right font-semibold">Change</th>
+                            <th class="px-4 py-3 text-right font-semibold">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in section.section_items %}
-                        <tr class="border-b border-border-dark last:border-0 hover:bg-stone-800/30 transition-colors">
+                        <tr class="border-b border-zinc-200 dark:border-zinc-800 last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
-                                    <div class="size-8 rounded-lg {{ 'bg-orange-500/10 text-orange-500' if item.asset_type == 'crypto' else 'bg-accent-up/10 text-accent-up' }} flex items-center justify-center">
+                                    <div class="size-8 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center">
                                         <span class="material-symbols-outlined text-base">{{ 'currency_bitcoin' if item.asset_type == 'crypto' else 'show_chart' }}</span>
                                     </div>
                                     <div>
-                                        <p class="text-white font-bold font-display">{{ item.symbol }}</p>
-                                        <p class="text-stone-500 text-xs">{{ item.display_name or item.symbol }}</p>
+                                        <p class="text-zinc-950 dark:text-zinc-50 font-semibold">{{ item.symbol }}</p>
+                                        <p class="text-zinc-400 text-xs">{{ item.display_name or item.symbol }}</p>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums text-white font-bold font-display">
+                            <td class="px-4 py-3 text-right tabular-nums text-zinc-950 dark:text-zinc-50 font-semibold">
                                 {% if item.price is not none %}
                                     {% if item.price >= 1000 %}{{ '{:,.0f}'.format(item.price|float) }}{% else %}{{ '%.2f'|format(item.price|float) }}{% endif %}
                                 {% else %}
-                                    <span class="text-stone-500">--</span>
+                                    <span class="text-zinc-400">--</span>
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums">
                                 {% if item.change_percent is not none %}
-                                <span class="{{ 'text-accent-up' if item.change_percent >= 0 else 'text-accent-down' }} font-bold">
+                                <span class="{{ 'text-green-600 dark:text-green-500' if item.change_percent >= 0 else 'text-red-600 dark:text-red-500' }} font-semibold">
                                     {{ '%+.2f'|format(item.change_percent|float) }}%
                                 </span>
                                 {% else %}
-                                <span class="text-stone-500">--</span>
+                                <span class="text-zinc-400">--</span>
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right">
-                                <div class="flex items-center justify-end gap-2">
+                                <div class="flex items-center justify-end gap-1">
                                     <form method="post" action="{{ url_for('watchlist_toggle_pin', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="{{ 'Unpin from homepage' if item.is_pinned else 'Pin to homepage' }}"
-                                            class="p-1.5 rounded-lg {{ 'bg-primary/20 text-primary' if item.is_pinned else 'text-stone-500 hover:text-primary hover:bg-primary/10' }} transition-colors cursor-pointer">
+                                            class="p-1.5 rounded-md {{ 'text-zinc-950 dark:text-zinc-50' if item.is_pinned else 'text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800' }} transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">{{ 'push_pin' if item.is_pinned else 'keep' }}</span>
                                         </button>
                                     </form>
                                     <form method="post" action="{{ url_for('watchlist_remove_item', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="Remove"
-                                            class="p-1.5 rounded-lg text-stone-500 hover:text-accent-down hover:bg-accent-down/10 transition-colors cursor-pointer">
+                                            class="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">close</span>
                                         </button>
                                     </form>
@@ -239,7 +239,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="bg-surface-dark rounded-2xl border border-border-dark p-6 text-stone-500 text-sm text-center font-body">
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 text-zinc-500 text-sm text-center">
                 No symbols in this section yet.
             </div>
             {% endif %}
@@ -248,30 +248,30 @@
 
         <!-- Empty state when no items at all -->
         {% if not active_watchlist.unsectioned_items and not active_watchlist.sections %}
-        <div class="text-center py-16 text-stone-500 font-body">
+        <div class="text-center py-16 text-zinc-500">
             <span class="material-symbols-outlined text-5xl block mb-3">bookmark_border</span>
-            <p class="text-lg font-bold text-stone-400 mb-1">Your watchlist is empty</p>
+            <p class="text-lg font-semibold text-zinc-400 mb-1">Your watchlist is empty</p>
             <p class="text-sm">Add a symbol above to start tracking it.</p>
         </div>
         {% endif %}
 
         <!-- Create section form -->
-        <div class="mt-6 p-4 bg-surface-dark rounded-2xl border border-border-dark">
-            <p class="text-stone-400 text-xs font-bold uppercase tracking-wider mb-3">Add Section</p>
+        <div class="mt-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <p class="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">Add Section</p>
             <form method="post" action="{{ url_for('watchlist_create_section', watchlist_id=active_watchlist.watchlist_id) }}" class="flex items-center gap-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" placeholder="Section name (e.g. Tech, Crypto)..." required
-                    class="bg-background-dark border border-border-dark text-white text-sm rounded-xl px-4 py-2 focus:ring-2 focus:ring-primary/50 focus:outline-none placeholder:text-stone-500 flex-1">
-                <button type="submit" class="px-4 py-2 bg-surface-dark border border-border-dark text-stone-300 text-sm font-bold rounded-xl hover:text-white hover:border-white/20 transition-colors cursor-pointer">
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-4 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 flex-1">
+                <button type="submit" class="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-semibold rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer">
                     Create Section
                 </button>
             </form>
         </div>
 
         {% else %}
-        <div class="text-center py-20 text-stone-500 font-body">
+        <div class="text-center py-20 text-zinc-500">
             <span class="material-symbols-outlined text-5xl block mb-3">list_alt</span>
-            <p class="text-lg font-bold text-stone-400 mb-1">No watchlists yet</p>
+            <p class="text-lg font-semibold text-zinc-400 mb-1">No watchlists yet</p>
             <p class="text-sm">Create your first watchlist above to get started.</p>
         </div>
         {% endif %}

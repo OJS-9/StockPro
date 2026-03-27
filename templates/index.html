@@ -4,36 +4,35 @@
 {% include '_nav.html' %}
 
 <main class="flex-1 flex flex-col items-center w-full">
-    <div class="w-full max-w-[1280px] px-4 md:px-10 py-5">
+    <div class="w-full max-w-7xl px-4 md:px-8 py-5">
         <div class="@container">
             <div class="@[480px]:p-4">
-                <div class="flex min-h-[480px] flex-col gap-6 bg-cover bg-center bg-no-repeat @[480px]:gap-8 rounded-2xl items-start justify-end px-4 pb-12 @[480px]:px-12 relative overflow-hidden hero-bg group" data-alt="Abstract financial market illustration with up and down trends">
-                    <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+                <div class="flex min-h-[420px] flex-col gap-6 bg-cover bg-center bg-no-repeat @[480px]:gap-8 rounded-xl items-start justify-end px-4 pb-10 @[480px]:px-10 relative overflow-hidden hero-bg group" data-alt="Abstract financial market illustration with up and down trends">
                     <div class="relative z-10 flex flex-col gap-2 text-left max-w-2xl mt-auto">
-                        <h1 class="text-white text-4xl font-black leading-tight tracking-[-0.033em] @[480px]:text-6xl @[480px]:font-black @[480px]:leading-[1.1] @[480px]:tracking-[-0.033em] font-display">
+                        <h1 class="text-zinc-950 dark:text-zinc-50 text-3xl font-bold leading-tight tracking-[-0.02em] @[480px]:text-5xl @[480px]:leading-[1.1]">
                             Understand the Market,<br/> Invest Smarter.
                         </h1>
-                        <h2 class="text-stone-300 text-base font-body font-normal leading-relaxed @[480px]:text-xl @[480px]:font-normal max-w-lg">
+                        <p class="text-zinc-500 text-sm @[480px]:text-base leading-relaxed max-w-lg">
                             Real-time insights, simplified analytics, and powerful visualizations for the modern investor.
-                        </h2>
+                        </p>
                     </div>
-                    <div class="relative z-10 w-full max-w-2xl mt-6">
-                        <form id="research-form" class="flex items-center gap-2 bg-white/10 dark:bg-surface-dark/90 backdrop-blur-md border border-white/20 dark:border-border-dark p-2 rounded-2xl shadow-2xl transition-all focus-within:ring-2 ring-primary/50 focus-within:bg-white/20 dark:focus-within:bg-surface-dark">
-                            <div class="flex items-center justify-center pl-4 text-stone-400">
-                                <span class="material-symbols-outlined text-2xl">search</span>
+                    <div class="relative z-10 w-full max-w-2xl mt-4">
+                        <form id="research-form" class="flex items-center gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 p-2 rounded-lg shadow-card-lg transition-all focus-within:ring-2 ring-zinc-400/30 focus-within:border-zinc-500">
+                            <div class="flex items-center justify-center pl-3 text-zinc-400">
+                                <span class="material-symbols-outlined text-xl">search</span>
                             </div>
-                            <div class="flex-1 flex flex-col justify-center h-12">
+                            <div class="flex-1 flex flex-col justify-center h-10">
                                 <input
                                     aria-label="Stock Ticker"
                                     name="ticker"
                                     id="ticker"
-                                    class="w-full bg-transparent border-none p-0 text-white placeholder:text-stone-400 focus:ring-0 text-lg font-bold font-display"
+                                    class="w-full bg-transparent border-none p-0 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-0 text-sm font-semibold"
                                     placeholder="Search Ticker..."
                                     type="text"
                                     value="{{ current_ticker }}"
                                     required
                                 />
-                                <div class="hidden sm:flex gap-3 text-xs text-stone-400 font-mono mt-0.5">
+                                <div class="hidden sm:flex gap-3 text-[10px] text-zinc-400 font-mono mt-0.5">
                                     <span>e.g. AAPL</span>
                                     <span>NVDA</span>
                                     <span>BTC-USD</span>
@@ -42,15 +41,15 @@
                             <select
                                 name="trade_type"
                                 id="trade_type"
-                                class="h-12 px-4 bg-white/10 dark:bg-surface-dark/50 border border-white/20 dark:border-border-dark text-white rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                                class="h-10 px-3 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 rounded-md text-sm font-medium focus:ring-2 focus:ring-zinc-400/30 focus:outline-none"
                                 required
                             >
                                 <option value="Investment" {% if current_trade_type == 'Investment' or not current_trade_type %}selected{% endif %}>Investment</option>
                                 <option value="Day Trade" {% if current_trade_type == 'Day Trade' %}selected{% endif %}>Day Trade</option>
                                 <option value="Swing Trade" {% if current_trade_type == 'Swing Trade' %}selected{% endif %}>Swing Trade</option>
                             </select>
-                            <button class="h-12 px-6 bg-primary hover:bg-white text-surface-dark font-bold rounded-xl transition-all shadow-lg hover:scale-105 active:scale-95 text-base flex items-center gap-2" type="submit">
-                                Analyze <span class="material-symbols-outlined text-lg">arrow_forward</span>
+                            <button class="h-10 px-5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-medium rounded-md transition-colors hover:bg-zinc-700 dark:hover:bg-zinc-300 text-sm flex items-center gap-2" type="submit">
+                                Analyze <span class="material-symbols-outlined text-sm">arrow_forward</span>
                             </button>
                         </form>
                     </div>
@@ -60,45 +59,44 @@
     </div>
 
     {% if pinned_tickers %}
-    <section class="w-full max-w-[1280px] px-4 md:px-10 py-8 flex flex-col gap-8">
-        <div class="flex items-center justify-between px-2">
+    <section class="w-full max-w-7xl px-4 md:px-8 py-8 flex flex-col gap-6">
+        <div class="flex items-center justify-between">
             <div>
-                <h2 class="text-stone-900 dark:text-white text-3xl font-display font-extrabold leading-tight">Market Overview</h2>
-                <p class="text-stone-500 mt-1 font-body">Real-time performance of your pinned tickers.</p>
+                <h2 class="text-xl font-semibold">Market Overview</h2>
+                <p class="text-zinc-500 text-sm mt-1">Real-time performance of your pinned tickers.</p>
             </div>
-            <a href="{{ url_for('watchlist') }}" class="text-sm font-bold font-body text-primary hover:text-white transition-colors flex items-center gap-1 cursor-pointer">
-                View Entire Watchlist <span class="material-symbols-outlined text-sm">chevron_right</span>
+            <a href="{{ url_for('watchlist') }}" class="text-sm font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors flex items-center gap-1">
+                View Watchlist <span class="material-symbols-outlined text-sm">chevron_right</span>
             </a>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {% for ticker in pinned_tickers %}
             {% set is_positive = ticker.change_percent is not none and ticker.change_percent >= 0 %}
             {% set is_negative = ticker.change_percent is not none and ticker.change_percent < 0 %}
             {% set is_crypto = ticker.asset_type == 'crypto' %}
-            <div class="bg-white dark:bg-surface-dark rounded-3xl p-6 border border-stone-200 dark:border-border-dark flex flex-col justify-between h-64 relative overflow-hidden group {{ 'hover:border-accent-down/50' if is_negative else 'hover:border-accent-up/50' }} transition-all duration-300 shadow-sm hover:shadow-xl">
-                <div class="absolute -right-10 -top-10 size-40 {{ 'bg-accent-down/5' if is_negative else 'bg-accent-up/5' }} rounded-full blur-3xl {{ 'group-hover:bg-accent-down/10' if is_negative else 'group-hover:bg-accent-up/10' }} transition-colors"></div>
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-5 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between relative overflow-hidden group hover:border-zinc-400 dark:hover:border-zinc-600 transition-all shadow-card dark:shadow-none">
                 <div class="flex justify-between items-start z-10">
                     <div class="flex items-center gap-3">
-                        <div class="size-12 rounded-xl {{ 'bg-orange-500/10' if is_crypto else ('bg-accent-down/10' if is_negative else 'bg-accent-up/10') }} flex items-center justify-center {{ 'text-orange-500' if is_crypto else ('text-accent-down' if is_negative else 'text-accent-up') }}">
-                            <span class="material-symbols-outlined text-2xl">{{ 'currency_bitcoin' if is_crypto else 'show_chart' }}</span>
+                        <div class="size-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-xl">{{ 'currency_bitcoin' if is_crypto else 'show_chart' }}</span>
                         </div>
                         <div>
-                            <h3 class="text-xl font-display font-bold dark:text-white">{{ ticker.display_name }}</h3>
-                            <p class="text-xs font-mono text-stone-500">{{ ticker.symbol }} &bull; {{ 'CRYPTO' if is_crypto else 'STOCK' }}</p>
+                            <h3 class="text-base font-semibold">{{ ticker.display_name }}</h3>
+                            <p class="text-[10px] font-mono text-zinc-500">{{ ticker.symbol }} &bull; {{ 'CRYPTO' if is_crypto else 'STOCK' }}</p>
                         </div>
                     </div>
                     {% if ticker.change_percent is not none %}
-                    <div class="{{ 'bg-accent-down/10 text-accent-down' if is_negative else 'bg-accent-up/10 text-accent-up' }} px-3 py-1 rounded-lg font-bold text-sm flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">{{ 'trending_down' if is_negative else 'trending_up' }}</span>
+                    <span class="inline-flex items-center gap-1 {{ 'bg-red-500/10 text-red-600 dark:text-red-500' if is_negative else 'bg-green-600/10 text-green-600 dark:text-green-500' }} px-2 py-0.5 rounded text-xs font-medium">
+                        <span class="material-symbols-outlined text-xs">{{ 'trending_down' if is_negative else 'trending_up' }}</span>
                         {{ '%+.2f'|format(ticker.change_percent|float) }}%
-                    </div>
+                    </span>
                     {% else %}
-                    <div class="bg-stone-100 dark:bg-stone-800 text-stone-400 px-3 py-1 rounded-lg font-bold text-sm">--</div>
+                    <span class="bg-zinc-100 dark:bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded text-xs font-medium">--</span>
                     {% endif %}
                 </div>
-                <div class="z-10 mt-auto">
+                <div class="z-10 mt-6">
                     {% if ticker.price is not none %}
-                    <p class="text-4xl font-display font-black text-stone-900 dark:text-white tabular-nums tracking-tight">
+                    <p class="text-3xl font-semibold font-mono tabular-nums tracking-tight">
                         {% if ticker.price >= 1000 %}
                             {{ '{:,.0f}'.format(ticker.price|float) }}
                         {% else %}
@@ -106,22 +104,22 @@
                         {% endif %}
                     </p>
                     {% else %}
-                    <p class="text-4xl font-display font-black text-stone-400 tabular-nums tracking-tight">--</p>
+                    <p class="text-3xl font-semibold font-mono text-zinc-400 tabular-nums tracking-tight">--</p>
                     {% endif %}
-                    <p class="text-stone-500 text-xs font-bold mt-1 uppercase tracking-wider">USD Price</p>
+                    <p class="text-zinc-500 text-[10px] font-medium mt-1 uppercase tracking-wider">USD Price</p>
                 </div>
-                <div class="absolute bottom-0 left-0 right-0 h-24 opacity-30 group-hover:opacity-50 transition-opacity">
+                <div class="absolute bottom-0 left-0 right-0 h-20 opacity-20 group-hover:opacity-40 transition-opacity">
                     {% if is_negative %}
                     <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 300 100">
                         <defs><linearGradient id="gradRed{{ loop.index }}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.5"></stop><stop offset="100%" stop-color="#ef4444" stop-opacity="0"></stop></linearGradient></defs>
                         <path d="M0 20 C50 15, 100 30, 150 50 C200 70, 250 60, 300 80 V 100 H 0 Z" fill="url(#gradRed{{ loop.index }})"></path>
-                        <path d="M0 20 C50 15, 100 30, 150 50 C200 70, 250 60, 300 80" fill="none" stroke="#ef4444" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+                        <path d="M0 20 C50 15, 100 30, 150 50 C200 70, 250 60, 300 80" fill="none" stroke="#ef4444" stroke-width="2" vector-effect="non-scaling-stroke"></path>
                     </svg>
                     {% else %}
                     <svg class="w-full h-full" preserveAspectRatio="none" viewBox="0 0 300 100">
                         <defs><linearGradient id="gradGreen{{ loop.index }}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#22c55e" stop-opacity="0.5"></stop><stop offset="100%" stop-color="#22c55e" stop-opacity="0"></stop></linearGradient></defs>
                         <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10 V 100 H 0 Z" fill="url(#gradGreen{{ loop.index }})"></path>
-                        <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10" fill="none" stroke="#22c55e" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+                        <path d="M0 80 C40 70, 80 90, 120 60 C160 30, 200 50, 240 20 L 300 10" fill="none" stroke="#22c55e" stroke-width="2" vector-effect="non-scaling-stroke"></path>
                     </svg>
                     {% endif %}
                 </div>
@@ -131,48 +129,29 @@
     </section>
     {% endif %}
 
-    <section class="w-full max-w-[1280px] px-4 md:px-10 py-6 mb-20 flex flex-col gap-8">
+    <section class="w-full max-w-7xl px-4 md:px-8 py-6 mb-16 flex flex-col gap-6">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
-                <h2 class="text-stone-900 dark:text-white text-3xl font-display font-extrabold leading-tight">Today's Briefing</h2>
-                <p class="text-stone-500 mt-1 font-body">Curated stories moving the markets.</p>
+                <h2 class="text-xl font-semibold">Today's Briefing</h2>
+                <p class="text-zinc-500 text-sm mt-1">Curated stories moving the markets.</p>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <button id="briefing-more-btn" class="px-4 py-2 rounded-xl text-xs font-bold font-body bg-surface-dark border border-border-dark text-stone-400 hover:text-white hover:border-white/20 transition-colors">More Stories</button>
+                <button id="briefing-more-btn" class="px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">More Stories</button>
             </div>
         </div>
-        <div id="briefing-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Skeleton cards shown while loading -->
-            <div class="briefing-skeleton flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark">
-                <div class="h-48 bg-stone-200 dark:bg-stone-800 animate-pulse"></div>
-                <div class="p-6 flex flex-col gap-3">
-                    <div class="h-3 w-24 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-5 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-5 w-3/4 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-4 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse mt-1"></div>
-                    <div class="h-4 w-2/3 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
+        <div id="briefing-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for _ in range(3) %}
+            <div class="briefing-skeleton flex flex-col bg-zinc-50 dark:bg-zinc-900 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                <div class="h-44 bg-zinc-200 dark:bg-zinc-800 animate-pulse"></div>
+                <div class="p-5 flex flex-col gap-3">
+                    <div class="h-3 w-24 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse"></div>
+                    <div class="h-4 w-full bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse"></div>
+                    <div class="h-4 w-3/4 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse"></div>
+                    <div class="h-3 w-full bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mt-1"></div>
+                    <div class="h-3 w-2/3 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse"></div>
                 </div>
             </div>
-            <div class="briefing-skeleton flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark">
-                <div class="h-48 bg-stone-200 dark:bg-stone-800 animate-pulse"></div>
-                <div class="p-6 flex flex-col gap-3">
-                    <div class="h-3 w-24 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-5 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-5 w-3/4 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-4 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse mt-1"></div>
-                    <div class="h-4 w-2/3 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                </div>
-            </div>
-            <div class="briefing-skeleton flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark">
-                <div class="h-48 bg-stone-200 dark:bg-stone-800 animate-pulse"></div>
-                <div class="p-6 flex flex-col gap-3">
-                    <div class="h-3 w-24 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-5 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-5 w-3/4 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                    <div class="h-4 w-full bg-stone-200 dark:bg-stone-700 rounded animate-pulse mt-1"></div>
-                    <div class="h-4 w-2/3 bg-stone-200 dark:bg-stone-700 rounded animate-pulse"></div>
-                </div>
-            </div>
+            {% endfor %}
         </div>
     </section>
 
@@ -194,30 +173,30 @@
                 ? `<img src="${image}" alt="" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">`
                 : article.publisher === 'WSJ'
                     ? `<img src="/static/images/wsj-logo.svg" alt="WSJ" class="absolute inset-0 w-full h-full object-cover">`
-                    : `<div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>`;
+                    : `<div class="absolute inset-0 bg-gradient-to-br from-zinc-200/50 dark:from-zinc-700/50 to-transparent"></div>`;
 
             return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
-                    class="flex flex-col bg-white dark:bg-surface-dark rounded-3xl overflow-hidden border border-stone-200 dark:border-border-dark group cursor-pointer hover:border-primary/50 transition-all hover:shadow-2xl hover:-translate-y-1 no-underline">
-                <div class="h-48 w-full relative bg-stone-100 dark:bg-stone-800 overflow-hidden">
+                    class="flex flex-col bg-zinc-50 dark:bg-zinc-900 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 group cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-all hover:shadow-card-md no-underline">
+                <div class="h-44 w-full relative bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                     ${imageInner}
                 </div>
-                <div class="p-6 flex-1 flex flex-col">
-                    <div class="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono mb-3">
-                        <span class="font-bold text-primary">${publisher}</span>
+                <div class="p-5 flex-1 flex flex-col">
+                    <div class="flex items-center gap-2 text-[10px] text-zinc-500 font-mono mb-2">
+                        <span class="font-semibold text-zinc-950 dark:text-zinc-50">${publisher}</span>
                     </div>
-                    <h3 class="text-stone-900 dark:text-white text-xl font-display font-bold leading-tight group-hover:text-primary transition-colors mb-2 line-clamp-3">
+                    <h3 class="text-zinc-950 dark:text-zinc-50 text-base font-semibold leading-snug group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors mb-2 line-clamp-3">
                         ${title}
                     </h3>
-                    ${description ? `<p class="text-stone-600 dark:text-stone-400 text-sm font-body leading-relaxed line-clamp-3">${description}</p>` : ''}
-                    <div class="mt-auto pt-4 flex items-center text-primary text-sm font-bold gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Read more <span class="material-symbols-outlined text-sm">arrow_outward</span>
+                    ${description ? `<p class="text-zinc-500 text-sm leading-relaxed line-clamp-3">${description}</p>` : ''}
+                    <div class="mt-auto pt-3 flex items-center text-zinc-500 text-xs font-medium gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Read more <span class="material-symbols-outlined text-xs">arrow_outward</span>
                     </div>
                 </div>
             </a>`;
         }
 
         function showFallback(grid) {
-            grid.innerHTML = `<div class="col-span-3 py-10 text-center text-stone-500 font-body">News unavailable right now. Check back shortly.</div>`;
+            grid.innerHTML = `<div class="col-span-3 py-10 text-center text-zinc-500 text-sm">News unavailable right now. Check back shortly.</div>`;
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -287,42 +266,39 @@
 {% include '_footer.html' %}
 
 <!-- Popup Modal -->
-<div id="popup-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-surface-dark border border-border-dark rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+<div id="popup-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 max-w-lg w-full mx-4 shadow-card-lg">
         <div class="flex items-center justify-between mb-1">
-            <h3 id="popup-title" class="text-white text-lg font-display font-bold">Select research topics</h3>
-            <button id="popup-close" class="text-stone-400 hover:text-white transition-colors">
-                <span class="material-symbols-outlined">close</span>
+            <h3 id="popup-title" class="text-base font-semibold">Select research topics</h3>
+            <button id="popup-close" class="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                <span class="material-symbols-outlined text-base">close</span>
             </button>
         </div>
-        <p id="popup-step-indicator" class="text-stone-500 text-xs font-mono mb-4">Step 1 of 2</p>
+        <p id="popup-step-indicator" class="text-zinc-500 text-xs font-mono mb-4">Step 1 of 2</p>
 
-        <!-- Loading state -->
-        <div id="popup-loading" class="flex items-center gap-3 py-6 text-stone-400">
-            <span class="material-symbols-outlined animate-spin text-2xl">autorenew</span>
-            <span class="font-body">Preparing...</span>
+        <div id="popup-loading" class="flex items-center gap-3 py-6 text-zinc-400">
+            <span class="material-symbols-outlined animate-spin text-xl">autorenew</span>
+            <span class="text-sm">Preparing...</span>
         </div>
 
-        <!-- Step 1: Subject selection -->
         <div id="popup-step-subjects" class="hidden flex flex-col gap-3">
             <div id="subjects-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1"></div>
-            <div class="flex items-center justify-between pt-4 border-t border-border-dark mt-2">
-                <button id="popup-skip-subjects" class="text-stone-400 hover:text-white transition-colors text-sm font-body">Skip</button>
-                <button id="popup-next" class="h-10 px-6 bg-primary text-[#0c0a09] font-bold rounded-lg text-sm flex items-center gap-2 hover:brightness-110 transition-all">
-                    Next <span class="material-symbols-outlined text-base">arrow_forward</span>
+            <div class="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800 mt-2">
+                <button id="popup-skip-subjects" class="text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm">Skip</button>
+                <button id="popup-next" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                    Next <span class="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
             </div>
         </div>
 
-        <!-- Step 2: Questions -->
         <div id="popup-questions" class="hidden flex flex-col gap-4">
             <div id="questions-list" class="flex flex-col gap-5"></div>
-            <div class="flex items-center justify-between pt-4 border-t border-border-dark mt-2">
-                <button id="popup-back" class="text-stone-400 hover:text-white transition-colors text-sm font-body flex items-center gap-1">
+            <div class="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800 mt-2">
+                <button id="popup-back" class="text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm">arrow_back</span> Back
                 </button>
-                <button id="popup-submit" class="h-10 px-6 bg-primary text-[#0c0a09] font-bold rounded-lg text-sm flex items-center gap-2 hover:brightness-110 transition-all">
-                    Generate Report <span class="material-symbols-outlined text-base">arrow_forward</span>
+                <button id="popup-submit" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                    Generate Report <span class="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
             </div>
         </div>
@@ -331,9 +307,9 @@
 
 <!-- Toast -->
 <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 hidden">
-    <div class="bg-surface-dark border border-border-dark rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl min-w-[260px] cursor-pointer">
-        <span id="toast-icon" class="material-symbols-outlined text-xl text-stone-400"></span>
-        <span id="toast-text" class="text-white text-sm font-body"></span>
+    <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3 shadow-card-lg min-w-[260px] cursor-pointer">
+        <span id="toast-icon" class="material-symbols-outlined text-lg text-zinc-400"></span>
+        <span id="toast-text" class="text-zinc-950 dark:text-zinc-50 text-sm"></span>
     </div>
 </div>
 
@@ -360,7 +336,7 @@
 
     let currentQuestions = [];
     let currentSubjects = [];
-    let currentSelectedIds = [];  // captured on Next click
+    let currentSelectedIds = [];
     let currentSessionId = null;
     let pollInterval = null;
     let toastTimeout = null;
@@ -388,10 +364,10 @@
             label.className = 'flex items-start gap-3 cursor-pointer group';
             const checked = s.priority === 1 ? 'checked' : '';
             label.innerHTML =
-                '<input type="checkbox" data-id="' + escapeHtml(s.id) + '" class="mt-0.5 accent-primary" ' + checked + '>' +
+                '<input type="checkbox" data-id="' + escapeHtml(s.id) + '" class="mt-0.5 rounded border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400" ' + checked + '>' +
                 '<div>' +
-                '<p class="text-white text-sm font-body font-medium group-hover:text-primary transition-colors">' + escapeHtml(s.name) + '</p>' +
-                '<p class="text-stone-400 text-xs font-body">' + escapeHtml(s.description) + '</p>' +
+                '<p class="text-sm font-medium group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">' + escapeHtml(s.name) + '</p>' +
+                '<p class="text-zinc-500 text-xs">' + escapeHtml(s.description) + '</p>' +
                 '</div>';
             subjectsList.appendChild(label);
         });
@@ -412,12 +388,12 @@
                 optionsHtml = '<div class="flex flex-wrap gap-2 mt-1" data-group="' + i + '">' +
                     item.options.map(function (opt) {
                         return '<button type="button" data-val="' + escapeHtml(opt) + '" ' +
-                            'class="option-pill px-3 py-1.5 rounded-lg text-xs font-body border border-border-dark text-stone-300 bg-[#0c0a09] hover:border-primary/60 hover:text-white transition-all">' +
+                            'class="option-pill px-3 py-1.5 rounded-md text-xs border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 bg-white dark:bg-zinc-950 hover:border-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-all">' +
                             escapeHtml(opt) + '</button>';
                     }).join('') +
                     '</div>';
             }
-            div.innerHTML = '<p class="text-white font-body font-medium text-sm">' + escapeHtml(item.question) + '</p>' + optionsHtml;
+            div.innerHTML = '<p class="text-sm font-medium">' + escapeHtml(item.question) + '</p>' + optionsHtml;
             questionsList.appendChild(div);
         });
 
@@ -425,20 +401,18 @@
             btn.addEventListener('click', function () {
                 const group = btn.closest('[data-group]');
                 group.querySelectorAll('.option-pill').forEach(function (b) {
-                    b.classList.remove('border-primary', 'text-white', 'bg-primary/10');
-                    b.classList.add('border-border-dark', 'text-stone-300', 'bg-[#0c0a09]');
+                    b.classList.remove('border-zinc-900', 'dark:border-zinc-50', 'text-zinc-950', 'dark:text-zinc-50', 'bg-zinc-100', 'dark:bg-zinc-800');
+                    b.classList.add('border-zinc-200', 'dark:border-zinc-700', 'text-zinc-600', 'dark:text-zinc-400', 'bg-white', 'dark:bg-zinc-950');
                 });
-                btn.classList.add('border-primary', 'text-white', 'bg-primary/10');
-                btn.classList.remove('border-border-dark', 'text-stone-300', 'bg-[#0c0a09]');
+                btn.classList.add('border-zinc-900', 'dark:border-zinc-50', 'text-zinc-950', 'dark:text-zinc-50', 'bg-zinc-100', 'dark:bg-zinc-800');
+                btn.classList.remove('border-zinc-200', 'dark:border-zinc-700', 'text-zinc-600', 'dark:text-zinc-400', 'bg-white', 'dark:bg-zinc-950');
             });
         });
     }
 
     function goToStep2() {
-        // Capture checked subject IDs
         currentSelectedIds = Array.from(subjectsList.querySelectorAll('input[type=checkbox]:checked'))
             .map(function (cb) { return cb.getAttribute('data-id'); });
-
         subjectsEl.classList.add('hidden');
         questionsEl.classList.remove('hidden');
         popupTitle.textContent = 'A few quick questions';
@@ -454,7 +428,7 @@
 
     function collectAnswers() {
         return Array.from(questionsList.querySelectorAll('[data-group]')).map(function (group) {
-            const selected = group.querySelector('.border-primary');
+            const selected = group.querySelector('.border-zinc-900');
             return selected ? selected.getAttribute('data-val') : '';
         });
     }
@@ -467,12 +441,12 @@
         clearTimeout(toastTimeout);
         if (type === 'in_progress') {
             toastIcon.textContent = 'autorenew';
-            toastIcon.className = 'material-symbols-outlined text-xl text-stone-400 animate-spin';
+            toastIcon.className = 'material-symbols-outlined text-lg text-zinc-400 animate-spin';
             toast.onclick = null;
             toastTimeout = setTimeout(function () { toast.classList.add('hidden'); }, 300000);
         } else if (type === 'ready') {
             toastIcon.textContent = 'check_circle';
-            toastIcon.className = 'material-symbols-outlined text-xl text-accent-up';
+            toastIcon.className = 'material-symbols-outlined text-lg text-green-600 dark:text-green-500';
             toast.onclick = function () { window.location.href = '/report/' + reportId; };
             toastTimeout = setTimeout(function () { toast.classList.add('hidden'); }, 30000);
         }
@@ -513,9 +487,7 @@
                     clearInterval(pollInterval);
                     toast.classList.add('hidden');
                 }
-            } catch (e) {
-                // ignore transient network errors
-            }
+            } catch (e) {}
         }, 3000);
     }
 
@@ -544,7 +516,6 @@
                     currentQuestions = [];
                 }
             } else if (data.questions && data.questions.length > 0) {
-                // No subjects (edge case) — skip straight to questions
                 renderQuestions(data.questions);
                 loadingEl.classList.add('hidden');
                 questionsEl.classList.remove('hidden');
@@ -566,7 +537,6 @@
         if (e.target === backdrop) closePopup();
     });
 
-    // Step 1: Skip — go straight to generation with all subjects (null)
     skipSubjectsBtn.addEventListener('click', async function () {
         currentSelectedIds = [];
         currentQuestions = [];
@@ -598,22 +568,18 @@
         }, 3000);
     });
 
-    // Step 1: Next → go to questions
     nextBtn.addEventListener('click', function () {
         if (currentQuestions.length > 0) {
             goToStep2();
         } else {
-            // No questions — capture selection and submit directly
             currentSelectedIds = Array.from(subjectsList.querySelectorAll('input[type=checkbox]:checked'))
                 .map(function (cb) { return cb.getAttribute('data-id'); });
             submitAnswers(currentSelectedIds);
         }
     });
 
-    // Step 2: Back → return to subjects
     backBtn.addEventListener('click', goToStep1);
 
-    // Step 2: Generate Report
     submitBtn.addEventListener('click', function () {
         submitAnswers(currentSelectedIds);
     });
