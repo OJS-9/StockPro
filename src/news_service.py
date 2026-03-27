@@ -13,7 +13,7 @@ CACHE_TTL = 15 * 60  # 15 minutes
 BLOOMBERG_AGENT = "bloomberg_search_2026_02_23_a9u4p1tv_1184e640"
 MORNINGSTAR_AGENT = "morningstar_search_2026_02_23_zicq0zdj_02869390"
 WSJ_AGENT = "wsj_article_template_2026_03_02_z7hhhvxe"
-WSJ_PIPELINE = "RSSWorldNews"
+WSJ_PIPELINE = "WSJcomUSBusiness"
 SEARCH_QUERY = "markets stocks economy finance"
 
 _cache = {

@@ -21,7 +21,7 @@ class TestWsjConstants:
 
     def test_wsj_pipeline_constant_exists(self):
         assert hasattr(news_service, 'WSJ_PIPELINE')
-        assert news_service.WSJ_PIPELINE == "RSSWorldNews"
+        assert news_service.WSJ_PIPELINE == "WSJcomUSBusiness"
 
 
 class TestMapArticleWsj:
