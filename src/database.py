@@ -1,5 +1,5 @@
 """
-MySQL database connection and schema management for reports, chunks, and portfolios.
+PostgreSQL database connection and schema management for reports, chunks, and portfolios.
 """
 
 import os
@@ -8,348 +8,271 @@ import uuid
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-import mysql.connector
-from mysql.connector import Error, pooling
+import psycopg2
+import psycopg2.pool
+import psycopg2.extras
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 class DatabaseManager:
-    """Manages MySQL database connections and operations for reports and chunks."""
-    
+    """Manages PostgreSQL database connections and operations for reports and chunks."""
+
     def __init__(self):
         """Initialize database manager with connection pool."""
-        self.config = {
-            'host': os.getenv('MYSQL_HOST', 'localhost'),
-            'port': int(os.getenv('MYSQL_PORT', 3306)),
-            'user': os.getenv('MYSQL_USER'),
-            'password': os.getenv('MYSQL_PASSWORD'),
-            'database': os.getenv('MYSQL_DATABASE'),
-            'pool_name': 'stock_research_pool',
-            'pool_size': 5,
-            'pool_reset_session': True
-        }
-        
-        if not all([self.config['user'], self.config['password'], self.config['database']]):
-            raise ValueError(
-                "MySQL configuration incomplete. Set MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE environment variables."
-            )
-        
-        self.connection_pool = None
-        self._initialize_pool()
-    
-    def _initialize_pool(self):
-        """Initialize connection pool."""
+        database_url = os.getenv('DATABASE_URL')
+        if not database_url:
+            raise ValueError("DATABASE_URL environment variable not set")
+
         try:
-            self.connection_pool = pooling.MySQLConnectionPool(**self.config)
-            print(f"✓ MySQL connection pool initialized")
-        except Error as e:
-            raise RuntimeError(f"Failed to create MySQL connection pool: {e}")
-    
+            self._pool = psycopg2.pool.SimpleConnectionPool(1, 5, dsn=database_url)
+            print("✓ PostgreSQL connection pool initialized")
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to create PostgreSQL connection pool: {e}")
+
     def get_connection(self):
         """Get a connection from the pool."""
         try:
-            return self.connection_pool.get_connection()
-        except Error as e:
+            return self._pool.getconn()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get connection from pool: {e}")
-    
+
+    def _release(self, conn):
+        """Return a connection to the pool."""
+        if conn is not None:
+            self._pool.putconn(conn)
+
     def init_schema(self):
         """Initialize database schema (create tables if they don't exist)."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
 
-            # Create users table (must exist before reports due to FK)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id VARCHAR(36) PRIMARY KEY,
-                    username VARCHAR(80) NOT NULL UNIQUE,
-                    email VARCHAR(120) NOT NULL UNIQUE,
-                    password_hash VARCHAR(255) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_username (username),
-                    INDEX idx_email (email)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
-
-            # Create reports table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS reports (
-                    report_id VARCHAR(36) PRIMARY KEY,
-                    user_id VARCHAR(36) NULL,
-                    ticker VARCHAR(10) NOT NULL,
-                    trade_type VARCHAR(50) NOT NULL,
-                    report_text MEDIUMTEXT NOT NULL,
-                    metadata JSON,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_ticker (ticker),
-                    INDEX idx_created_at (created_at),
-                    INDEX idx_user_id (user_id),
-                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
-
-            # Inline migration: add user_id column if it doesn't exist yet
-            cursor.execute("""
-                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'reports'
-                  AND COLUMN_NAME = 'user_id'
-            """)
-            (col_exists,) = cursor.fetchone()
-            if not col_exists:
-                cursor.execute("""
-                    ALTER TABLE reports
-                    ADD COLUMN user_id VARCHAR(36) NULL AFTER report_id,
-                    ADD INDEX idx_user_id (user_id)
+                # Trigger function for updated_at auto-update
+                cur.execute("""
+                    CREATE OR REPLACE FUNCTION update_updated_at()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                      NEW.updated_at = NOW();
+                      RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql
                 """)
 
-            # Inline migration: upgrade report_text from TEXT to MEDIUMTEXT if needed
-            cursor.execute("""
-                SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'reports'
-                  AND COLUMN_NAME = 'report_text'
-            """)
-            row = cursor.fetchone()
-            if row and row[0] == 'text':
-                cursor.execute("""
-                    ALTER TABLE reports MODIFY COLUMN report_text MEDIUMTEXT NOT NULL
+                # Users
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id       VARCHAR(36)  PRIMARY KEY,
+                        username      VARCHAR(80)  NOT NULL UNIQUE,
+                        email         VARCHAR(120) NOT NULL UNIQUE,
+                        password_hash VARCHAR(255),
+                        google_id     VARCHAR(255) UNIQUE,
+                        tier          VARCHAR(20)  NOT NULL DEFAULT 'free',
+                        created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+                    )
                 """)
-            
-            # Create report_chunks table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS report_chunks (
-                    chunk_id VARCHAR(36) PRIMARY KEY,
-                    report_id VARCHAR(36) NOT NULL,
-                    chunk_text TEXT NOT NULL,
-                    section VARCHAR(500),
-                    chunk_index INT NOT NULL,
-                    embedding JSON,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
-                    INDEX idx_report_id (report_id),
-                    INDEX idx_section (section)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_username  ON users (username)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_email     ON users (email)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_google_id ON users (google_id)")
 
-            # Inline migration: widen section column if it was created as VARCHAR(100) or VARCHAR(255)
-            cursor.execute("""
-                SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'report_chunks'
-                  AND COLUMN_NAME = 'section'
-            """)
-            row = cursor.fetchone()
-            if row and row[0] in (100, 255):
-                cursor.execute("""
-                    ALTER TABLE report_chunks MODIFY COLUMN section VARCHAR(500)
+                # Reports
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS reports (
+                        report_id   VARCHAR(36) PRIMARY KEY,
+                        user_id     VARCHAR(36) REFERENCES users(user_id) ON DELETE SET NULL,
+                        ticker      VARCHAR(10) NOT NULL,
+                        trade_type  VARCHAR(50) NOT NULL,
+                        report_text TEXT        NOT NULL,
+                        metadata    JSONB,
+                        created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+                    )
                 """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_report_ticker     ON reports (ticker)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_report_created_at ON reports (created_at)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_report_user_id    ON reports (user_id)")
 
-            # Create users table (must come before portfolios for FK)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id VARCHAR(36) PRIMARY KEY,
-                    username VARCHAR(80) NOT NULL UNIQUE,
-                    email VARCHAR(120) NOT NULL UNIQUE,
-                    password_hash VARCHAR(255) NULL,
-                    google_id VARCHAR(255) NULL UNIQUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_username (username),
-                    INDEX idx_email (email),
-                    INDEX idx_google_id (google_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
-
-            # Migration: add google_id and make password_hash nullable if table already existed
-            cursor.execute("""
-                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'users'
-                  AND COLUMN_NAME = 'google_id'
-            """)
-            (google_id_exists,) = cursor.fetchone()
-            if not google_id_exists:
-                cursor.execute("""
-                    ALTER TABLE users
-                    MODIFY COLUMN password_hash VARCHAR(255) NULL,
-                    ADD COLUMN google_id VARCHAR(255) NULL UNIQUE,
-                    ADD INDEX idx_google_id (google_id)
+                # Report chunks
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS report_chunks (
+                        chunk_id    VARCHAR(36) PRIMARY KEY,
+                        report_id   VARCHAR(36) NOT NULL REFERENCES reports(report_id) ON DELETE CASCADE,
+                        chunk_text  TEXT        NOT NULL,
+                        section     VARCHAR(500),
+                        chunk_index INT         NOT NULL,
+                        embedding   JSONB,
+                        created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+                    )
                 """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chunk_report_id ON report_chunks (report_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_chunk_section   ON report_chunks (section)")
 
-            # Create portfolios table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS portfolios (
-                    portfolio_id VARCHAR(36) PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL DEFAULT 'My Portfolio',
-                    description TEXT,
-                    user_id VARCHAR(36) NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    CONSTRAINT fk_portfolio_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
-
-            # Inline migration: add user_id column if it doesn't exist yet
-            cursor.execute("""
-                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'portfolios'
-                  AND COLUMN_NAME = 'user_id'
-            """)
-            (col_exists,) = cursor.fetchone()
-            if not col_exists:
-                cursor.execute("""
-                    ALTER TABLE portfolios
-                    ADD COLUMN user_id VARCHAR(36) NULL,
-                    ADD CONSTRAINT fk_portfolio_user
-                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
+                # Portfolios
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolios (
+                        portfolio_id  VARCHAR(36)   PRIMARY KEY,
+                        name          VARCHAR(100)  NOT NULL DEFAULT 'My Portfolio',
+                        description   TEXT,
+                        user_id       VARCHAR(36)   REFERENCES users(user_id) ON DELETE SET NULL,
+                        track_cash    BOOLEAN       NOT NULL DEFAULT FALSE,
+                        cash_balance  NUMERIC(18,2) NOT NULL DEFAULT 0,
+                        created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+                        updated_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_trigger WHERE tgname = 'set_portfolios_updated_at'
+                        ) THEN
+                            CREATE TRIGGER set_portfolios_updated_at
+                            BEFORE UPDATE ON portfolios
+                            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+                        END IF;
+                    END $$
                 """)
 
-            # Inline migration: add track_cash and cash_balance if they don't exist
-            cursor.execute("""
-                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'portfolios'
-                  AND COLUMN_NAME = 'track_cash'
-            """)
-            (track_cash_exists,) = cursor.fetchone()
-            if not track_cash_exists:
-                cursor.execute("""
-                    ALTER TABLE portfolios
-                    ADD COLUMN track_cash TINYINT(1) NOT NULL DEFAULT 0,
-                    ADD COLUMN cash_balance DECIMAL(18, 2) NOT NULL DEFAULT 0
+                # Holdings
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS holdings (
+                        holding_id       VARCHAR(36)   PRIMARY KEY,
+                        portfolio_id     VARCHAR(36)   NOT NULL REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
+                        symbol           VARCHAR(20)   NOT NULL,
+                        asset_type       VARCHAR(10)   NOT NULL CHECK (asset_type IN ('stock', 'crypto')),
+                        total_quantity   NUMERIC(18,8) NOT NULL DEFAULT 0,
+                        average_cost     NUMERIC(18,8) NOT NULL DEFAULT 0,
+                        total_cost_basis NUMERIC(18,2) NOT NULL DEFAULT 0,
+                        created_at       TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+                        updated_at       TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (portfolio_id, symbol)
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_holdings_portfolio_id ON holdings (portfolio_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_holdings_symbol       ON holdings (symbol)")
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_trigger WHERE tgname = 'set_holdings_updated_at'
+                        ) THEN
+                            CREATE TRIGGER set_holdings_updated_at
+                            BEFORE UPDATE ON holdings
+                            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+                        END IF;
+                    END $$
                 """)
 
-            # Create holdings table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS holdings (
-                    holding_id VARCHAR(36) PRIMARY KEY,
-                    portfolio_id VARCHAR(36) NOT NULL,
-                    symbol VARCHAR(20) NOT NULL,
-                    asset_type ENUM('stock', 'crypto') NOT NULL,
-                    total_quantity DECIMAL(18, 8) NOT NULL DEFAULT 0,
-                    average_cost DECIMAL(18, 8) NOT NULL DEFAULT 0,
-                    total_cost_basis DECIMAL(18, 2) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (portfolio_id) REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
-                    UNIQUE KEY unique_portfolio_symbol (portfolio_id, symbol),
-                    INDEX idx_portfolio_id (portfolio_id),
-                    INDEX idx_symbol (symbol)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                # Transactions
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS transactions (
+                        transaction_id   VARCHAR(36)   PRIMARY KEY,
+                        holding_id       VARCHAR(36)   NOT NULL REFERENCES holdings(holding_id) ON DELETE CASCADE,
+                        transaction_type VARCHAR(10)   NOT NULL CHECK (transaction_type IN ('buy', 'sell')),
+                        quantity         NUMERIC(18,8) NOT NULL,
+                        price_per_unit   NUMERIC(18,8) NOT NULL,
+                        fees             NUMERIC(18,2) DEFAULT 0,
+                        transaction_date TIMESTAMP     NOT NULL,
+                        notes            TEXT,
+                        import_source    VARCHAR(50),
+                        created_at       TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_txn_holding_id ON transactions (holding_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_txn_date       ON transactions (transaction_date)")
 
-            # Create transactions table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    transaction_id VARCHAR(36) PRIMARY KEY,
-                    holding_id VARCHAR(36) NOT NULL,
-                    transaction_type ENUM('buy', 'sell') NOT NULL,
-                    quantity DECIMAL(18, 8) NOT NULL,
-                    price_per_unit DECIMAL(18, 8) NOT NULL,
-                    fees DECIMAL(18, 2) DEFAULT 0,
-                    transaction_date TIMESTAMP NOT NULL,
-                    notes TEXT,
-                    import_source VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (holding_id) REFERENCES holdings(holding_id) ON DELETE CASCADE,
-                    INDEX idx_holding_id (holding_id),
-                    INDEX idx_transaction_date (transaction_date)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                # CSV imports
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS csv_imports (
+                        import_id     VARCHAR(36)  PRIMARY KEY,
+                        portfolio_id  VARCHAR(36)  NOT NULL REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
+                        filename      VARCHAR(255) NOT NULL,
+                        row_count     INT          NOT NULL,
+                        success_count INT          NOT NULL,
+                        error_count   INT          NOT NULL,
+                        errors_json   JSONB,
+                        imported_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_csv_portfolio_id ON csv_imports (portfolio_id)")
 
-            # Create csv_imports table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS csv_imports (
-                    import_id VARCHAR(36) PRIMARY KEY,
-                    portfolio_id VARCHAR(36) NOT NULL,
-                    filename VARCHAR(255) NOT NULL,
-                    row_count INT NOT NULL,
-                    success_count INT NOT NULL,
-                    error_count INT NOT NULL,
-                    errors_json JSON,
-                    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (portfolio_id) REFERENCES portfolios(portfolio_id) ON DELETE CASCADE,
-                    INDEX idx_portfolio_id (portfolio_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                # Watchlists
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS watchlists (
+                        watchlist_id VARCHAR(36)  PRIMARY KEY,
+                        user_id      VARCHAR(36)  NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        name         VARCHAR(100) NOT NULL DEFAULT 'My Watchlist',
+                        position     INT          NOT NULL DEFAULT 0,
+                        created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                        updated_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON watchlists (user_id)")
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_trigger WHERE tgname = 'set_watchlists_updated_at'
+                        ) THEN
+                            CREATE TRIGGER set_watchlists_updated_at
+                            BEFORE UPDATE ON watchlists
+                            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+                        END IF;
+                    END $$
+                """)
 
-            # Create watchlists table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS watchlists (
-                    watchlist_id VARCHAR(36) PRIMARY KEY,
-                    user_id VARCHAR(36) NOT NULL,
-                    name VARCHAR(100) NOT NULL DEFAULT 'My Watchlist',
-                    position INT NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                    INDEX idx_watchlists_user_id (user_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                # Watchlist sections
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS watchlist_sections (
+                        section_id   VARCHAR(36)  PRIMARY KEY,
+                        watchlist_id VARCHAR(36)  NOT NULL REFERENCES watchlists(watchlist_id) ON DELETE CASCADE,
+                        name         VARCHAR(100) NOT NULL,
+                        position     INT          NOT NULL DEFAULT 0,
+                        created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_sections_watchlist_id ON watchlist_sections (watchlist_id)")
 
-            # Create watchlist_sections table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS watchlist_sections (
-                    section_id VARCHAR(36) PRIMARY KEY,
-                    watchlist_id VARCHAR(36) NOT NULL,
-                    name VARCHAR(100) NOT NULL,
-                    position INT NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (watchlist_id) REFERENCES watchlists(watchlist_id) ON DELETE CASCADE,
-                    INDEX idx_sections_watchlist_id (watchlist_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                # Watchlist items
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS watchlist_items (
+                        item_id      VARCHAR(36)  PRIMARY KEY,
+                        watchlist_id VARCHAR(36)  NOT NULL REFERENCES watchlists(watchlist_id) ON DELETE CASCADE,
+                        section_id   VARCHAR(36)  REFERENCES watchlist_sections(section_id) ON DELETE SET NULL,
+                        symbol       VARCHAR(20)  NOT NULL,
+                        asset_type   VARCHAR(10)  NOT NULL CHECK (asset_type IN ('stock', 'crypto')),
+                        display_name VARCHAR(100),
+                        position     INT          NOT NULL DEFAULT 0,
+                        is_pinned    BOOLEAN      NOT NULL DEFAULT FALSE,
+                        created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (watchlist_id, symbol)
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_items_watchlist_id ON watchlist_items (watchlist_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_items_section_id   ON watchlist_items (section_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_items_symbol       ON watchlist_items (symbol)")
 
-            # Create watchlist_items table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS watchlist_items (
-                    item_id VARCHAR(36) PRIMARY KEY,
-                    watchlist_id VARCHAR(36) NOT NULL,
-                    section_id VARCHAR(36) NULL,
-                    symbol VARCHAR(20) NOT NULL,
-                    asset_type ENUM('stock', 'crypto') NOT NULL,
-                    display_name VARCHAR(100) NULL,
-                    position INT NOT NULL DEFAULT 0,
-                    is_pinned TINYINT(1) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (watchlist_id) REFERENCES watchlists(watchlist_id) ON DELETE CASCADE,
-                    FOREIGN KEY (section_id) REFERENCES watchlist_sections(section_id) ON DELETE SET NULL,
-                    UNIQUE KEY unique_watchlist_symbol (watchlist_id, symbol),
-                    INDEX idx_items_watchlist_id (watchlist_id),
-                    INDEX idx_items_section_id (section_id),
-                    INDEX idx_items_symbol (symbol)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
+                # Price cache
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS price_cache (
+                        symbol         VARCHAR(20)   PRIMARY KEY,
+                        asset_type     VARCHAR(10)   NOT NULL CHECK (asset_type IN ('stock', 'crypto')),
+                        price          NUMERIC(18,8),
+                        change_percent NUMERIC(10,4),
+                        display_name   VARCHAR(100),
+                        last_updated   TIMESTAMP
+                    )
+                """)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_price_cache_last_updated ON price_cache (last_updated)")
 
-            # Create price_cache table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS price_cache (
-                    symbol VARCHAR(20) PRIMARY KEY,
-                    asset_type ENUM('stock', 'crypto') NOT NULL,
-                    price DECIMAL(18, 8) NULL,
-                    change_percent DECIMAL(10, 4) NULL,
-                    display_name VARCHAR(100) NULL,
-                    last_updated TIMESTAMP NULL,
-                    INDEX idx_price_cache_last_updated (last_updated)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
-
-            connection.commit()
+            conn.commit()
             print("✓ Database schema initialized")
 
-        except Error as e:
-            if connection:
-                connection.rollback()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to initialize schema: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
-    
+            self._release(conn)
+
     def save_report(
         self,
         ticker: str,
@@ -358,126 +281,63 @@ class DatabaseManager:
         metadata: Optional[Dict[str, Any]] = None,
         user_id: Optional[str] = None
     ) -> str:
-        """
-        Save a report to the database.
-
-        Args:
-            ticker: Stock ticker symbol
-            trade_type: Type of trade
-            report_text: Full report text
-            metadata: Optional metadata dictionary
-            user_id: Optional user ID for ownership
-
-        Returns:
-            report_id: Generated report ID
-        """
+        """Save a report to the database. Returns report_id."""
         report_id = str(uuid.uuid4())
-        connection = None
-
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            metadata_json = json.dumps(metadata) if metadata else None
-
-            cursor.execute("""
-                INSERT INTO reports (report_id, user_id, ticker, trade_type, report_text, metadata)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (report_id, user_id, ticker.upper(), trade_type, report_text, metadata_json))
-            
-            connection.commit()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO reports (report_id, user_id, ticker, trade_type, report_text, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (report_id, user_id, ticker.upper(), trade_type, report_text,
+                      json.dumps(metadata) if metadata else None))
+            conn.commit()
             return report_id
-            
-        except Error as e:
-            if connection:
-                connection.rollback()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to save report: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
-    
+            self._release(conn)
+
     def get_report(self, report_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve a report by ID, optionally verifying ownership.
-
-        Args:
-            report_id: Report ID
-            user_id: If provided, only return the report if it belongs to this user
-
-        Returns:
-            Report dictionary or None if not found / not owned by user
-        """
-        connection = None
-        cursor = None
+        """Retrieve a report by ID, optionally verifying ownership."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            if user_id:
-                cursor.execute("""
-                    SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
-                    FROM reports
-                    WHERE report_id = %s AND user_id = %s
-                """, (report_id, user_id))
-            else:
-                cursor.execute("""
-                    SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
-                    FROM reports
-                    WHERE report_id = %s
-                """, (report_id,))
-
-            result = cursor.fetchone()
-            if result and result.get('metadata'):
-                result['metadata'] = json.loads(result['metadata'])
-
-            return result
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if user_id:
+                    cur.execute("""
+                        SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
+                        FROM reports WHERE report_id = %s AND user_id = %s
+                    """, (report_id, user_id))
+                else:
+                    cur.execute("""
+                        SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
+                        FROM reports WHERE report_id = %s
+                    """, (report_id,))
+                return cur.fetchone()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get report: {e}")
         finally:
-            if cursor:
-                cursor.close()
-            if connection and connection.is_connected():
-                connection.close()
-    
+            self._release(conn)
+
     def get_reports_by_ticker(self, ticker: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent reports for a ticker.
-
-        Args:
-            ticker: Stock ticker symbol
-            limit: Maximum number of reports to return
-
-        Returns:
-            List of report dictionaries
-        """
-        connection = None
+        """Get recent reports for a ticker."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT report_id, ticker, trade_type, report_text, metadata, created_at
-                FROM reports
-                WHERE ticker = %s
-                ORDER BY created_at DESC
-                LIMIT %s
-            """, (ticker.upper(), limit))
-
-            results = cursor.fetchall()
-            for result in results:
-                if result.get('metadata'):
-                    result['metadata'] = json.loads(result['metadata'])
-
-            return results
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT report_id, ticker, trade_type, report_text, metadata, created_at
+                    FROM reports WHERE ticker = %s ORDER BY created_at DESC LIMIT %s
+                """, (ticker.upper(), limit))
+                return cur.fetchall()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get reports by ticker: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_all_reports(
         self,
@@ -488,200 +348,111 @@ class DatabaseManager:
         offset: int = 0,
         user_id: Optional[str] = None
     ) -> tuple[List[Dict[str, Any]], int]:
-        """
-        Get paginated reports with optional filtering.
-
-        Args:
-            ticker: Optional ticker filter
-            trade_type: Optional trade type filter
-            sort_order: Sort order for created_at (ASC or DESC)
-            limit: Maximum number of reports to return
-            offset: Number of reports to skip
-            user_id: If provided, only return reports belonging to this user
-
-        Returns:
-            Tuple of (reports list, total count)
-        """
-        connection = None
-        cursor = None
+        """Get paginated reports with optional filtering."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                where_clauses = []
+                params = []
 
-            # Build WHERE clause dynamically
-            where_clauses = []
-            params = []
+                if user_id:
+                    where_clauses.append("user_id = %s")
+                    params.append(user_id)
+                if ticker:
+                    where_clauses.append("ticker = %s")
+                    params.append(ticker.upper())
+                if trade_type:
+                    where_clauses.append("trade_type = %s")
+                    params.append(trade_type)
 
-            if user_id:
-                where_clauses.append("user_id = %s")
-                params.append(user_id)
+                where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+                sort_order = "DESC" if sort_order.upper() not in ("ASC", "DESC") else sort_order.upper()
 
-            if ticker:
-                where_clauses.append("ticker = %s")
-                params.append(ticker.upper())
+                cur.execute(f"SELECT COUNT(*) as total FROM reports {where_sql}", params)
+                total_count = cur.fetchone()['total']
 
-            if trade_type:
-                where_clauses.append("trade_type = %s")
-                params.append(trade_type)
+                cur.execute(f"""
+                    SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
+                    FROM reports {where_sql}
+                    ORDER BY created_at {sort_order}
+                    LIMIT %s OFFSET %s
+                """, params + [limit, offset])
 
-            where_sql = ""
-            if where_clauses:
-                where_sql = "WHERE " + " AND ".join(where_clauses)
-
-            # Validate sort order
-            sort_order = "DESC" if sort_order.upper() not in ("ASC", "DESC") else sort_order.upper()
-
-            # Get total count
-            count_sql = f"SELECT COUNT(*) as total FROM reports {where_sql}"
-            cursor.execute(count_sql, params)
-            total_count = cursor.fetchone()['total']
-
-            # Get paginated results
-            query_sql = f"""
-                SELECT report_id, user_id, ticker, trade_type, report_text, metadata, created_at
-                FROM reports
-                {where_sql}
-                ORDER BY created_at {sort_order}
-                LIMIT %s OFFSET %s
-            """
-            cursor.execute(query_sql, params + [limit, offset])
-
-            results = cursor.fetchall()
-            for result in results:
-                if result.get('metadata'):
-                    result['metadata'] = json.loads(result['metadata'])
-
-            return results, total_count
-
-        except Error as e:
+                return cur.fetchall(), total_count
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get all reports: {e}")
         finally:
-            if cursor:
-                cursor.close()
-            if connection and connection.is_connected():
-                connection.close()
-    
-    def save_chunks(
-        self,
-        report_id: str,
-        chunks: List[Dict[str, Any]]
-    ):
-        """
-        Save report chunks with embeddings.
-        
-        Args:
-            report_id: Report ID
-            chunks: List of chunk dictionaries with keys:
-                - chunk_text: Text content
-                - section: Section name (optional)
-                - chunk_index: Index in report
-                - embedding: Embedding vector (list of floats)
-        """
-        connection = None
+            self._release(conn)
+
+    def save_chunks(self, report_id: str, chunks: List[Dict[str, Any]]):
+        """Save report chunks with embeddings."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-            
-            for chunk in chunks:
-                chunk_id = str(uuid.uuid4())
-                embedding_json = json.dumps(chunk.get('embedding')) if chunk.get('embedding') else None
-                
-                cursor.execute("""
-                    INSERT INTO report_chunks 
-                    (chunk_id, report_id, chunk_text, section, chunk_index, embedding)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                    chunk_id,
-                    report_id,
-                    chunk['chunk_text'],
-                    chunk.get('section'),
-                    chunk['chunk_index'],
-                    embedding_json
-                ))
-            
-            connection.commit()
-            
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                for chunk in chunks:
+                    chunk_id = str(uuid.uuid4())
+                    cur.execute("""
+                        INSERT INTO report_chunks
+                        (chunk_id, report_id, chunk_text, section, chunk_index, embedding)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        chunk_id,
+                        report_id,
+                        chunk['chunk_text'],
+                        chunk.get('section'),
+                        chunk['chunk_index'],
+                        json.dumps(chunk.get('embedding')) if chunk.get('embedding') else None
+                    ))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to save chunks: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
-    
+            self._release(conn)
+
     def get_chunks_by_report(
         self,
         report_id: str,
         include_embeddings: bool = True
     ) -> List[Dict[str, Any]]:
-        """
-        Retrieve all chunks for a report.
-        
-        Args:
-            report_id: Report ID
-            include_embeddings: Whether to include embeddings in results
-        
-        Returns:
-            List of chunk dictionaries
-        """
-        connection = None
+        """Retrieve all chunks for a report."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-            
-            if include_embeddings:
-                cursor.execute("""
-                    SELECT chunk_id, report_id, chunk_text, section, chunk_index, embedding, created_at
-                    FROM report_chunks
-                    WHERE report_id = %s
-                    ORDER BY chunk_index ASC
-                """, (report_id,))
-            else:
-                cursor.execute("""
-                    SELECT chunk_id, report_id, chunk_text, section, chunk_index, created_at
-                    FROM report_chunks
-                    WHERE report_id = %s
-                    ORDER BY chunk_index ASC
-                """, (report_id,))
-            
-            results = cursor.fetchall()
-            for result in results:
-                if result.get('embedding'):
-                    result['embedding'] = json.loads(result['embedding'])
-            
-            return results
-            
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if include_embeddings:
+                    cur.execute("""
+                        SELECT chunk_id, report_id, chunk_text, section, chunk_index, embedding, created_at
+                        FROM report_chunks WHERE report_id = %s ORDER BY chunk_index ASC
+                    """, (report_id,))
+                else:
+                    cur.execute("""
+                        SELECT chunk_id, report_id, chunk_text, section, chunk_index, created_at
+                        FROM report_chunks WHERE report_id = %s ORDER BY chunk_index ASC
+                    """, (report_id,))
+                return cur.fetchall()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get chunks: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
-    
+            self._release(conn)
+
     def delete_report(self, report_id: str):
-        """
-        Delete a report and all its chunks (cascade).
-
-        Args:
-            report_id: Report ID
-        """
-        connection = None
+        """Delete a report and all its chunks (cascade)."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("DELETE FROM reports WHERE report_id = %s", (report_id,))
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM reports WHERE report_id = %s", (report_id,))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to delete report: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     # ==================== Portfolio Methods ====================
 
@@ -695,104 +466,82 @@ class DatabaseManager:
         cash_balance: float = 0.0
     ):
         """Create a new portfolio."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("""
-                INSERT INTO portfolios (portfolio_id, name, description, user_id, track_cash, cash_balance)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (portfolio_id, name, description, user_id, 1 if track_cash else 0, cash_balance))
-
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO portfolios (portfolio_id, name, description, user_id, track_cash, cash_balance)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (portfolio_id, name, description, user_id, track_cash, cash_balance))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to create portfolio: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_portfolio(self, portfolio_id: str) -> Optional[Dict[str, Any]]:
         """Get portfolio by ID."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT portfolio_id, name, description, user_id, created_at, updated_at,
-                       COALESCE(track_cash, 0) AS track_cash, COALESCE(cash_balance, 0) AS cash_balance
-                FROM portfolios
-                WHERE portfolio_id = %s
-            """, (portfolio_id,))
-
-            row = cursor.fetchone()
-            if row and 'track_cash' in row:
-                row['track_cash'] = bool(row['track_cash'])
-            return row
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT portfolio_id, name, description, user_id, created_at, updated_at,
+                           COALESCE(track_cash, FALSE) AS track_cash,
+                           COALESCE(cash_balance, 0) AS cash_balance
+                    FROM portfolios WHERE portfolio_id = %s
+                """, (portfolio_id,))
+                return cur.fetchone()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get portfolio: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def update_cash_balance(self, portfolio_id: str, cash_balance: float) -> None:
         """Update the cash balance for a portfolio."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-            cursor.execute("""
-                UPDATE portfolios SET cash_balance = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE portfolio_id = %s
-            """, (cash_balance, portfolio_id))
-            connection.commit()
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE portfolios SET cash_balance = %s WHERE portfolio_id = %s
+                """, (cash_balance, portfolio_id))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to update cash balance: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def list_portfolios(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List portfolios, optionally filtered by user."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            if user_id is not None:
-                cursor.execute("""
-                    SELECT portfolio_id, name, description, user_id, created_at, updated_at,
-                           COALESCE(track_cash, 0) AS track_cash, COALESCE(cash_balance, 0) AS cash_balance
-                    FROM portfolios
-                    WHERE user_id = %s
-                    ORDER BY created_at ASC
-                """, (user_id,))
-            else:
-                cursor.execute("""
-                    SELECT portfolio_id, name, description, user_id, created_at, updated_at,
-                           COALESCE(track_cash, 0) AS track_cash, COALESCE(cash_balance, 0) AS cash_balance
-                    FROM portfolios
-                    ORDER BY created_at ASC
-                """)
-
-            return cursor.fetchall()
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if user_id is not None:
+                    cur.execute("""
+                        SELECT portfolio_id, name, description, user_id, created_at, updated_at,
+                               COALESCE(track_cash, FALSE) AS track_cash,
+                               COALESCE(cash_balance, 0) AS cash_balance
+                        FROM portfolios WHERE user_id = %s ORDER BY created_at ASC
+                    """, (user_id,))
+                else:
+                    cur.execute("""
+                        SELECT portfolio_id, name, description, user_id, created_at, updated_at,
+                               COALESCE(track_cash, FALSE) AS track_cash,
+                               COALESCE(cash_balance, 0) AS cash_balance
+                        FROM portfolios ORDER BY created_at ASC
+                    """)
+                return cur.fetchall()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to list portfolios: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     # ==================== User Methods ====================
 
@@ -804,135 +553,103 @@ class DatabaseManager:
         password_hash: Optional[str] = None,
         google_id: Optional[str] = None,
     ):
-        """Create a new user. password_hash and google_id are optional (e.g. Google-only users)."""
-        connection = None
+        """Create a new user."""
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-            cursor.execute("""
-                INSERT INTO users (user_id, username, email, password_hash, google_id)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (user_id, username, email, password_hash, google_id))
-
-            connection.commit()
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO users (user_id, username, email, password_hash, google_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (user_id, username, email, password_hash, google_id))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to create user: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """Get a user by username."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT user_id, username, email, password_hash, google_id, created_at
-                FROM users
-                WHERE username = %s
-            """, (username,))
-
-            return cursor.fetchone()
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    FROM users WHERE username = %s
+                """, (username,))
+                return cur.fetchone()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a user by ID."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT user_id, username, email, password_hash, google_id, created_at
-                FROM users
-                WHERE user_id = %s
-            """, (user_id,))
-
-            return cursor.fetchone()
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    FROM users WHERE user_id = %s
+                """, (user_id,))
+                return cur.fetchone()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get a user by email."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT user_id, username, email, password_hash, google_id, created_at
-                FROM users
-                WHERE email = %s
-            """, (email,))
-
-            return cursor.fetchone()
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    FROM users WHERE email = %s
+                """, (email,))
+                return cur.fetchone()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_user_by_google_id(self, google_id: str) -> Optional[Dict[str, Any]]:
         """Get a user by Google OAuth sub (google_id)."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT user_id, username, email, password_hash, google_id, created_at
-                FROM users
-                WHERE google_id = %s
-            """, (google_id,))
-
-            return cursor.fetchone()
-
-        except Error as e:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    FROM users WHERE google_id = %s
+                """, (google_id,))
+                return cur.fetchone()
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def update_user_google_id(self, user_id: str, google_id: str):
         """Link a Google account to an existing user."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("""
-                UPDATE users SET google_id = %s WHERE user_id = %s
-            """, (google_id, user_id))
-
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE users SET google_id = %s WHERE user_id = %s
+                """, (google_id, user_id))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to update user: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     # ==================== Holdings Methods ====================
 
@@ -944,115 +661,90 @@ class DatabaseManager:
         asset_type: str
     ):
         """Create a new holding."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("""
-                INSERT INTO holdings (holding_id, portfolio_id, symbol, asset_type)
-                VALUES (%s, %s, %s, %s)
-            """, (holding_id, portfolio_id, symbol.upper(), asset_type))
-
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO holdings (holding_id, portfolio_id, symbol, asset_type)
+                    VALUES (%s, %s, %s, %s)
+                """, (holding_id, portfolio_id, symbol.upper(), asset_type))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to create holding: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_holding(self, portfolio_id: str, symbol: str) -> Optional[Dict[str, Any]]:
         """Get a specific holding by portfolio and symbol."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT holding_id, portfolio_id, symbol, asset_type,
-                       total_quantity, average_cost, total_cost_basis,
-                       created_at, updated_at
-                FROM holdings
-                WHERE portfolio_id = %s AND symbol = %s
-            """, (portfolio_id, symbol.upper()))
-
-            result = cursor.fetchone()
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT holding_id, portfolio_id, symbol, asset_type,
+                           total_quantity, average_cost, total_cost_basis,
+                           created_at, updated_at
+                    FROM holdings WHERE portfolio_id = %s AND symbol = %s
+                """, (portfolio_id, symbol.upper()))
+                result = cur.fetchone()
             if result:
-                # Convert Decimal to Decimal for consistency
                 result['total_quantity'] = Decimal(str(result['total_quantity']))
                 result['average_cost'] = Decimal(str(result['average_cost']))
                 result['total_cost_basis'] = Decimal(str(result['total_cost_basis']))
             return result
-
-        except Error as e:
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get holding: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_holding_by_id(self, holding_id: str) -> Optional[Dict[str, Any]]:
         """Get a holding by its ID."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT holding_id, portfolio_id, symbol, asset_type,
-                       total_quantity, average_cost, total_cost_basis,
-                       created_at, updated_at
-                FROM holdings
-                WHERE holding_id = %s
-            """, (holding_id,))
-
-            result = cursor.fetchone()
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT holding_id, portfolio_id, symbol, asset_type,
+                           total_quantity, average_cost, total_cost_basis,
+                           created_at, updated_at
+                    FROM holdings WHERE holding_id = %s
+                """, (holding_id,))
+                result = cur.fetchone()
             if result:
                 result['total_quantity'] = Decimal(str(result['total_quantity']))
                 result['average_cost'] = Decimal(str(result['average_cost']))
                 result['total_cost_basis'] = Decimal(str(result['total_cost_basis']))
             return result
-
-        except Error as e:
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get holding: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_holdings(self, portfolio_id: str) -> List[Dict[str, Any]]:
         """Get all holdings for a portfolio."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT holding_id, portfolio_id, symbol, asset_type,
-                       total_quantity, average_cost, total_cost_basis,
-                       created_at, updated_at
-                FROM holdings
-                WHERE portfolio_id = %s
-                ORDER BY symbol ASC
-            """, (portfolio_id,))
-
-            results = cursor.fetchall()
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT holding_id, portfolio_id, symbol, asset_type,
+                           total_quantity, average_cost, total_cost_basis,
+                           created_at, updated_at
+                    FROM holdings WHERE portfolio_id = %s ORDER BY symbol ASC
+                """, (portfolio_id,))
+                results = cur.fetchall()
             for result in results:
                 result['total_quantity'] = Decimal(str(result['total_quantity']))
                 result['average_cost'] = Decimal(str(result['average_cost']))
                 result['total_cost_basis'] = Decimal(str(result['total_cost_basis']))
             return results
-
-        except Error as e:
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get holdings: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def update_holding(
         self,
@@ -1062,48 +754,37 @@ class DatabaseManager:
         total_cost_basis: Decimal
     ):
         """Update holding totals."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("""
-                UPDATE holdings
-                SET total_quantity = %s,
-                    average_cost = %s,
-                    total_cost_basis = %s
-                WHERE holding_id = %s
-            """, (str(total_quantity), str(average_cost), str(total_cost_basis), holding_id))
-
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE holdings
+                    SET total_quantity = %s, average_cost = %s, total_cost_basis = %s
+                    WHERE holding_id = %s
+                """, (str(total_quantity), str(average_cost), str(total_cost_basis), holding_id))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to update holding: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def delete_holding(self, holding_id: str):
         """Delete a holding and all its transactions (cascade)."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("DELETE FROM holdings WHERE holding_id = %s", (holding_id,))
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM holdings WHERE holding_id = %s", (holding_id,))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to delete holding: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     # ==================== Transaction Methods ====================
 
@@ -1120,412 +801,377 @@ class DatabaseManager:
         import_source: str = "manual"
     ):
         """Add a transaction to a holding."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("""
-                INSERT INTO transactions
-                (transaction_id, holding_id, transaction_type, quantity,
-                 price_per_unit, fees, transaction_date, notes, import_source)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                transaction_id,
-                holding_id,
-                transaction_type,
-                str(quantity),
-                str(price_per_unit),
-                str(fees),
-                transaction_date,
-                notes,
-                import_source
-            ))
-
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO transactions
+                    (transaction_id, holding_id, transaction_type, quantity,
+                     price_per_unit, fees, transaction_date, notes, import_source)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    transaction_id, holding_id, transaction_type,
+                    str(quantity), str(price_per_unit), str(fees),
+                    transaction_date, notes, import_source
+                ))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to add transaction: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_transaction(self, transaction_id: str) -> Optional[Dict[str, Any]]:
         """Get a transaction by ID."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT transaction_id, holding_id, transaction_type, quantity,
-                       price_per_unit, fees, transaction_date, notes, import_source,
-                       created_at
-                FROM transactions
-                WHERE transaction_id = %s
-            """, (transaction_id,))
-
-            result = cursor.fetchone()
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT transaction_id, holding_id, transaction_type, quantity,
+                           price_per_unit, fees, transaction_date, notes, import_source, created_at
+                    FROM transactions WHERE transaction_id = %s
+                """, (transaction_id,))
+                result = cur.fetchone()
             if result:
                 result['quantity'] = Decimal(str(result['quantity']))
                 result['price_per_unit'] = Decimal(str(result['price_per_unit']))
                 result['fees'] = Decimal(str(result['fees']))
             return result
-
-        except Error as e:
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get transaction: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_transactions(self, holding_id: str) -> List[Dict[str, Any]]:
         """Get all transactions for a holding."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT transaction_id, holding_id, transaction_type, quantity,
-                       price_per_unit, fees, transaction_date, notes, import_source,
-                       created_at
-                FROM transactions
-                WHERE holding_id = %s
-                ORDER BY transaction_date ASC
-            """, (holding_id,))
-
-            results = cursor.fetchall()
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT transaction_id, holding_id, transaction_type, quantity,
+                           price_per_unit, fees, transaction_date, notes, import_source, created_at
+                    FROM transactions WHERE holding_id = %s ORDER BY transaction_date ASC
+                """, (holding_id,))
+                results = cur.fetchall()
             for result in results:
                 result['quantity'] = Decimal(str(result['quantity']))
                 result['price_per_unit'] = Decimal(str(result['price_per_unit']))
                 result['fees'] = Decimal(str(result['fees']))
             return results
-
-        except Error as e:
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get transactions: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def delete_transaction(self, transaction_id: str):
         """Delete a transaction."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            cursor.execute("DELETE FROM transactions WHERE transaction_id = %s", (transaction_id,))
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM transactions WHERE transaction_id = %s", (transaction_id,))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to delete transaction: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     def get_all_portfolio_transactions(self, portfolio_id: str) -> List[Dict[str, Any]]:
         """Get all transactions for a portfolio joined with holding symbol and asset_type."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-
-            cursor.execute("""
-                SELECT t.transaction_id, t.holding_id, t.transaction_type, t.quantity,
-                       t.price_per_unit, t.fees, t.transaction_date, t.notes,
-                       h.symbol, h.asset_type
-                FROM transactions t
-                JOIN holdings h ON t.holding_id = h.holding_id
-                WHERE h.portfolio_id = %s
-                ORDER BY t.transaction_date ASC
-            """, (portfolio_id,))
-
-            results = cursor.fetchall()
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT t.transaction_id, t.holding_id, t.transaction_type, t.quantity,
+                           t.price_per_unit, t.fees, t.transaction_date, t.notes,
+                           h.symbol, h.asset_type
+                    FROM transactions t
+                    JOIN holdings h ON t.holding_id = h.holding_id
+                    WHERE h.portfolio_id = %s
+                    ORDER BY t.transaction_date ASC
+                """, (portfolio_id,))
+                results = cur.fetchall()
             for result in results:
                 result['quantity'] = Decimal(str(result['quantity']))
                 result['price_per_unit'] = Decimal(str(result['price_per_unit']))
                 result['fees'] = Decimal(str(result['fees']))
             return results
-
-        except Error as e:
+        except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get portfolio transactions: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
-                connection.close()
+            self._release(conn)
 
     # ==================== Watchlist Methods ====================
 
     def create_watchlist(self, watchlist_id, user_id, name='My Watchlist'):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "INSERT INTO watchlists (watchlist_id, user_id, name) VALUES (%s, %s, %s)",
                     (watchlist_id, user_id, name)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_watchlist(self, watchlist_id):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT * FROM watchlists WHERE watchlist_id = %s", (watchlist_id,))
-                return cursor.fetchone()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM watchlists WHERE watchlist_id = %s", (watchlist_id,))
+                return cur.fetchone()
         finally:
-            conn.close()
+            self._release(conn)
 
     def list_watchlists(self, user_id):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute(
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
                     "SELECT * FROM watchlists WHERE user_id = %s ORDER BY position, created_at",
                     (user_id,)
                 )
-                return cursor.fetchall()
+                return cur.fetchall()
         finally:
-            conn.close()
+            self._release(conn)
 
     def update_watchlist(self, watchlist_id, name):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "UPDATE watchlists SET name = %s WHERE watchlist_id = %s",
                     (name, watchlist_id)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def delete_watchlist(self, watchlist_id):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute("DELETE FROM watchlists WHERE watchlist_id = %s", (watchlist_id,))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM watchlists WHERE watchlist_id = %s", (watchlist_id,))
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     # ── Section CRUD ─────────────────────────────────────────────
 
     def create_section(self, section_id, watchlist_id, name, position=0):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "INSERT INTO watchlist_sections (section_id, watchlist_id, name, position) VALUES (%s, %s, %s, %s)",
                     (section_id, watchlist_id, name, position)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def list_sections(self, watchlist_id):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute(
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
                     "SELECT * FROM watchlist_sections WHERE watchlist_id = %s ORDER BY position, created_at",
                     (watchlist_id,)
                 )
-                return cursor.fetchall()
+                return cur.fetchall()
         finally:
-            conn.close()
+            self._release(conn)
 
     def update_section(self, section_id, name):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "UPDATE watchlist_sections SET name = %s WHERE section_id = %s",
                     (name, section_id)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def delete_section(self, section_id):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute("DELETE FROM watchlist_sections WHERE section_id = %s", (section_id,))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM watchlist_sections WHERE section_id = %s", (section_id,))
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     # ── Item CRUD ────────────────────────────────────────────────
 
     def add_watchlist_item(self, item_id, watchlist_id, symbol, asset_type, display_name=None, section_id=None):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "INSERT INTO watchlist_items (item_id, watchlist_id, section_id, symbol, asset_type, display_name) VALUES (%s, %s, %s, %s, %s, %s)",
                     (item_id, watchlist_id, section_id, symbol, asset_type, display_name)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def remove_watchlist_item(self, item_id):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute("DELETE FROM watchlist_items WHERE item_id = %s", (item_id,))
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM watchlist_items WHERE item_id = %s", (item_id,))
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_watchlist_items(self, watchlist_id):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("""
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
                     SELECT wi.*, ws.name AS section_name, ws.position AS section_position
                     FROM watchlist_items wi
                     LEFT JOIN watchlist_sections ws ON wi.section_id = ws.section_id
                     WHERE wi.watchlist_id = %s
                     ORDER BY ws.position, ws.created_at, wi.position, wi.created_at
                 """, (watchlist_id,))
-                return cursor.fetchall()
+                return cur.fetchall()
         finally:
-            conn.close()
+            self._release(conn)
 
     def move_item_to_section(self, item_id, section_id):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "UPDATE watchlist_items SET section_id = %s WHERE item_id = %s",
                     (section_id, item_id)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def set_item_pinned(self, item_id, is_pinned):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
+            with conn.cursor() as cur:
+                cur.execute(
                     "UPDATE watchlist_items SET is_pinned = %s WHERE item_id = %s",
-                    (1 if is_pinned else 0, item_id)
+                    (bool(is_pinned), item_id)
                 )
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_pinned_items(self, user_id):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("""
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
                     SELECT wi.*
                     FROM watchlist_items wi
                     JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id
-                    WHERE wl.user_id = %s AND wi.is_pinned = 1
+                    WHERE wl.user_id = %s AND wi.is_pinned = TRUE
                     ORDER BY wi.created_at
                     LIMIT 3
                 """, (user_id,))
-                return cursor.fetchall()
+                return cur.fetchall()
         finally:
-            conn.close()
+            self._release(conn)
 
     def count_pinned_items(self, user_id):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("""
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
                     SELECT COUNT(*) AS cnt
                     FROM watchlist_items wi
                     JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id
-                    WHERE wl.user_id = %s AND wi.is_pinned = 1
+                    WHERE wl.user_id = %s AND wi.is_pinned = TRUE
                 """, (user_id,))
-                row = cursor.fetchone()
+                row = cur.fetchone()
                 return row['cnt'] if row else 0
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_all_watched_symbols(self):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT DISTINCT symbol, asset_type FROM watchlist_items")
-                return cursor.fetchall()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT DISTINCT symbol, asset_type FROM watchlist_items")
+                return cur.fetchall()
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_watched_symbols_for_user(self, user_id):
         """Return all watched symbols for a specific user."""
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("""
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
                     SELECT DISTINCT wi.symbol, wi.asset_type
                     FROM watchlist_items wi
                     JOIN watchlists w ON wi.watchlist_id = w.watchlist_id
                     WHERE w.user_id = %s
                 """, (user_id,))
-                return cursor.fetchall()
+                return cur.fetchall()
         finally:
-            conn.close()
+            self._release(conn)
 
     # ── Price Cache ──────────────────────────────────────────────
 
     def upsert_price_cache(self, symbol, asset_type, price, change_percent, display_name=None):
         conn = self.get_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute("""
+            with conn.cursor() as cur:
+                cur.execute("""
                     INSERT INTO price_cache (symbol, asset_type, price, change_percent, display_name, last_updated)
                     VALUES (%s, %s, %s, %s, %s, NOW())
-                    ON DUPLICATE KEY UPDATE
-                        price = VALUES(price),
-                        change_percent = VALUES(change_percent),
-                        display_name = COALESCE(VALUES(display_name), display_name),
-                        last_updated = NOW()
+                    ON CONFLICT (symbol) DO UPDATE SET
+                        price          = EXCLUDED.price,
+                        change_percent = EXCLUDED.change_percent,
+                        display_name   = COALESCE(EXCLUDED.display_name, price_cache.display_name),
+                        last_updated   = NOW()
                 """, (symbol, asset_type, price, change_percent, display_name))
             conn.commit()
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_cached_prices(self, symbols):
         if not symbols:
             return {}
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 placeholders = ','.join(['%s'] * len(symbols))
-                cursor.execute(
+                cur.execute(
                     f"SELECT * FROM price_cache WHERE symbol IN ({placeholders})",
                     list(symbols)
                 )
-                rows = cursor.fetchall()
+                rows = cur.fetchall()
                 return {row['symbol']: row for row in rows}
         finally:
-            conn.close()
+            self._release(conn)
 
     def get_all_cached_prices(self):
         conn = self.get_connection()
         try:
-            with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT * FROM price_cache")
-                rows = cursor.fetchall()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM price_cache")
+                rows = cur.fetchall()
                 return {row['symbol']: row for row in rows}
         finally:
-            conn.close()
+            self._release(conn)
 
     # ==================== CSV Import Logging ====================
 
@@ -1540,29 +1186,23 @@ class DatabaseManager:
         errors_json: List[Dict[str, Any]]
     ):
         """Log a CSV import operation."""
-        connection = None
+        conn = None
         try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-
-            errors_str = json.dumps(errors_json) if errors_json else None
-
-            cursor.execute("""
-                INSERT INTO csv_imports
-                (import_id, portfolio_id, filename, row_count, success_count, error_count, errors_json)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (import_id, portfolio_id, filename, row_count, success_count, error_count, errors_str))
-
-            connection.commit()
-
-        except Error as e:
-            if connection:
-                connection.rollback()
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO csv_imports
+                    (import_id, portfolio_id, filename, row_count, success_count, error_count, errors_json)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (import_id, portfolio_id, filename, row_count, success_count, error_count,
+                      json.dumps(errors_json) if errors_json else None))
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
             raise RuntimeError(f"Failed to log CSV import: {e}")
         finally:
-            if connection and connection.is_connected():
-                cursor.close()                
-                connection.close()
+            self._release(conn)
 
 
 # Global instance
@@ -1576,4 +1216,3 @@ def get_database_manager() -> DatabaseManager:
         _db_manager = DatabaseManager()
         _db_manager.init_schema()
     return _db_manager
-
