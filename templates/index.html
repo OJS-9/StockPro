@@ -64,12 +64,12 @@
 
     {% if pinned_tickers %}
     <section class="w-full max-w-7xl px-4 md:px-8 py-8 flex flex-col gap-6">
-        <div class="flex items-center justify-between">
-            <div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
                 <h2 class="text-xl font-semibold">Market Overview</h2>
                 <p class="text-zinc-500 text-sm mt-1">Real-time performance of your pinned tickers.</p>
             </div>
-            <a href="{{ url_for('watchlist') }}" class="text-sm font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors flex items-center gap-1">
+            <a href="{{ url_for('watchlist') }}" class="min-h-11 inline-flex items-center gap-1 shrink-0 text-sm font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors -mr-1 pr-1 rounded-md">
                 View Watchlist <span class="material-symbols-outlined text-sm">chevron_right</span>
             </a>
         </div>
@@ -140,7 +140,7 @@
                 <p class="text-zinc-500 text-sm mt-1">Curated stories moving the markets.</p>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <button id="briefing-more-btn" class="px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">More Stories</button>
+                <button type="button" id="briefing-more-btn" class="min-h-11 px-4 py-2 rounded-md text-xs font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors inline-flex items-center justify-center">More Stories</button>
             </div>
         </div>
         <div id="briefing-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
