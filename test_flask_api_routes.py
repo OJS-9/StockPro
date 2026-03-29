@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -82,3 +82,105 @@ class TestApiNewsPublic:
             resp = api_client.get("/api/news")
             assert resp.status_code == 200
             assert resp.get_json() == []
+
+
+class TestPortfolioApiJson:
+    def test_portfolio_prices_404_when_not_owner(self, api_client):
+        import app as app_module
+
+        mock_svc = MagicMock()
+        mock_svc.get_portfolio.return_value = {
+            "portfolio_id": "p1",
+            "user_id": "someone-else",
+        }
+        with patch.object(app_module, "get_portfolio_service", return_value=mock_svc):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "me"
+            resp = api_client.get("/api/portfolio/p1/prices")
+        assert resp.status_code == 404
+        assert resp.get_json() == {"error": "Not found"}
+
+    def test_portfolio_prices_returns_holdings_when_owner(self, api_client):
+        import app as app_module
+
+        mock_svc = MagicMock()
+        mock_svc.get_portfolio.return_value = {"portfolio_id": "p1", "user_id": "me"}
+        mock_svc.get_portfolio_summary.return_value = {
+            "holdings": [
+                {
+                    "symbol": "AAPL",
+                    "price_available": True,
+                    "current_price": 100.0,
+                    "market_value": 1000.0,
+                    "unrealized_gain": 10.0,
+                    "unrealized_gain_pct": 1.0,
+                }
+            ],
+            "total_market_value": 1000.0,
+            "total_unrealized_gain": 10.0,
+            "total_unrealized_gain_pct": 1.0,
+            "stock_allocation_pct": 100.0,
+            "crypto_allocation_pct": 0.0,
+            "cash_allocation_pct": 0.0,
+        }
+        with patch.object(app_module, "get_portfolio_service", return_value=mock_svc):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "me"
+            resp = api_client.get("/api/portfolio/p1/prices")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["holdings"][0]["symbol"] == "AAPL"
+        assert data["total_market_value"] == 1000.0
+
+    def test_portfolios_prices_returns_list_per_portfolio(self, api_client):
+        import app as app_module
+
+        mock_svc = MagicMock()
+        mock_svc.list_portfolios.return_value = [{"portfolio_id": "p1"}]
+        mock_svc.get_portfolio_summary.return_value = {
+            "total_market_value": 100.0,
+            "total_unrealized_gain": 5.0,
+            "total_unrealized_gain_pct": 5.0,
+        }
+        with patch.object(app_module, "get_portfolio_service", return_value=mock_svc):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "me"
+            resp = api_client.get("/api/portfolios/prices")
+        assert resp.status_code == 200
+        rows = resp.get_json()
+        assert len(rows) == 1
+        assert rows[0]["portfolio_id"] == "p1"
+        assert rows[0]["total_market_value"] == 100.0
+
+    def test_portfolio_history_404_when_not_owner(self, api_client):
+        import app as app_module
+
+        mock_svc = MagicMock()
+        mock_svc.get_portfolio.return_value = {
+            "portfolio_id": "p1",
+            "user_id": "other",
+        }
+        with patch.object(app_module, "get_portfolio_service", return_value=mock_svc):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "me"
+            resp = api_client.get("/api/portfolio/p1/history")
+        assert resp.status_code == 404
+
+    def test_portfolio_history_returns_json_when_owner(self, api_client):
+        import app as app_module
+
+        mock_portfolio = MagicMock()
+        mock_portfolio.get_portfolio.return_value = {
+            "portfolio_id": "p1",
+            "user_id": "me",
+        }
+        mock_history = MagicMock()
+        mock_history.get_monthly_values.return_value = {"months": [], "values": []}
+
+        with patch.object(app_module, "get_portfolio_service", return_value=mock_portfolio):
+            with patch.object(app_module, "get_history_service", return_value=mock_history):
+                with api_client.session_transaction() as sess:
+                    sess["user_id"] = "me"
+                resp = api_client.get("/api/portfolio/p1/history")
+        assert resp.status_code == 200
+        assert resp.get_json() == {"months": [], "values": []}
