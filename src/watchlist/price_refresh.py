@@ -2,6 +2,7 @@
 Background price refresh job — updates price_cache every 15 minutes.
 Respects Alpha Vantage 5 calls/min rate limit by staggering stock fetches.
 """
+
 import sys
 import os
 import threading
@@ -9,12 +10,12 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-REFRESH_INTERVAL = 900   # 15 minutes
+REFRESH_INTERVAL = 900  # 15 minutes
 
 DEFAULT_SYMBOLS = [
-    ('SPY',  'stock',  'S&P 500'),
-    ('BTC',  'crypto', 'Bitcoin'),
-    ('TSLA', 'stock',  'Tesla Inc.'),
+    ("SPY", "stock", "S&P 500"),
+    ("BTC", "crypto", "Bitcoin"),
+    ("TSLA", "stock", "Tesla Inc."),
 ]
 
 
@@ -30,6 +31,7 @@ class PriceRefreshJob:
     def db(self):
         if self._db is None:
             from database import get_database_manager
+
             self._db = get_database_manager()
         return self._db
 
@@ -37,6 +39,7 @@ class PriceRefreshJob:
     def provider_factory(self):
         if self._provider_factory is None:
             from data_providers.provider_factory import DataProviderFactory
+
             self._provider_factory = DataProviderFactory
         return self._provider_factory
 
@@ -67,7 +70,7 @@ class PriceRefreshJob:
     def _do_refresh(self):
         # Collect all symbols from watchlist + defaults
         watched = self.db.get_all_watched_symbols()
-        symbol_map = {row['symbol']: row['asset_type'] for row in watched}
+        symbol_map = {row["symbol"]: row["asset_type"] for row in watched}
 
         # Ensure defaults are always refreshed
         for sym, asset_type, display_name in DEFAULT_SYMBOLS:
@@ -76,8 +79,16 @@ class PriceRefreshJob:
         # Build display_name map from defaults
         default_names = {sym: name for sym, _, name in DEFAULT_SYMBOLS}
 
-        stocks = [(sym, default_names.get(sym)) for sym, at in symbol_map.items() if at == 'stock']
-        cryptos = [(sym, default_names.get(sym)) for sym, at in symbol_map.items() if at == 'crypto']
+        stocks = [
+            (sym, default_names.get(sym))
+            for sym, at in symbol_map.items()
+            if at == "stock"
+        ]
+        cryptos = [
+            (sym, default_names.get(sym))
+            for sym, at in symbol_map.items()
+            if at == "crypto"
+        ]
 
         # Skip symbols already fresh in DB (< 15 min old) — single source of truth
         all_syms = [s for s, _ in stocks] + [s for s, _ in cryptos]
@@ -86,27 +97,31 @@ class PriceRefreshJob:
 
         def _is_stale(sym):
             row = cached.get(sym)
-            if not row or not row.get('last_updated'):
+            if not row or not row.get("last_updated"):
                 return True
-            return row['last_updated'] < cutoff
+            return row["last_updated"] < cutoff
 
-        stocks  = [(s, n) for s, n in stocks  if _is_stale(s)]
+        stocks = [(s, n) for s, n in stocks if _is_stale(s)]
         cryptos = [(s, n) for s, n in cryptos if _is_stale(s)]
 
-        print(f"[price_refresh] Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos")
+        print(
+            f"[price_refresh] Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos"
+        )
 
         # Crypto: batch fetch with change%
         if cryptos:
             try:
                 crypto_symbols = [s for s, _ in cryptos]
                 crypto_names = {s: n for s, n in cryptos}
-                provider, _ = self.provider_factory.get_provider_for_symbol('BTC')
+                provider, _ = self.provider_factory.get_provider_for_symbol("BTC")
                 batch = provider.get_prices_with_change(crypto_symbols)
                 for sym, data in batch.items():
                     self.db.upsert_price_cache(
-                        sym, 'crypto',
-                        data.get('price'), data.get('change_percent'),
-                        crypto_names.get(sym)
+                        sym,
+                        "crypto",
+                        data.get("price"),
+                        data.get("change_percent"),
+                        crypto_names.get(sym),
                     )
             except Exception as e:
                 print(f"[price_refresh] Crypto batch error: {e}")
@@ -114,12 +129,13 @@ class PriceRefreshJob:
         # Concurrent batch fetch for stocks
         if stocks:
             stock_symbols = [s for s, _ in stocks]
-            stock_names   = {s: n for s, n in stocks}
-            provider, _   = self.provider_factory.get_provider_for_symbol('AAPL')
-            prices        = provider.get_prices_batch_warmup(stock_symbols)
+            stock_names = {s: n for s, n in stocks}
+            provider, _ = self.provider_factory.get_provider_for_symbol("AAPL")
+            prices = provider.get_prices_batch_warmup(stock_symbols)
             for sym, data in prices.items():
                 self.db.upsert_price_cache(
-                    sym, 'stock',
+                    sym,
+                    "stock",
                     float(data["price"]),
                     data.get("change_percent"),
                     stock_names.get(sym),

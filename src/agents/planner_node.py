@@ -7,7 +7,7 @@ and conversation context. Single structured-JSON LLM call, no tools.
 
 import json
 import os
-from typing import List, Any
+from typing import List
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -19,12 +19,16 @@ PLANNER_MODEL = os.getenv("PLANNER_MODEL", "gemini-2.5-flash")
 PLANNER_MAX_SUBJECTS = int(os.getenv("PLANNER_MAX_SUBJECTS", "8"))
 
 
-def _build_system_prompt(ticker: str, trade_type: str, eligible: List[ResearchSubject], locked: bool = False) -> str:
+def _build_system_prompt(
+    ticker: str, trade_type: str, eligible: List[ResearchSubject], locked: bool = False
+) -> str:
     subject_lines = "\n".join(
         f'  - "{s.id}": {s.name} — {s.description}' for s in eligible
     )
     if locked:
-        subject_rule = "Use exactly these subjects in this order. Do not add or remove any."
+        subject_rule = (
+            "Use exactly these subjects in this order. Do not add or remove any."
+        )
     else:
         subject_rule = "Include ALL eligible subjects unless the user context makes one clearly irrelevant."
     return f"""You are a research planning assistant for a stock analysis platform.
@@ -122,7 +126,9 @@ def _parse_response(
     )
 
 
-def _fallback_plan(ticker: str, trade_type: str, eligible: List[ResearchSubject]) -> ResearchPlan:
+def _fallback_plan(
+    ticker: str, trade_type: str, eligible: List[ResearchSubject]
+) -> ResearchPlan:
     return ResearchPlan(
         ticker=ticker,
         trade_type=trade_type,
@@ -160,7 +166,9 @@ def planner_node(state: dict) -> dict:
         id_to_subject = {s.id: s for s in eligible_filtered}
         eligible = [id_to_subject[sid] for sid in user_selected if sid in id_to_subject]
 
-    system_prompt = _build_system_prompt(ticker, trade_type, eligible, locked=bool(user_selected))
+    system_prompt = _build_system_prompt(
+        ticker, trade_type, eligible, locked=bool(user_selected)
+    )
     user_prompt = _build_user_prompt(ticker, trade_type, conversation_context, eligible)
 
     llm = ChatGoogleGenerativeAI(
@@ -191,18 +199,25 @@ def planner_node(state: dict) -> dict:
         plan = _fallback_plan(ticker, trade_type, eligible)
 
     subject_names = ", ".join(plan.selected_subject_ids)
-    print(f"[PlannerNode] Plan: {len(plan.selected_subject_ids)} subjects — {subject_names}, {input_tok}/{output_tok} tokens")
+    print(
+        f"[PlannerNode] Plan: {len(plan.selected_subject_ids)} subjects — {subject_names}, {input_tok}/{output_tok} tokens"
+    )
     if emitter:
         emitter.emit(f"Researching: {subject_names}...")
 
     # Compute budget settings here so _fan_out can read them from state
     # (avoids InvalidUpdateError from parallel specialized_nodes all returning the same field)
-    from spend_budget import compute_effective_specialized_settings_from_plan, get_spend_budget_usd
+    from spend_budget import (
+        compute_effective_specialized_settings_from_plan,
+    )
     import os as _os
+
     spend_budget_usd = state.get("spend_budget_usd")
     if spend_budget_usd is None:
         spend_budget_usd = float("inf")
-    subject_ids = plan.selected_subject_ids[:int(_os.getenv("MAX_RESEARCH_SUBJECTS", "8"))]
+    subject_ids = plan.selected_subject_ids[
+        : int(_os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
+    ]
     try:
         budget = compute_effective_specialized_settings_from_plan(
             ticker=ticker,
@@ -215,7 +230,9 @@ def planner_node(state: dict) -> dict:
         print(f"[PlannerNode] Budget computation failed ({exc}); using defaults.")
         budget = {
             "effective_max_turns": int(_os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8")),
-            "effective_max_output_tokens": int(_os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")),
+            "effective_max_output_tokens": int(
+                _os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")
+            ),
             "estimated_spend_usd": None,
             "budget_exhausted": False,
         }

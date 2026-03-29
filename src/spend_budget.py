@@ -117,7 +117,11 @@ def compute_effective_specialized_settings_from_estimates(
     min_max_output_tokens = max(1, int(min_max_output_tokens))
 
     # If we can't compute cost (rates missing) or budget is "infinite", keep defaults.
-    if spend_budget_usd == float("inf") or input_rate_usd_per_1k_tokens <= 0 or output_rate_usd_per_1k_tokens <= 0:
+    if (
+        spend_budget_usd == float("inf")
+        or input_rate_usd_per_1k_tokens <= 0
+        or output_rate_usd_per_1k_tokens <= 0
+    ):
         estimated = _estimate_spend_usd(
             subject_count=subject_count,
             total_input_tokens_per_turn=total_input_tokens_per_turn,
@@ -166,7 +170,9 @@ def compute_effective_specialized_settings_from_estimates(
         input_rate_usd_per_1k_tokens=input_rate_usd_per_1k_tokens,
         output_rate_usd_per_1k_tokens=output_rate_usd_per_1k_tokens,
     )
-    effective_out = max(min_max_output_tokens, min(base_max_output_tokens, effective_out))
+    effective_out = max(
+        min_max_output_tokens, min(base_max_output_tokens, effective_out)
+    )
 
     est = estimate(effective_turns, effective_out)
     if est <= spend_budget_usd:
@@ -187,7 +193,9 @@ def compute_effective_specialized_settings_from_estimates(
         input_rate_usd_per_1k_tokens=input_rate_usd_per_1k_tokens,
         output_rate_usd_per_1k_tokens=output_rate_usd_per_1k_tokens,
     )
-    effective_out = max(min_max_output_tokens, min(base_max_output_tokens, effective_out))
+    effective_out = max(
+        min_max_output_tokens, min(base_max_output_tokens, effective_out)
+    )
 
     est = estimate(effective_turns, effective_out)
     budget_exhausted = est > spend_budget_usd
@@ -268,7 +276,9 @@ def compute_effective_specialized_settings_from_plan(
         # Budget enforcement disabled (can't compute USD without rates).
         return {
             "effective_max_turns": int(os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8")),
-            "effective_max_output_tokens": int(os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")),
+            "effective_max_output_tokens": int(
+                os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")
+            ),
             "estimated_spend_usd": None,
             "budget_exhausted": False,
         }
@@ -277,10 +287,14 @@ def compute_effective_specialized_settings_from_plan(
     output_rate = rates["output_rate"]
 
     base_max_turns = int(os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8"))
-    base_max_output_tokens = int(os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000"))
+    base_max_output_tokens = int(
+        os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")
+    )
 
     min_max_turns = int(os.getenv("RESEARCH_SPEND_BUDGET_USD_MIN_MAX_TURNS", "2"))
-    min_max_output_tokens = int(os.getenv("RESEARCH_SPEND_BUDGET_USD_MIN_MAX_OUTPUT_TOKENS", "512"))
+    min_max_output_tokens = int(
+        os.getenv("RESEARCH_SPEND_BUDGET_USD_MIN_MAX_OUTPUT_TOKENS", "512")
+    )
 
     total_input_tokens_per_turn = estimate_total_input_tokens_per_turn(
         ticker=ticker,
@@ -322,7 +336,9 @@ def estimate_total_input_tokens_per_turn(
     total = 0
     for sid in selected_subject_ids:
         subject = get_research_subject_by_id(sid)
-        focus_hint = getattr(plan, "subject_focus", {}).get(sid, "") if plan is not None else ""
+        focus_hint = (
+            getattr(plan, "subject_focus", {}).get(sid, "") if plan is not None else ""
+        )
 
         instructions = _get_instructions(subject, ticker, trade_type, focus_hint)
         research_prompt = subject.prompt_template.format(ticker=ticker)
@@ -332,4 +348,3 @@ def estimate_total_input_tokens_per_turn(
         total += estimate_tokens(instructions + "\n" + research_prompt)
 
     return total
-

@@ -7,10 +7,10 @@ Called in parallel for each research subject via the Send() API in research_grap
 
 import os
 import time
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 
 from research_subjects import ResearchSubject, get_research_subject_by_id
@@ -18,12 +18,15 @@ from date_utils import get_datetime_context_string
 
 SPECIALIZED_MODEL = os.getenv("SPECIALIZED_AGENT_MODEL", "gemini-2.5-pro")
 SPECIALIZED_MAX_TURNS = int(os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8"))
-SPECIALIZED_MAX_OUTPUT_TOKENS = int(os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000"))
+SPECIALIZED_MAX_OUTPUT_TOKENS = int(
+    os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")
+)
 
 
 def _get_clients():
     """Initialize MCP and Nimble clients (cached per-process via module-level singletons)."""
     from mcp_manager import MCPManager
+
     mcp_client = None
     nimble_client = None
 
@@ -35,6 +38,7 @@ def _get_clients():
 
     try:
         from nimble_client import NimbleClient
+
         nimble_client = NimbleClient()
     except ValueError as e:
         print(f"[SpecializedNode] Info: Nimble not configured ({e}).")
@@ -44,7 +48,9 @@ def _get_clients():
     return mcp_client, nimble_client
 
 
-def _get_instructions(subject: ResearchSubject, ticker: str, trade_type: str, focus_hint: str = "") -> str:
+def _get_instructions(
+    subject: ResearchSubject, ticker: str, trade_type: str, focus_hint: str = ""
+) -> str:
     datetime_context = get_datetime_context_string()
     focus_block = ""
     if focus_hint:
@@ -90,37 +96,44 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     if status == 429:
         return True
     message = str(exc).lower()
-    return "resource exhausted" in message or "rate limit" in message or "429" in message
+    return (
+        "resource exhausted" in message or "rate limit" in message or "429" in message
+    )
 
 
 def specialized_node(state: dict) -> dict:
     """
     LangGraph node: runs a ReAct agent for one research subject.
 
-    Reads: ticker, trade_type, plan, subject_id, emitter
+    Reads: ticker, trade_type, plan, subject_id
     Writes: research_outputs (merged via operator.or_ in ResearchState)
     """
     ticker = state["ticker"]
     trade_type = state["trade_type"]
     plan = state["plan"]
     subject_id = state["subject_id"]
-    emitter = state.get("emitter")
     effective_max_turns = state.get("effective_max_turns", SPECIALIZED_MAX_TURNS)
-    effective_max_output_tokens = state.get("effective_max_output_tokens", SPECIALIZED_MAX_OUTPUT_TOKENS)
+    effective_max_output_tokens = state.get(
+        "effective_max_output_tokens", SPECIALIZED_MAX_OUTPUT_TOKENS
+    )
 
     try:
         subject = get_research_subject_by_id(subject_id)
     except ValueError as exc:
         print(f"[SpecializedNode] Unknown subject '{subject_id}': {exc}")
-        return {"research_outputs": {subject_id: {
-            "subject_id": subject_id,
-            "subject_name": subject_id,
-            "research_output": f"Error: unknown subject id '{subject_id}'",
-            "sources": [],
-            "ticker": ticker,
-            "trade_type": trade_type,
-            "error": str(exc),
-        }}}
+        return {
+            "research_outputs": {
+                subject_id: {
+                    "subject_id": subject_id,
+                    "subject_name": subject_id,
+                    "research_output": f"Error: unknown subject id '{subject_id}'",
+                    "sources": [],
+                    "ticker": ticker,
+                    "trade_type": trade_type,
+                    "error": str(exc),
+                }
+            }
+        }
 
     focus_hint = plan.subject_focus.get(subject_id, "")
     instructions = _get_instructions(subject, ticker, trade_type, focus_hint)
@@ -131,6 +144,7 @@ def specialized_node(state: dict) -> dict:
     mcp_client, nimble_client = _get_clients()
 
     from langchain_tools import create_all_tools
+
     tools = create_all_tools(mcp_client, nimble_client)
 
     llm = ChatGoogleGenerativeAI(
@@ -165,28 +179,40 @@ def specialized_node(state: dict) -> dict:
                 output_tok += usage.get("output_tokens", 0)
 
             for msg in reversed(result["messages"]):
-                if hasattr(msg, "content") and msg.content and not getattr(msg, "tool_calls", None):
+                if (
+                    hasattr(msg, "content")
+                    and msg.content
+                    and not getattr(msg, "tool_calls", None)
+                ):
                     content = msg.content
                     if isinstance(content, list):
                         output_text = "\n".join(
-                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            (
+                                part.get("text", "")
+                                if isinstance(part, dict)
+                                else str(part)
+                            )
                             for part in content
                         )
                     else:
                         output_text = str(content)
                     break
 
-            print(f"[SpecializedNode] {subject.name}: {len(output_text)} chars, {input_tok}/{output_tok} tokens")
+            print(
+                f"[SpecializedNode] {subject.name}: {len(output_text)} chars, {input_tok}/{output_tok} tokens"
+            )
             return {
-                "research_outputs": {subject_id: {
-                    "subject_id": subject_id,
-                    "subject_name": subject.name,
-                    "research_output": output_text,
-                    "sources": [],
-                    "ticker": ticker,
-                    "trade_type": trade_type,
-                    "focus_hint": focus_hint,
-                }},
+                "research_outputs": {
+                    subject_id: {
+                        "subject_id": subject_id,
+                        "subject_name": subject.name,
+                        "research_output": output_text,
+                        "sources": [],
+                        "ticker": ticker,
+                        "trade_type": trade_type,
+                        "focus_hint": focus_hint,
+                    }
+                },
                 "actual_input_tokens": input_tok,
                 "actual_output_tokens": output_tok,
             }
@@ -195,19 +221,25 @@ def specialized_node(state: dict) -> dict:
             last_exc = exc
             if not _is_rate_limit_error(exc) or attempt == max_retries - 1:
                 break
-            delay = base_delay * (2 ** attempt)
-            print(f"[SpecializedNode:{subject_id}] Rate limit, retrying in {delay:.1f}s")
+            delay = base_delay * (2**attempt)
+            print(
+                f"[SpecializedNode:{subject_id}] Rate limit, retrying in {delay:.1f}s"
+            )
             time.sleep(delay)
 
     error_msg = f"Error in research for {subject.name}: {last_exc}"
     print(error_msg)
-    return {"research_outputs": {subject_id: {
-        "subject_id": subject_id,
-        "subject_name": subject.name,
-        "research_output": error_msg,
-        "sources": [],
-        "ticker": ticker,
-        "trade_type": trade_type,
-        "focus_hint": focus_hint,
-        "error": str(last_exc),
-    }}}
+    return {
+        "research_outputs": {
+            subject_id: {
+                "subject_id": subject_id,
+                "subject_name": subject.name,
+                "research_output": error_msg,
+                "sources": [],
+                "ticker": ticker,
+                "trade_type": trade_type,
+                "focus_hint": focus_hint,
+                "error": str(last_exc),
+            }
+        }
+    }

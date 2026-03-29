@@ -37,7 +37,9 @@ class EmbeddingService:
         except Exception as e:
             raise RuntimeError(f"Failed to create embedding: {e}")
 
-    def create_embeddings_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
+    def create_embeddings_batch(
+        self, texts: List[str], batch_size: int = 100
+    ) -> List[List[float]]:
         """Create embeddings for multiple texts."""
         embeddings = []
         for text in texts:

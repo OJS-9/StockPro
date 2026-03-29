@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import create_react_agent
 
@@ -56,7 +56,9 @@ class OrchestratorSession:
             f"I want to research {ticker} for a {trade_type} strategy. "
             "Please help me create a fundamental research report."
         )
-        self.conversation_history.append({"role": "system", "content": system_instructions})
+        self.conversation_history.append(
+            {"role": "system", "content": system_instructions}
+        )
         self.conversation_history.append({"role": "user", "content": user_message})
 
         return self._get_agent_response(user_message, system_instructions)
@@ -65,7 +67,8 @@ class OrchestratorSession:
         """Continue with a user response."""
         self.conversation_history.append({"role": "user", "content": user_response})
         system_instructions = next(
-            (m["content"] for m in self.conversation_history if m["role"] == "system"), ""
+            (m["content"] for m in self.conversation_history if m["role"] == "system"),
+            "",
         )
         return self._get_agent_response(user_response, system_instructions)
 
@@ -113,7 +116,11 @@ class OrchestratorSession:
                 )
                 session.current_report_id = result.get("report_id", "")
                 session.last_report_text = result.get("report_text", "")
-                report_id_short = session.current_report_id[:8] if session.current_report_id else "unknown"
+                report_id_short = (
+                    session.current_report_id[:8]
+                    if session.current_report_id
+                    else "unknown"
+                )
                 return (
                     f"Report generated successfully! Report ID: {report_id_short}...\n\n"
                     "The comprehensive research report has been created and is ready to view."
@@ -134,10 +141,7 @@ class OrchestratorSession:
         )
 
         # Build message history (last 4 non-system messages)
-        recent = [
-            m for m in self.conversation_history[-4:]
-            if m["role"] != "system"
-        ]
+        recent = [m for m in self.conversation_history[-4:] if m["role"] != "system"]
         messages = []
         for m in recent:
             if m["role"] == "user":
@@ -153,18 +157,28 @@ class OrchestratorSession:
             result = agent.invoke({"messages": messages})
             response_text = ""
             for msg in reversed(result["messages"]):
-                if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
+                if (
+                    isinstance(msg, AIMessage)
+                    and msg.content
+                    and not getattr(msg, "tool_calls", None)
+                ):
                     content = msg.content
                     response_text = (
                         "\n".join(
-                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            (
+                                part.get("text", "")
+                                if isinstance(part, dict)
+                                else str(part)
+                            )
                             for part in content
                         )
                         if isinstance(content, list)
                         else str(content)
                     )
                     break
-            self.conversation_history.append({"role": "assistant", "content": response_text})
+            self.conversation_history.append(
+                {"role": "assistant", "content": response_text}
+            )
             return response_text
         except Exception as e:
             error_msg = f"Error generating response: {e}"

@@ -110,17 +110,17 @@ class TestWarmPortfolioCache(unittest.TestCase):
                       "Threading spawn of _warm_portfolio_cache not found in app.py")
         self.assertIn('daemon=True', source,
                       "daemon=True not found in threading.Thread call in app.py")
-        # Both must appear near the session assignment block
-        idx_thread = source.find('threading.Thread(target=_warm_portfolio_cache')
-        idx_session = source.find("session['user_id'] = clerk_user_id")
+        # Both must appear near the session assignment block (Black may split Thread() across lines)
+        idx_thread = source.find("target=_warm_portfolio_cache")
+        idx_session = source.find('session["user_id"] = clerk_user_id')
         self.assertNotEqual(idx_thread, -1,
-                            "threading.Thread(target=_warm_portfolio_cache) not found")
+                            "target=_warm_portfolio_cache not found in app.py")
         self.assertNotEqual(idx_session, -1,
-                            "session['user_id'] = clerk_user_id not found")
-        # Thread spawn should come AFTER session assignment (within ~300 chars)
+                            'session["user_id"] = clerk_user_id not found')
+        # Thread spawn should come AFTER session assignment (within ~400 chars; allows Black wrapping)
         self.assertGreater(idx_thread, idx_session,
-                           "Thread spawn should appear after session['user_id'] = clerk_user_id")
-        self.assertLess(idx_thread - idx_session, 300,
+                           'Thread spawn should appear after session["user_id"] = clerk_user_id')
+        self.assertLess(idx_thread - idx_session, 400,
                         "Thread spawn is too far from session assignment — may be in wrong place")
 
 

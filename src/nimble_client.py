@@ -67,7 +67,9 @@ class NimbleClient:
                 resp.raise_for_status()
                 return resp.json()
         except httpx.TimeoutException as e:
-            return {"error": f"[Nimble timeout] Extract exceeded {self.timeout:.0f}s: {e}"}
+            return {
+                "error": f"[Nimble timeout] Extract exceeded {self.timeout:.0f}s: {e}"
+            }
         except Exception as e:
             return {"error": f"[Nimble error] Extract failed: {e}"}
 

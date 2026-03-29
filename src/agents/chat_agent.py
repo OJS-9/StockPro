@@ -44,7 +44,11 @@ def _build_rag_prompt(
     prompt_parts = ["Relevant excerpts from the report:", ""]
 
     for i, chunk in enumerate(chunks, 1):
-        section_info = f" (Section: {chunk.get('section', 'Unknown')})" if chunk.get("section") else ""
+        section_info = (
+            f" (Section: {chunk.get('section', 'Unknown')})"
+            if chunk.get("section")
+            else ""
+        )
         prompt_parts.append(f"[Excerpt {i}{section_info}]")
         prompt_parts.append(chunk["chunk_text"])
         prompt_parts.append("")
@@ -106,7 +110,10 @@ class ReportChatAgent:
 
         try:
             response = self._llm.invoke(
-                [SystemMessage(content=system_instructions), HumanMessage(content=prompt)]
+                [
+                    SystemMessage(content=system_instructions),
+                    HumanMessage(content=prompt),
+                ]
             )
             return response.content or ""
         except Exception as e:
@@ -114,7 +121,9 @@ class ReportChatAgent:
             print(error_msg)
             return error_msg
 
-    def chat_with_report(self, report_id: str, question: str, reset_history: bool = False) -> str:
+    def chat_with_report(
+        self, report_id: str, question: str, reset_history: bool = False
+    ) -> str:
         """Chat with a report, maintaining conversation history."""
         if reset_history:
             self.conversation_history = []

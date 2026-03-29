@@ -29,24 +29,28 @@ class ResearchState(TypedDict):
     ticker: str
     trade_type: str
     conversation_context: str
-    plan: Any                                              # ResearchPlan (set by planner_node)
-    subject_id: str                                        # set per Send() invocation
-    research_outputs: Annotated[Dict[str, Any], operator.or_]  # merged across parallel nodes
-    failed_subjects: List[str]                             # subject_ids that errored (set by quality_gate_node)
-    is_partial_report: bool                                # True if some subjects failed
-    report_text: str                                       # set by synthesis_node
-    report_id: str                                         # set by storage_node
+    plan: Any  # ResearchPlan (set by planner_node)
+    subject_id: str  # set per Send() invocation
+    research_outputs: Annotated[
+        Dict[str, Any], operator.or_
+    ]  # merged across parallel nodes
+    failed_subjects: List[str]  # subject_ids that errored (set by quality_gate_node)
+    is_partial_report: bool  # True if some subjects failed
+    report_text: str  # set by synthesis_node
+    report_id: str  # set by storage_node
     user_id: Optional[int]
     emitter: Optional[StepEmitter]
-    user_selected_subjects: Optional[List[str]]            # set from popup subject selection
-    spend_budget_usd: Optional[float]                      # estimated USD budget for this run
-    estimated_spend_usd: Optional[float]                  # estimated from prompt-size heuristics
-    effective_max_turns: Optional[int]                    # per-subject cap used by specialized_node
-    effective_max_output_tokens: Optional[int]            # per-subject cap used by specialized_node
-    budget_exhausted: bool                                 # True when min caps still exceed budget
-    actual_input_tokens: Annotated[int, operator.add]     # summed across all nodes
-    actual_output_tokens: Annotated[int, operator.add]    # summed across all nodes
-    actual_cost_usd: Optional[float]                      # computed in storage_node
+    user_selected_subjects: Optional[List[str]]  # set from popup subject selection
+    spend_budget_usd: Optional[float]  # estimated USD budget for this run
+    estimated_spend_usd: Optional[float]  # estimated from prompt-size heuristics
+    effective_max_turns: Optional[int]  # per-subject cap used by specialized_node
+    effective_max_output_tokens: Optional[
+        int
+    ]  # per-subject cap used by specialized_node
+    budget_exhausted: bool  # True when min caps still exceed budget
+    actual_input_tokens: Annotated[int, operator.add]  # summed across all nodes
+    actual_output_tokens: Annotated[int, operator.add]  # summed across all nodes
+    actual_cost_usd: Optional[float]  # computed in storage_node
 
 
 _MAX_SUBJECTS = int(os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
@@ -61,8 +65,7 @@ def _fan_out(state: ResearchState) -> List[Send]:
 
     # Budget settings were computed in planner_node and stored in state.
     return [
-        Send("specialized_node", {**state, "subject_id": sid})
-        for sid in subject_ids
+        Send("specialized_node", {**state, "subject_id": sid}) for sid in subject_ids
     ]
 
 
@@ -103,12 +106,12 @@ def storage_node(state: ResearchState) -> dict:
     actual_cost_usd = None
     try:
         from spend_budget import get_gemini_usd_rates
+
         rates = get_gemini_usd_rates()
         if rates and (actual_input_tokens or actual_output_tokens):
-            actual_cost_usd = (
-                (actual_input_tokens / 1000) * rates["input_rate"] +
-                (actual_output_tokens / 1000) * rates["output_rate"]
-            )
+            actual_cost_usd = (actual_input_tokens / 1000) * rates["input_rate"] + (
+                actual_output_tokens / 1000
+            ) * rates["output_rate"]
     except Exception as exc:
         print(f"[StorageNode] Could not compute actual cost: {exc}")
     actual_cost_usd = _sanitize_json_float(actual_cost_usd)
@@ -170,10 +173,14 @@ def quality_gate_node(state: ResearchState) -> dict:
             failed.append(sid)
         elif len(result.get("research_output", "")) < _MIN_OUTPUT_CHARS:
             char_count = len(result.get("research_output", ""))
-            print(f"[QualityGate] {sid}: output too short ({char_count} chars) — treating as failure")
+            print(
+                f"[QualityGate] {sid}: output too short ({char_count} chars) — treating as failure"
+            )
             failed.append(sid)
         else:
-            urls = list(dict.fromkeys(_URL_RE.findall(result.get("research_output", ""))))
+            urls = list(
+                dict.fromkeys(_URL_RE.findall(result.get("research_output", "")))
+            )
             clean_outputs[sid] = {**result, "sources": urls}
 
     total = len(research_outputs)
@@ -208,7 +215,11 @@ def quality_gate_node(state: ResearchState) -> dict:
 
 def _quality_gate_route(state: ResearchState) -> str:
     """Skip synthesis and go straight to storage if the gate already wrote an error report."""
-    if state.get("is_partial_report") and state.get("report_text") and not state["research_outputs"]:
+    if (
+        state.get("is_partial_report")
+        and state.get("report_text")
+        and not state["research_outputs"]
+    ):
         return "storage_node"
     return "synthesis_node"
 
@@ -224,7 +235,9 @@ _builder.add_node("storage_node", storage_node)
 _builder.add_edge(START, "planner_node")
 _builder.add_conditional_edges("planner_node", _fan_out, ["specialized_node"])
 _builder.add_edge("specialized_node", "quality_gate_node")
-_builder.add_conditional_edges("quality_gate_node", _quality_gate_route, ["synthesis_node", "storage_node"])
+_builder.add_conditional_edges(
+    "quality_gate_node", _quality_gate_route, ["synthesis_node", "storage_node"]
+)
 _builder.add_edge("synthesis_node", "storage_node")
 _builder.add_edge("storage_node", END)
 
@@ -276,7 +289,11 @@ def run_research(
 
     from langchain_core.runnables.config import merge_configs
 
-    run_name = f"{username} - {ticker.upper()} Research" if username else f"{ticker.upper()} Research"
+    run_name = (
+        f"{username} - {ticker.upper()} Research"
+        if username
+        else f"{ticker.upper()} Research"
+    )
     invoke_config = merge_configs(
         parent_config or {},
         {"run_name": run_name, "configurable": {"thread_id": str(uuid.uuid4())}},

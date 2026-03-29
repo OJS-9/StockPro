@@ -18,6 +18,7 @@ from typing import Optional
 @dataclass
 class StepEmitter:
     """Lightweight SSE step queue. LangSmith handles all LLM/tool tracing automatically."""
+
     step_queue: Optional[queue.Queue] = field(default=None)
 
     def emit(self, msg: str):
