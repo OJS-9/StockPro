@@ -203,6 +203,10 @@
                             chatMessages.appendChild(createAssistantMessage(data.report_preview));
                         }
 
+                        if (data.pending_questions && data.pending_questions.length > 0) {
+                            chatMessages.appendChild(createQuestionBlock(data.pending_questions));
+                        }
+
                         scrollToBottom();
 
                         // Persist state to Flask session
@@ -354,6 +358,61 @@
             </div>
         `;
         return div;
+    }
+
+    // Create a question block with clickable options for ask_user_questions tool
+    function createQuestionBlock(questions) {
+        const wrap = document.createElement('div');
+        wrap.className = 'flex items-start gap-3';
+        const timeString = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        let questionsHtml = '';
+        questions.forEach(function(q, qi) {
+            const optionsHtml = (q.options || []).map(function(opt) {
+                return `<button type="button"
+                    data-qi="${qi}"
+                    data-question="${escapeHtml(q.question)}"
+                    data-answer="${escapeHtml(opt)}"
+                    class="question-option px-3 py-1.5 text-xs rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors">
+                    ${escapeHtml(opt)}
+                </button>`;
+            }).join('');
+            questionsHtml += `
+                <div class="mb-3">
+                    <p class="text-zinc-700 dark:text-zinc-300 text-sm mb-2">${escapeHtml(q.question)}</p>
+                    <div class="flex flex-wrap gap-2">${optionsHtml}</div>
+                </div>`;
+        });
+
+        wrap.innerHTML = `
+            <div class="flex-shrink-0 size-7 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                <span class="material-symbols-outlined text-zinc-500 text-base">smart_toy</span>
+            </div>
+            <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">StockPro AI</span>
+                    <span class="text-xs text-zinc-400">${timeString}</span>
+                </div>
+                <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg rounded-tl-sm px-4 py-3 max-w-3xl">
+                    ${questionsHtml}
+                </div>
+            </div>`;
+
+        // Wire up option buttons: clicking fills the input and submits
+        wrap.querySelectorAll('.question-option').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const question = btn.getAttribute('data-question');
+                const answer = btn.getAttribute('data-answer');
+                const userInput = document.getElementById('user_response');
+                if (userInput) {
+                    userInput.value = answer;
+                    const submitBtn = document.querySelector('form[action="{{ url_for('continue_conversation') }}"] button[type="submit"]');
+                    if (submitBtn) submitBtn.click();
+                }
+            });
+        });
+
+        return wrap;
     }
 
     // Escape HTML to prevent XSS

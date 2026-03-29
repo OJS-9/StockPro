@@ -107,7 +107,7 @@ class WatchlistService:
         try:
             self.db.add_watchlist_item(item_id, watchlist_id, symbol, asset_type, display_name, section_id)
         except Exception as e:
-            if 'Duplicate entry' in str(e) or '1062' in str(e):
+            if 'duplicate key' in str(e).lower() or '23505' in str(e):
                 raise ValueError(f"{symbol} is already in this watchlist")
             raise
 

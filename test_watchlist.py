@@ -75,7 +75,7 @@ class TestWatchlistService:
         mock_provider.get_asset_info.return_value = None
         mock_provider.get_current_price.return_value = None
         self.mock_factory.get_provider_for_symbol.return_value = (mock_provider, 'stock')
-        self.mock_db.add_watchlist_item.side_effect = Exception('Duplicate entry for key')
+        self.mock_db.add_watchlist_item.side_effect = Exception('duplicate key value violates unique constraint "watchlist_items_watchlist_id_symbol_key"')
 
         try:
             self.service.add_symbol('wl-1', 'AAPL')

@@ -492,6 +492,10 @@ def continue_conversation():
         try:
             response = agent.continue_conversation(user_input)
 
+            # Capture and clear pending questions surfaced by ask_user_questions tool
+            pending_questions = list(agent.pending_questions)
+            agent.pending_questions = []
+
             new_history = list(conversation_history_snapshot)
             new_history.append({"role": "user", "content": user_input})
             new_history.append({"role": "assistant", "content": response})
@@ -516,6 +520,7 @@ def continue_conversation():
                 "report_preview": report_preview,
                 "current_report_id": current_report_id,
                 "report_text": getattr(agent, 'last_report_text', None) or '',
+                "pending_questions": pending_questions,
             })
         except Exception as e:
             step_q.put({"type": "error", "message": str(e)})
