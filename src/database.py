@@ -4,6 +4,7 @@ PostgreSQL database connection and schema management for reports, chunks, and po
 
 import logging
 import os
+import threading
 import json
 import uuid
 from decimal import Decimal
@@ -1413,14 +1414,18 @@ class DatabaseManager:
             self._release(conn)
 
 
-# Global instance
+# Global instance (thread-safe singleton — concurrent init_schema causes PostgreSQL
+# "tuple concurrently updated" when DDL runs from multiple connections at once)
 _db_manager: Optional[DatabaseManager] = None
+_db_manager_lock = threading.Lock()
 
 
 def get_database_manager() -> DatabaseManager:
     """Get or create global database manager instance."""
     global _db_manager
     if _db_manager is None:
-        _db_manager = DatabaseManager()
-        _db_manager.init_schema()
+        with _db_manager_lock:
+            if _db_manager is None:
+                _db_manager = DatabaseManager()
+                _db_manager.init_schema()
     return _db_manager
