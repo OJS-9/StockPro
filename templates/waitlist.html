@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}StockPro - Join the Waitlist{% endblock %}
+
+{% block content %}
+{% include '_nav.html' %}
+
+<main class="flex-1 flex flex-col items-center w-full">
+
+    <!-- Hero -->
+    <section class="w-full max-w-5xl px-4 md:px-8 pt-16 pb-12 flex flex-col items-center text-center gap-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-gain dark:bg-gain-dark animate-pulse"></span>
+            Early access — limited spots available
+        </div>
+
+        <h1 class="text-4xl md:text-6xl font-bold text-zinc-950 dark:text-zinc-50 leading-tight tracking-tight max-w-3xl">
+            Institutional-grade stock research.<br/>
+            <span class="text-gain dark:text-gain-dark">In minutes, not hours.</span>
+        </h1>
+
+        <p class="text-zinc-500 dark:text-zinc-400 text-lg max-w-xl leading-relaxed">
+            StockPro deploys a 12-agent AI pipeline to produce the depth of research that used to take analysts hours — delivered in a single click.
+        </p>
+
+        <!-- Email capture form -->
+        <form id="waitlist-form" action="/waitlist/join" method="POST"
+              class="w-full max-w-md flex flex-col sm:flex-row gap-2 mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <input
+                type="email"
+                name="email"
+                required
+                placeholder="your@email.com"
+                class="flex-1 h-11 px-4 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400/40"
+            />
+            <button type="submit"
+                    class="h-11 px-6 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold rounded-lg text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors whitespace-nowrap">
+                Join Waitlist
+            </button>
+        </form>
+
+        {% if waitlist_success %}
+        <p class="text-gain dark:text-gain-dark text-sm font-medium">
+            You're on the list. We'll be in touch soon.
+        </p>
+        {% endif %}
+        {% if waitlist_error %}
+        <p class="text-loss dark:text-loss-dark text-sm font-medium">{{ waitlist_error }}</p>
+        {% endif %}
+
+        <p class="text-zinc-400 text-xs">No spam. Unsubscribe anytime.</p>
+    </section>
+
+    <!-- Social proof bar -->
+    <section class="w-full border-t border-b border-zinc-100 dark:border-zinc-800 py-4 overflow-hidden">
+        <div class="flex items-center justify-center gap-8 md:gap-16 px-4 text-zinc-400 text-xs font-medium uppercase tracking-widest">
+            <span>AI-Powered</span>
+            <span class="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+            <span>12 Research Agents</span>
+            <span class="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+            <span>Day · Swing · Long-Term</span>
+            <span class="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+            <span>Stocks &amp; Crypto</span>
+        </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="w-full max-w-5xl px-4 md:px-8 py-16 flex flex-col items-center gap-10">
+        <div class="text-center">
+            <h2 class="text-2xl md:text-3xl font-bold text-zinc-950 dark:text-zinc-50 mb-2">How the agents work</h2>
+            <p class="text-zinc-500 text-sm max-w-md mx-auto">Each report runs 12 specialized AI agents in parallel — the same coverage a sell-side team would produce over days.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+            <!-- Step 1 -->
+            <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col gap-3">
+                <div class="w-8 h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-sm font-bold">1</div>
+                <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-sm">Enter a ticker</h3>
+                <p class="text-zinc-500 text-xs leading-relaxed">Type any US stock or crypto ticker and choose your trade horizon: day trade, swing, or long-term investment.</p>
+            </div>
+            <!-- Step 2 -->
+            <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col gap-3">
+                <div class="w-8 h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-sm font-bold">2</div>
+                <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-sm">Agents run in parallel</h3>
+                <p class="text-zinc-500 text-xs leading-relaxed">Up to 12 agents simultaneously research fundamentals, technicals, earnings, macro context, risk factors, and more.</p>
+            </div>
+            <!-- Step 3 -->
+            <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col gap-3">
+                <div class="w-8 h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-sm font-bold">3</div>
+                <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-sm">Get your report</h3>
+                <p class="text-zinc-500 text-xs leading-relaxed">A synthesis agent combines all findings into a single coherent report — and you can chat with it to go deeper on any section.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sample report preview -->
+    <section class="w-full max-w-5xl px-4 md:px-8 pb-16 flex flex-col items-center gap-6">
+        <h2 class="text-2xl md:text-3xl font-bold text-zinc-950 dark:text-zinc-50 text-center">What a report looks like</h2>
+        <div class="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-card-lg">
+            <!-- Fake browser chrome -->
+            <div class="flex items-center gap-2 px-4 py-3 bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+                <span class="ml-3 text-xs text-zinc-400 font-mono">stockpro.app/report/NVDA</span>
+            </div>
+            <!-- Report content mock -->
+            <div class="bg-white dark:bg-zinc-950 p-6 md:p-8 flex flex-col gap-6">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <p class="text-xs text-zinc-400 mb-1 uppercase tracking-widest">Investment Report</p>
+                        <h3 class="text-xl font-bold text-zinc-950 dark:text-zinc-50">NVIDIA Corporation (NVDA)</h3>
+                        <p class="text-zinc-500 text-xs mt-1">Semiconductors · Generated in 2m 34s · 12 agents</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <span class="px-2 py-1 rounded text-xs font-semibold bg-gain/10 text-gain dark:text-gain-dark">Strong Buy</span>
+                        <span class="px-2 py-1 rounded text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">$875 target</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-4">
+                        <p class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Company Overview</p>
+                        <p class="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">NVIDIA dominates the GPU market with ~80% share in data center AI accelerators. Revenue grew 122% YoY driven by Hopper architecture demand from hyperscalers. The upcoming Blackwell platform is fully booked through 2025...</p>
+                    </div>
+                    <div class="rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-4">
+                        <p class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Risk Factors</p>
+                        <p class="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">Key risks include US export restrictions to China (currently ~15% of revenue), rising competition from AMD MI300X and custom silicon from Amazon, Google, and Microsoft, and a potential cyclical downturn in AI capex...</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <span class="material-symbols-outlined text-sm text-zinc-400">chat</span>
+                    <span class="text-xs text-zinc-400 italic">Chat with this report to ask follow-up questions...</span>
+                </div>
+            </div>
+        </div>
+        <p class="text-zinc-400 text-xs text-center">Sample output. Not financial advice.</p>
+    </section>
+
+    <!-- Who it's for -->
+    <section class="w-full bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 py-16">
+        <div class="max-w-5xl mx-auto px-4 md:px-8 flex flex-col items-center gap-8">
+            <h2 class="text-2xl md:text-3xl font-bold text-zinc-950 dark:text-zinc-50 text-center">Built for serious investors</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <div class="flex flex-col gap-2 p-5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                    <span class="material-symbols-outlined text-zinc-400 text-xl">bolt</span>
+                    <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-sm">Active traders</h3>
+                    <p class="text-zinc-500 text-xs leading-relaxed">Get rapid pre-trade context on any ticker — news catalysts, technicals, and sector momentum in one report.</p>
+                </div>
+                <div class="flex flex-col gap-2 p-5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                    <span class="material-symbols-outlined text-zinc-400 text-xl">trending_up</span>
+                    <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-sm">Long-term investors</h3>
+                    <p class="text-zinc-500 text-xs leading-relaxed">Deep-dive fundamentals: valuation, competitive moat, management quality, and growth drivers — all in one place.</p>
+                </div>
+                <div class="flex flex-col gap-2 p-5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+                    <span class="material-symbols-outlined text-zinc-400 text-xl">currency_bitcoin</span>
+                    <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-sm">Crypto investors</h3>
+                    <p class="text-zinc-500 text-xs leading-relaxed">Research BTC, ETH, and altcoins alongside equities. Track your portfolio across both asset classes.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="w-full max-w-5xl px-4 md:px-8 py-16 flex flex-col items-center gap-5">
+        <h2 class="text-2xl md:text-3xl font-bold text-zinc-950 dark:text-zinc-50 text-center">Be first when we launch</h2>
+        <p class="text-zinc-500 text-sm text-center max-w-sm">Early access users get priority onboarding and locked-in pricing.</p>
+        <form action="/waitlist/join" method="POST"
+              class="w-full max-w-md flex flex-col sm:flex-row gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <input
+                type="email"
+                name="email"
+                required
+                placeholder="your@email.com"
+                class="flex-1 h-11 px-4 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400/40"
+            />
+            <button type="submit"
+                    class="h-11 px-6 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold rounded-lg text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors whitespace-nowrap">
+                Join Waitlist
+            </button>
+        </form>
+        <p class="text-zinc-400 text-xs">No spam. Unsubscribe anytime.</p>
+    </section>
+
+</main>
+
+{% include '_footer.html' %}
+
+<script>
+document.querySelectorAll('form[action="/waitlist/join"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Joining...';
+        }
+    });
+});
+</script>
+{% endblock %}

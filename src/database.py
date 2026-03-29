@@ -358,6 +358,15 @@ class DatabaseManager:
                     WHERE read_at IS NULL
                     """)
 
+                # Public waitlist signups (pre-launch; no mail provider yet)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS waitlist_emails (
+                        id         SERIAL PRIMARY KEY,
+                        email      TEXT UNIQUE NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """)
+
             conn.commit()
             logger.info("Database schema initialized")
 
@@ -365,6 +374,28 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to initialize schema: {e}")
+        finally:
+            self._release(conn)
+
+    def add_waitlist_email(self, email: str) -> None:
+        """Persist a waitlist signup. Duplicate emails are ignored (idempotent)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO waitlist_emails (email)
+                    VALUES (%s)
+                    ON CONFLICT (email) DO NOTHING
+                    """,
+                    (email,),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to save waitlist email: {e}") from e
         finally:
             self._release(conn)
 

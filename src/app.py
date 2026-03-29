@@ -458,6 +458,40 @@ def sign_out():
     return redirect(url_for("sign_in"))
 
 
+@app.route("/waitlist", methods=["GET"])
+def waitlist():
+    """Waitlist landing page."""
+    return render_template(
+        "waitlist.html",
+        waitlist_success=request.args.get("success") == "1",
+        waitlist_error=None,
+    )
+
+
+@app.route("/waitlist/join", methods=["POST"])
+def waitlist_join():
+    """Handle waitlist email submission; stores email in PostgreSQL."""
+    email = request.form.get("email", "").strip().lower()
+    if not email or "@" not in email:
+        return render_template(
+            "waitlist.html",
+            waitlist_success=False,
+            waitlist_error="Please enter a valid email address.",
+        )
+    try:
+        from database import get_database_manager
+
+        get_database_manager().add_waitlist_email(email)
+    except Exception:
+        app.logger.exception("waitlist signup failed")
+        return render_template(
+            "waitlist.html",
+            waitlist_success=False,
+            waitlist_error="Something went wrong. Please try again in a moment.",
+        )
+    return redirect("/waitlist?success=1")
+
+
 @app.route("/")
 @login_required
 def index():
