@@ -111,6 +111,17 @@ def _continue_conversation_rate_limit():
     return os.getenv("STOCKPRO_RATE_LIMIT_CONTINUE", "60 per hour")
 
 
+def sse_user_facing_error(exc: BaseException) -> str:
+    """Build a short SSE error string for the chat UI (no stack traces; cap API noise)."""
+    msg = (str(exc) or "").strip()
+    if not msg:
+        return "Something went wrong. Please try again."
+    max_len = 500
+    if len(msg) > max_len:
+        return msg[: max_len - 3] + "..."
+    return msg
+
+
 def flash_status(message: str, status_type: str = "info"):
     """Set a status message and type in the session for the next page render.
     status_type: 'success', 'error', or 'info'
@@ -590,7 +601,8 @@ def continue_conversation():
                 }
             )
         except Exception as e:
-            step_q.put({"type": "error", "message": str(e)})
+            app.logger.exception("continue_conversation background task failed")
+            step_q.put({"type": "error", "message": sse_user_facing_error(e)})
         finally:
             agent.set_emitter(None)
 
