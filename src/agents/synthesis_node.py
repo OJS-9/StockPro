@@ -7,11 +7,12 @@ No tools — pure synthesis LLM call.
 
 import logging
 import os
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from langsmith_service import StepEmitter
 from report_quality import assess_report_structure
 from research_plan import ResearchPlan
 from research_subjects import get_research_subject_by_id
@@ -28,7 +29,9 @@ _END_MARKER = "END_OF_REPORT"
 _TRUNCATION_THRESHOLD = 0.9
 
 
-def _log_structure_quality(report_text: str) -> None:
+def _log_structure_quality(
+    report_text: str, emitter: Optional[StepEmitter] = None
+) -> None:
     """Log when Markdown section headings look incomplete (Phase 1.7 quality signal)."""
     if not report_text or report_text.startswith("[INCOMPLETE REPORT"):
         return
@@ -39,7 +42,17 @@ def _log_structure_quality(report_text: str) -> None:
         logger.warning(
             "Report structure quality: Markdown headings missing expected topics: %s",
             ", ".join(missing),
+            extra={
+                "quality_pass": False,
+                "quality_missing_sections": ",".join(missing),
+            },
         )
+        if emitter:
+            emitter.emit(
+                "Review: report may be missing standard sections ("
+                + ", ".join(missing)
+                + ")."
+            )
 
 
 def _is_truncated(text: str, max_tokens: int) -> bool:
@@ -315,7 +328,7 @@ def synthesis_node(state: dict) -> dict:
                 combined = report_text + "\n" + (retry_response.content or "")
                 if _END_MARKER in combined:
                     logger.info("Continuation successful: %s chars", len(combined))
-                    _log_structure_quality(combined)
+                    _log_structure_quality(combined, emitter)
                     return {
                         "report_text": combined,
                         "actual_input_tokens": total_input_tok,
@@ -338,7 +351,7 @@ def synthesis_node(state: dict) -> dict:
                     len(report_text),
                 )
 
-        _log_structure_quality(report_text)
+        _log_structure_quality(report_text, emitter)
         return {
             "report_text": report_text,
             "actual_input_tokens": total_input_tok,
