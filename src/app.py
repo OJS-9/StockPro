@@ -1310,6 +1310,110 @@ def portfolio_history(portfolio_id):
 
 
 # ============================================================================
+# Price alerts (Phase 2 — STOA-16; persistence; delivery/evaluation later)
+# ============================================================================
+
+
+def _alert_row_to_json(row):
+    if not row:
+        return None
+    return {
+        "alert_id": row["alert_id"],
+        "symbol": row["symbol"],
+        "asset_type": row["asset_type"],
+        "direction": row["direction"],
+        "target_price": (
+            float(row["target_price"]) if row.get("target_price") is not None else None
+        ),
+        "active": bool(row["active"]),
+        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+        "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
+        "last_triggered_at": (
+            row["last_triggered_at"].isoformat()
+            if row.get("last_triggered_at")
+            else None
+        ),
+    }
+
+
+@app.route("/api/alerts", methods=["GET"])
+@login_required
+def api_list_alerts():
+    from database import get_database_manager
+
+    db = get_database_manager()
+    rows = db.list_price_alerts_for_user(session["user_id"])
+    return jsonify({"success": True, "alerts": [_alert_row_to_json(r) for r in rows]})
+
+
+@app.route("/api/alerts", methods=["POST"])
+@login_required
+def api_create_alert():
+    from database import get_database_manager
+
+    data = request.get_json(silent=True) or {}
+    symbol = (data.get("symbol") or "").strip().upper()
+    direction = (data.get("direction") or "").strip().lower()
+    if not symbol:
+        return jsonify({"success": False, "error": "symbol is required"}), 400
+    if direction not in ("above", "below"):
+        return (
+            jsonify({"success": False, "error": "direction must be above or below"}),
+            400,
+        )
+    try:
+        target_price = float(data.get("target_price"))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "invalid target_price"}), 400
+    if target_price <= 0:
+        return (
+            jsonify({"success": False, "error": "target_price must be positive"}),
+            400,
+        )
+    asset_type = (data.get("asset_type") or "stock").strip().lower()
+    if asset_type not in ("stock", "crypto"):
+        return jsonify({"success": False, "error": "invalid asset_type"}), 400
+
+    alert_id = str(uuid.uuid4())
+    db = get_database_manager()
+    db.create_price_alert(
+        alert_id=alert_id,
+        user_id=session["user_id"],
+        symbol=symbol,
+        direction=direction,
+        target_price=target_price,
+        asset_type=asset_type,
+    )
+    return jsonify({"success": True, "alert_id": alert_id})
+
+
+@app.route("/api/alerts/<alert_id>", methods=["DELETE"])
+@login_required
+def api_delete_alert(alert_id):
+    from database import get_database_manager
+
+    db = get_database_manager()
+    if not db.delete_price_alert(alert_id, session["user_id"]):
+        return jsonify({"success": False, "error": "Not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/alerts/<alert_id>", methods=["PATCH"])
+@login_required
+def api_patch_alert(alert_id):
+    from database import get_database_manager
+
+    data = request.get_json(silent=True) or {}
+    if "active" not in data:
+        return jsonify({"success": False, "error": "active field required"}), 400
+    active = bool(data.get("active"))
+    db = get_database_manager()
+    if not db.set_price_alert_active(alert_id, session["user_id"], active):
+        return jsonify({"success": False, "error": "Not found"}), 404
+    return jsonify({"success": True})
+
+
+# ============================================================================
 # Report History & Export Routes
 # ============================================================================
 @app.route("/reports")

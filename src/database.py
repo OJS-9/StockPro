@@ -303,6 +303,40 @@ class DatabaseManager:
                     "CREATE INDEX IF NOT EXISTS idx_price_cache_last_updated ON price_cache (last_updated)"
                 )
 
+                # Price alerts (user-defined targets vs cached quotes; evaluation in jobs later)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS price_alerts (
+                        alert_id          VARCHAR(36) PRIMARY KEY,
+                        user_id           VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        symbol            VARCHAR(20) NOT NULL,
+                        asset_type        VARCHAR(10) NOT NULL DEFAULT 'stock'
+                            CHECK (asset_type IN ('stock', 'crypto')),
+                        direction         VARCHAR(10) NOT NULL CHECK (direction IN ('above', 'below')),
+                        target_price      NUMERIC(18, 8) NOT NULL,
+                        active            BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_triggered_at TIMESTAMP NULL
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_price_alerts_user_id ON price_alerts (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_price_alerts_symbol ON price_alerts (symbol)"
+                )
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_trigger WHERE tgname = 'set_price_alerts_updated_at'
+                        ) THEN
+                            CREATE TRIGGER set_price_alerts_updated_at
+                            BEFORE UPDATE ON price_alerts
+                            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+                        END IF;
+                    END $$
+                """)
+
             conn.commit()
             logger.info("Database schema initialized")
 
@@ -1371,6 +1405,100 @@ class DatabaseManager:
                 return {row["symbol"]: row for row in rows}
         finally:
             self._release(conn)
+
+    # ==================== Price alerts ====================
+
+    def create_price_alert(
+        self,
+        alert_id: str,
+        user_id: str,
+        symbol: str,
+        direction: str,
+        target_price: float,
+        asset_type: str = "stock",
+    ) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO price_alerts
+                    (alert_id, user_id, symbol, asset_type, direction, target_price)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (alert_id, user_id, symbol, asset_type, direction, target_price),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to create price alert: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
+    def list_price_alerts_for_user(self, user_id: str) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM price_alerts
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    """,
+                    (user_id,),
+                )
+                return list(cur.fetchall())
+        finally:
+            self._release(conn)
+
+    def delete_price_alert(self, alert_id: str, user_id: str) -> bool:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM price_alerts
+                    WHERE alert_id = %s AND user_id = %s
+                    """,
+                    (alert_id, user_id),
+                )
+                deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to delete price alert: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
+    def set_price_alert_active(self, alert_id: str, user_id: str, active: bool) -> bool:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE price_alerts SET active = %s
+                    WHERE alert_id = %s AND user_id = %s
+                    """,
+                    (active, alert_id, user_id),
+                )
+                ok = cur.rowcount > 0
+            conn.commit()
+            return ok
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update price alert: {e}")
+        finally:
+            if conn:
+                self._release(conn)
 
     # ==================== CSV Import Logging ====================
 
