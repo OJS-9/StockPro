@@ -112,3 +112,35 @@ def test_patch_alert_active(client, logged_in):
         r = client.patch(f"/api/alerts/{aid}", json={"active": False})
     assert r.status_code == 200
     db.set_price_alert_active.assert_called_once_with(aid, uid, False)
+
+
+def test_list_notifications_requires_login(client):
+    r = client.get("/api/alerts/notifications")
+    assert r.status_code == 302
+
+
+def test_list_notifications_empty(client, logged_in):
+    with patch("database.get_database_manager") as mock_db:
+        db = MagicMock()
+        db.list_price_alert_notifications_for_user.return_value = []
+        db.count_unread_price_alert_notifications.return_value = 0
+        mock_db.return_value = db
+        r = client.get("/api/alerts/notifications")
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["success"] is True
+    assert data["notifications"] == []
+    assert data["unread_count"] == 0
+
+
+def test_patch_notification_read(client, logged_in):
+    nid = str(uuid.uuid4())
+    with client.session_transaction() as sess:
+        uid = sess["user_id"]
+    with patch("database.get_database_manager") as mock_db:
+        db = MagicMock()
+        db.mark_price_alert_notification_read.return_value = True
+        mock_db.return_value = db
+        r = client.patch(f"/api/alerts/notifications/{nid}", json={"read": True})
+    assert r.status_code == 200
+    db.mark_price_alert_notification_read.assert_called_once_with(nid, uid)

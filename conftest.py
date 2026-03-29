@@ -16,3 +16,5 @@ def pytest_configure(config):
         "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----",
     )
     os.environ.setdefault("CLERK_PUBLISHABLE_KEY", "pk_test_pytest")
+    # Avoid running price-alert evaluation on every mocked/real upsert during tests.
+    os.environ.setdefault("STOCKPRO_ALERT_EVAL_ENABLED", "false")

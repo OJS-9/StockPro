@@ -337,6 +337,27 @@ class DatabaseManager:
                     END $$
                 """)
 
+                # Fired when an alert condition matches cached price (in-app notification feed)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS price_alert_notifications (
+                        notification_id   VARCHAR(36) PRIMARY KEY,
+                        user_id           VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        alert_id          VARCHAR(36) NOT NULL REFERENCES price_alerts(alert_id) ON DELETE CASCADE,
+                        symbol            VARCHAR(20) NOT NULL,
+                        body              TEXT NOT NULL,
+                        read_at           TIMESTAMP NULL,
+                        created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_pan_user_created ON price_alert_notifications (user_id, created_at DESC)"
+                )
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_pan_user_unread
+                    ON price_alert_notifications (user_id)
+                    WHERE read_at IS NULL
+                    """)
+
             conn.commit()
             logger.info("Database schema initialized")
 
@@ -1379,6 +1400,17 @@ class DatabaseManager:
             conn.commit()
         finally:
             self._release(conn)
+        try:
+            if os.getenv("STOCKPRO_ALERT_EVAL_ENABLED", "true").lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                from alerts.evaluation import evaluate_alerts_for_symbols
+
+                evaluate_alerts_for_symbols(self, [symbol])
+        except Exception:
+            logger.exception("price alert evaluation failed after cache upsert")
 
     def get_cached_prices(self, symbols):
         if not symbols:
@@ -1496,6 +1528,124 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to update price alert: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
+    def list_active_alerts_for_symbols(
+        self, symbols: List[str]
+    ) -> List[Dict[str, Any]]:
+        if not symbols:
+            return []
+        norm = [s.upper() for s in symbols]
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM price_alerts
+                    WHERE active = TRUE AND symbol = ANY(%s)
+                    """,
+                    (norm,),
+                )
+                return list(cur.fetchall())
+        finally:
+            self._release(conn)
+
+    def record_price_alert_trigger(
+        self,
+        notification_id: str,
+        user_id: str,
+        alert_id: str,
+        symbol: str,
+        body: str,
+    ) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO price_alert_notifications
+                    (notification_id, user_id, alert_id, symbol, body)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (notification_id, user_id, alert_id, symbol, body),
+                )
+                cur.execute(
+                    """
+                    UPDATE price_alerts
+                    SET last_triggered_at = NOW()
+                    WHERE alert_id = %s
+                    """,
+                    (alert_id,),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to record price alert trigger: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
+    def list_price_alert_notifications_for_user(
+        self, user_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM price_alert_notifications
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (user_id, limit),
+                )
+                return list(cur.fetchall())
+        finally:
+            self._release(conn)
+
+    def count_unread_price_alert_notifications(self, user_id: str) -> int:
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM price_alert_notifications
+                    WHERE user_id = %s AND read_at IS NULL
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        finally:
+            self._release(conn)
+
+    def mark_price_alert_notification_read(
+        self, notification_id: str, user_id: str
+    ) -> bool:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE price_alert_notifications
+                    SET read_at = NOW()
+                    WHERE notification_id = %s AND user_id = %s AND read_at IS NULL
+                    """,
+                    (notification_id, user_id),
+                )
+                ok = cur.rowcount > 0
+            conn.commit()
+            return ok
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to mark notification read: {e}")
         finally:
             if conn:
                 self._release(conn)

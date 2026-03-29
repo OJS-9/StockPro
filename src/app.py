@@ -1310,7 +1310,7 @@ def portfolio_history(portfolio_id):
 
 
 # ============================================================================
-# Price alerts (Phase 2 — STOA-16; persistence; delivery/evaluation later)
+# Price alerts (Phase 2 — STOA-16; persistence + evaluation + in-app notifications)
 # ============================================================================
 
 
@@ -1409,6 +1409,55 @@ def api_patch_alert(alert_id):
     active = bool(data.get("active"))
     db = get_database_manager()
     if not db.set_price_alert_active(alert_id, session["user_id"], active):
+        return jsonify({"success": False, "error": "Not found"}), 404
+    return jsonify({"success": True})
+
+
+def _alert_notification_row_to_json(row):
+    if not row:
+        return None
+    return {
+        "notification_id": row["notification_id"],
+        "alert_id": row["alert_id"],
+        "symbol": row["symbol"],
+        "body": row["body"],
+        "read_at": row["read_at"].isoformat() if row.get("read_at") else None,
+        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+    }
+
+
+@app.route("/api/alerts/notifications", methods=["GET"])
+@login_required
+def api_list_alert_notifications():
+    from database import get_database_manager
+
+    db = get_database_manager()
+    try:
+        limit = min(100, max(1, int(request.args.get("limit", 50))))
+    except (TypeError, ValueError):
+        limit = 50
+    uid = session["user_id"]
+    rows = db.list_price_alert_notifications_for_user(uid, limit=limit)
+    unread = db.count_unread_price_alert_notifications(uid)
+    return jsonify(
+        {
+            "success": True,
+            "notifications": [_alert_notification_row_to_json(r) for r in rows],
+            "unread_count": unread,
+        }
+    )
+
+
+@app.route("/api/alerts/notifications/<notification_id>", methods=["PATCH"])
+@login_required
+def api_patch_alert_notification(notification_id):
+    from database import get_database_manager
+
+    data = request.get_json(silent=True) or {}
+    if not data.get("read"):
+        return jsonify({"success": False, "error": "read: true required"}), 400
+    db = get_database_manager()
+    if not db.mark_price_alert_notification_read(notification_id, session["user_id"]):
         return jsonify({"success": False, "error": "Not found"}), 404
     return jsonify({"success": True})
 

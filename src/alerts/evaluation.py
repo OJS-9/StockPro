@@ -1,0 +1,100 @@
+"""
+Evaluate active price alerts against price_cache after quotes update.
+"""
+
+import logging
+import os
+import uuid
+from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any, Iterable, List
+
+logger = logging.getLogger(__name__)
+
+
+def _to_float(x: Any) -> float:
+    if x is None:
+        raise TypeError("price is None")
+    if isinstance(x, Decimal):
+        return float(x)
+    return float(x)
+
+
+def condition_met(direction: str, price: float, target: float) -> bool:
+    d = (direction or "").lower()
+    if d == "above":
+        return price >= target
+    if d == "below":
+        return price <= target
+    return False
+
+
+def _format_money(x: float) -> str:
+    if abs(x) >= 1000:
+        return f"${x:,.2f}"
+    return f"${x:.4g}"
+
+
+def _cooldown() -> timedelta:
+    sec = float(os.getenv("STOCKPRO_ALERT_COOLDOWN_SEC", "3600"))
+    return timedelta(seconds=sec)
+
+
+def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
+    """
+    Check active alerts for the given symbols against price_cache.
+    Inserts notification rows and updates last_triggered_at when conditions match
+    and cooldown since last_triggered_at has elapsed.
+    """
+    syms = list({str(s).upper() for s in symbols if s})
+    if not syms:
+        return 0
+    alerts: List = db.list_active_alerts_for_symbols(syms)
+    if not alerts:
+        return 0
+    cache = db.get_cached_prices(syms)
+    cooldown = _cooldown()
+    now = datetime.utcnow()
+    fired = 0
+    for alert in alerts:
+        sym = alert["symbol"]
+        row = cache.get(sym)
+        if not row:
+            continue
+        at_cache = (row.get("asset_type") or "stock").lower()
+        at_alert = (alert.get("asset_type") or "stock").lower()
+        if at_cache != at_alert:
+            continue
+        try:
+            price = _to_float(row.get("price"))
+        except (TypeError, ValueError):
+            continue
+        try:
+            target = _to_float(alert.get("target_price"))
+        except (TypeError, ValueError):
+            continue
+        direction = (alert.get("direction") or "").lower()
+        if not condition_met(direction, price, target):
+            continue
+        last = alert.get("last_triggered_at")
+        if last is not None:
+            if getattr(last, "tzinfo", None):
+                last = last.replace(tzinfo=None)
+            if now - last < cooldown:
+                continue
+        body = (
+            f"{sym} is now {_format_money(price)} "
+            f"({direction} your target of {_format_money(target)})."
+        )
+        nid = str(uuid.uuid4())
+        try:
+            db.record_price_alert_trigger(
+                nid, alert["user_id"], alert["alert_id"], sym, body
+            )
+            fired += 1
+        except Exception:
+            logger.exception(
+                "record_price_alert_trigger failed for alert_id=%s",
+                alert.get("alert_id"),
+            )
+    return fired
