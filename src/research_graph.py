@@ -59,6 +59,18 @@ class ResearchState(TypedDict):
 _MAX_SUBJECTS = int(os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
 _MIN_OUTPUT_CHARS = int(os.getenv("QUALITY_GATE_MIN_OUTPUT_CHARS", "200"))
 _URL_RE = re.compile(r"https?://[^\s<>\"{}|\\^`\[\]]+")
+_MAX_ABORT_DETAIL_CHARS = 600
+
+
+def _subject_failure_reason(subject_id: str, result: Dict[str, Any]) -> str:
+    """Short human-readable reason for quality-gate failure (logging / user-facing detail)."""
+    if result.get("error"):
+        err = str(result["error"])
+        if len(err) > 180:
+            return f"{subject_id}: {err[:180]}…"
+        return f"{subject_id}: {err}"
+    out_len = len(result.get("research_output", ""))
+    return f"{subject_id}: output too short ({out_len} chars, min {_MIN_OUTPUT_CHARS})"
 
 
 def _fan_out(state: ResearchState) -> List[Send]:
@@ -193,13 +205,27 @@ def quality_gate_node(state: ResearchState) -> dict:
 
     if emitter and failed_count:
         emitter.emit(f"Warning: {failed_count}/{total} research subjects failed")
+        detail_parts = [
+            _subject_failure_reason(sid, research_outputs[sid]) for sid in failed[:5]
+        ]
+        remainder = len(failed) - len(detail_parts)
+        detail_line = "; ".join(detail_parts)
+        if remainder > 0:
+            detail_line += f"; …and {remainder} more"
+        emitter.emit(detail_line[:500])
 
     if total > 0 and failed_count / total > 0.5:
+        detail_bits = [_subject_failure_reason(sid, research_outputs[sid]) for sid in failed]
+        detail_blob = "; ".join(detail_bits)
+        if len(detail_blob) > _MAX_ABORT_DETAIL_CHARS:
+            detail_blob = detail_blob[: _MAX_ABORT_DETAIL_CHARS - 1] + "…"
         error_text = (
             f"Research generation failed for {ticker}: "
-            f"{failed_count} of {total} subjects returned errors "
+            f"{failed_count} of {total} subjects did not produce usable output "
             f"({', '.join(failed)}). Please try again."
         )
+        if detail_blob:
+            error_text += f"\n\nDetails:\n{detail_blob}"
         logger.error("Aborting synthesis — too many failures: %s", failed)
         return {
             "research_outputs": clean_outputs,
@@ -219,12 +245,13 @@ def quality_gate_node(state: ResearchState) -> dict:
 
 
 def _quality_gate_route(state: ResearchState) -> str:
-    """Skip synthesis and go straight to storage if the gate already wrote an error report."""
-    if (
-        state.get("is_partial_report")
-        and state.get("report_text")
-        and not state["research_outputs"]
-    ):
+    """
+    Skip synthesis when the gate already set a user-facing error report (>50% subjects failed).
+
+    If we routed to synthesis here, synthesis would overwrite gate error text. `report_text`
+    is only non-empty at this point when the gate aborted; partial runs leave it empty.
+    """
+    if state.get("report_text"):
         return "storage_node"
     return "synthesis_node"
 

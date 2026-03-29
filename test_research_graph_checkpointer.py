@@ -180,6 +180,8 @@ def test_gate_majority_failure_aborts():
     assert result["is_partial_report"] is True
     assert "NVDA" in result["report_text"]
     assert "failed" in result["report_text"].lower() or "error" in result["report_text"].lower()
+    assert "Details:" in result["report_text"]
+    assert "subj_a" in result["report_text"]
     # clean output still captured even on abort
     assert "subj_c" in result["research_outputs"]
 
@@ -192,6 +194,20 @@ def test_quality_gate_route_abort_goes_to_storage():
         is_partial_report=True,
         report_text="Research generation failed for AAPL: ...",
         research_outputs={},  # all failed
+    )
+    assert _quality_gate_route(state) == "storage_node"
+
+
+def test_quality_gate_route_abort_with_partial_clean_goes_to_storage():
+    """>50% failure with some clean subjects: gate sets report_text — must skip synthesis."""
+    from research_graph import _quality_gate_route
+
+    state = _make_state(
+        is_partial_report=True,
+        report_text="Research generation failed for NVDA: 2 of 3 subjects...",
+        research_outputs={
+            "subj_c": {"research_output": _GOOD_TEXT, "sources": []},
+        },
     )
     assert _quality_gate_route(state) == "storage_node"
 
