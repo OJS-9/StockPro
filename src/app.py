@@ -433,6 +433,7 @@ def start_research():
         session['conversation_history'] = conversation_history
         session['current_ticker'] = ticker
         session['current_trade_type'] = trade_type
+        session.pop('report_chat_mode', None)
         flash_status(f'Research started for {ticker} ({trade_type})', 'success')
         
     except Exception as e:
@@ -458,6 +459,7 @@ def continue_conversation():
 
     # Snapshot mutable session state so the background thread can read it safely
     previous_report_id = session.get('current_report_id')
+    report_chat_mode = session.get('report_chat_mode', False)
     conversation_history_snapshot = list(session.get('conversation_history', []))
     ticker = session.get('current_ticker', '')
     trade_type = session.get('current_trade_type', 'Investment')
@@ -470,7 +472,14 @@ def continue_conversation():
 
     def run_in_background():
         try:
-            response = agent.continue_conversation(user_input)
+            print(f"[Continue] report_chat_mode={report_chat_mode}, previous_report_id={previous_report_id}")
+            if report_chat_mode and previous_report_id:
+                agent.current_report_id = previous_report_id
+                print(f"[Continue] Calling chat_with_report for report {previous_report_id}...")
+                response = agent.chat_with_report(user_input)
+                print(f"[Continue] chat_with_report returned ({len(response)} chars)")
+            else:
+                response = agent.continue_conversation(user_input)
 
             new_history = list(conversation_history_snapshot)
             new_history.append({"role": "user", "content": user_input})
@@ -480,7 +489,7 @@ def continue_conversation():
             report_generated = False
             report_preview = None
 
-            if current_report_id and current_report_id != previous_report_id:
+            if not report_chat_mode and current_report_id and current_report_id != previous_report_id:
                 report_text = getattr(agent, 'last_report_text', None) or ''
                 if report_text:
                     report_preview = f"# Research Report\n\n{report_text}"
@@ -498,6 +507,9 @@ def continue_conversation():
                 "report_text": getattr(agent, 'last_report_text', None) or '',
             })
         except Exception as e:
+            import traceback
+            print(f"[Continue] ERROR in background thread: {e}")
+            traceback.print_exc()
             step_q.put({"type": "error", "message": str(e)})
         finally:
             agent.set_emitter(None)
@@ -602,42 +614,6 @@ def generate_report():
     return redirect(url_for('chat'))
 
 
-@app.route('/chat_report', methods=['POST'])
-@login_required
-def chat_report():
-    """Handle form submission to chat with report."""
-    question = request.form.get('chat_question', '').strip()
-    
-    # Validate input
-    if not question:
-        flash_status('Please enter a question.', 'info')
-        return redirect(url_for('index'))
-    
-    if 'current_report_id' not in session:
-        flash_status('No report available. Please generate a report first.', 'error')
-        return redirect(url_for('index'))
-    
-    try:
-        session_id = get_or_create_session_id()
-        agent = initialize_session(session_id)
-        agent.current_report_id = session.get('current_report_id')
-        
-        # Get answer from chat agent
-        answer = agent.chat_with_report(question)
-        
-        # Update chat history in session
-        chat_history = session.get('chat_history', [])
-        chat_history.append({"role": "user", "content": question})
-        chat_history.append({"role": "assistant", "content": answer})
-        session['chat_history'] = chat_history
-        flash_status('Answer received', 'success')
-        
-    except Exception as e:
-        flash_status(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('index'))
-
-
 @app.route('/clear', methods=['POST'])
 @login_required
 def clear_conversation():
@@ -645,6 +621,7 @@ def clear_conversation():
     session['conversation_history'] = []
     session['current_ticker'] = ''
     session['current_trade_type'] = 'Investment'
+    session.pop('report_chat_mode', None)
     flash_status('Conversation cleared. Ready for new research.', 'info')
 
     # Optionally reset agent
@@ -1331,6 +1308,7 @@ def chat_with_report(report_id):
         session['current_report_id'] = report_id
         session['current_ticker'] = report['ticker']
         session['current_trade_type'] = report['trade_type']
+        session['report_chat_mode'] = True
 
         # Initialize conversation with report context
         session['conversation_history'] = [

@@ -28,58 +28,64 @@ class VectorSearch:
         report_id: str,
         query_embedding: List[float],
         top_k: int = 5,
-        min_score: float = 0.0
+        min_score: float = 0.0,
+        chunk_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search for top-k most relevant chunks using cosine similarity.
-        
+
         Args:
             report_id: Report ID to search within
             query_embedding: Query embedding vector
             top_k: Number of top results to return
             min_score: Minimum similarity score threshold
-        
+            chunk_type: Optional filter — 'report' or 'research'
+
         Returns:
             List of chunk dictionaries with similarity scores, sorted by relevance
         """
         # Get all chunks for the report with embeddings
         chunks = self.db.get_chunks_by_report(report_id, include_embeddings=True)
-        
+
         if not chunks:
             return []
-        
+
+        if chunk_type:
+            chunks = [c for c in chunks if c.get('chunk_type', 'report') == chunk_type]
+
         # Convert query embedding to numpy array
         query_vec = np.array(query_embedding)
-        
+
         # Calculate cosine similarity for each chunk
         results = []
         for chunk in chunks:
             if not chunk.get('embedding'):
                 continue
-            
+
             # Parse embedding if it's a JSON string
             embedding = chunk['embedding']
             if isinstance(embedding, str):
                 embedding = json.loads(embedding)
-            
+
             chunk_vec = np.array(embedding)
-            
+
             # Calculate cosine similarity
             similarity = self._cosine_similarity(query_vec, chunk_vec)
-            
+
             if similarity >= min_score:
                 results.append({
                     'chunk_id': chunk['chunk_id'],
                     'chunk_text': chunk['chunk_text'],
                     'section': chunk.get('section'),
                     'chunk_index': chunk['chunk_index'],
+                    'chunk_type': chunk.get('chunk_type', 'report'),
                     'similarity_score': float(similarity),
                     'created_at': chunk.get('created_at')
                 })
-        
+
         # Sort by similarity score (descending)
         results.sort(key=lambda x: x['similarity_score'], reverse=True)
-        
+
         # Return top-k
         return results[:top_k]
     

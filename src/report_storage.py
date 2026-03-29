@@ -78,6 +78,32 @@ class ReportStorage:
         
         return report_id
     
+    def store_research_chunks(self, report_id: str, research_outputs: Dict[str, Dict[str, Any]]):
+        """Store specialized agent outputs as individual research chunks."""
+        chunks = []
+        for i, (subject_id, output) in enumerate(research_outputs.items()):
+            text = output.get('research_output', '')
+            if not text:
+                continue
+            chunks.append({
+                'chunk_text': text,
+                'section': f"research:{output.get('subject_name', subject_id)}",
+                'chunk_index': 1000 + i,
+                'chunk_type': 'research',
+            })
+
+        if not chunks:
+            return
+
+        print(f"Embedding {len(chunks)} research chunks...")
+        texts = [c['chunk_text'] for c in chunks]
+        embeddings = self.embedding_service.create_embeddings_batch(texts)
+        for j, chunk in enumerate(chunks):
+            chunk['embedding'] = embeddings[j] if j < len(embeddings) else None
+
+        self.db.save_chunks(report_id, chunks)
+        print(f"Stored {len(chunks)} research chunks for report {report_id}")
+
     def get_report(self, report_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Retrieve a report by ID, optionally verifying ownership.

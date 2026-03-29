@@ -145,6 +145,10 @@ def storage_node(state: ResearchState) -> dict:
             user_id=user_id,
         )
         print(f"[StorageNode] Report stored: {report_id}")
+
+        research_outputs = state.get("research_outputs", {})
+        if research_outputs:
+            storage.store_research_chunks(report_id, research_outputs)
     except Exception as e:
         print(f"[StorageNode] Storage failed (report still available): {e}")
 

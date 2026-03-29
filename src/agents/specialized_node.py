@@ -10,7 +10,7 @@ import time
 from typing import Optional, Dict, Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 
 from research_subjects import ResearchSubject, get_research_subject_by_id
@@ -165,7 +165,7 @@ def specialized_node(state: dict) -> dict:
                 output_tok += usage.get("output_tokens", 0)
 
             for msg in reversed(result["messages"]):
-                if hasattr(msg, "content") and msg.content and not getattr(msg, "tool_calls", None):
+                if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
                     content = msg.content
                     if isinstance(content, list):
                         output_text = "\n".join(
