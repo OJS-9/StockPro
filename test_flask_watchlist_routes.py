@@ -53,6 +53,7 @@ class TestWatchlistRoutesAuth:
                 sess["username"] = "testuser"
             resp = api_client.get("/watchlist")
         assert resp.status_code == 200
+        assert b"stockpro-alerts-root" in resp.data
 
 
 class TestWatchlistOwnershipPost:

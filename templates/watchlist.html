@@ -27,6 +27,198 @@
             </form>
         </div>
 
+        <!-- Price alerts (API: /api/alerts, /api/alerts/notifications) -->
+        <section id="stockpro-alerts-root" class="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-4 sm:p-6" aria-labelledby="alerts-heading">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 id="alerts-heading" class="text-lg font-semibold text-zinc-950 dark:text-zinc-50">Price alerts</h2>
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Get in-app notifications when a symbol crosses your target (uses live cache prices).</p>
+                </div>
+                <button type="button" id="alerts-refresh" class="min-h-11 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors self-start sm:self-center">
+                    Refresh
+                </button>
+            </div>
+            <div id="alerts-notifications" class="mb-4 space-y-2" aria-live="polite"></div>
+            <div id="alerts-list" class="mb-4 overflow-x-auto"></div>
+            <form id="alerts-create-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end border-t border-zinc-200 dark:border-zinc-800 pt-4">
+                <div class="sm:col-span-1">
+                    <label for="alert-symbol" class="block text-xs font-medium text-zinc-500 mb-1">Symbol</label>
+                    <input id="alert-symbol" name="symbol" type="text" required maxlength="20" placeholder="AAPL"
+                        class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2.5 min-h-11 uppercase" style="text-transform:uppercase">
+                </div>
+                <div class="sm:col-span-1">
+                    <label for="alert-direction" class="block text-xs font-medium text-zinc-500 mb-1">Direction</label>
+                    <select id="alert-direction" name="direction" class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2.5 min-h-11">
+                        <option value="above">At or above</option>
+                        <option value="below">At or below</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-1">
+                    <label for="alert-target" class="block text-xs font-medium text-zinc-500 mb-1">Target price</label>
+                    <input id="alert-target" name="target_price" type="number" step="any" min="0" required placeholder="150"
+                        class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2.5 min-h-11 tabular-nums">
+                </div>
+                <div class="sm:col-span-1">
+                    <label for="alert-asset" class="block text-xs font-medium text-zinc-500 mb-1">Type</label>
+                    <select id="alert-asset" name="asset_type" class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2.5 min-h-11">
+                        <option value="stock">Stock</option>
+                        <option value="crypto">Crypto</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2 lg:col-span-2 flex gap-2">
+                    <button type="submit" class="min-h-11 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors w-full sm:w-auto">
+                        Add alert
+                    </button>
+                </div>
+            </form>
+            <p id="alerts-msg" class="text-sm mt-3 hidden" role="status"></p>
+        </section>
+        <script>
+        (function () {
+            var csrfToken = {{ csrf_token() | tojson }};
+            var hdr = function () {
+                return {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrfToken
+                };
+            };
+            var msgEl = document.getElementById('alerts-msg');
+            function showMsg(text, isErr) {
+                if (!msgEl) return;
+                msgEl.textContent = text;
+                msgEl.classList.remove('hidden', 'text-red-600', 'dark:text-red-400', 'text-green-600', 'dark:text-green-400');
+                if (isErr) {
+                    msgEl.classList.add('text-red-600', 'dark:text-red-400');
+                } else {
+                    msgEl.classList.add('text-green-600', 'dark:text-green-400');
+                }
+            }
+            function hideMsg() {
+                if (msgEl) { msgEl.classList.add('hidden'); msgEl.textContent = ''; }
+            }
+            function esc(s) {
+                var d = document.createElement('div');
+                d.textContent = s;
+                return d.innerHTML;
+            }
+            async function loadNotifications() {
+                var el = document.getElementById('alerts-notifications');
+                if (!el) return;
+                var r = await fetch('/api/alerts/notifications?limit=10', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                if (!r.ok) { el.innerHTML = '<p class="text-sm text-red-600">Could not load notifications.</p>'; return; }
+                var j = await r.json();
+                if (!j.success) return;
+                var unread = j.unread_count || 0;
+                var head = '<div class="flex items-center gap-2 mb-2"><span class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Recent notifications</span>';
+                if (unread > 0) head += '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-zinc-900 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-900">' + unread + ' unread</span>';
+                head += '</div>';
+                var rows = (j.notifications || []).map(function (n) {
+                    var muted = n.read_at ? 'opacity-70' : '';
+                    return '<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 p-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 ' + muted + '">' +
+                        '<p class="text-sm text-zinc-800 dark:text-zinc-200 flex-1">' + esc(n.body || '') + '</p>' +
+                        (!n.read_at ? '<button type="button" class="shrink-0 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:underline min-h-11 sm:min-h-9 px-2" data-mark-read="' + esc(n.notification_id) + '">Mark read</button>' : '') +
+                        '</div>';
+                }).join('');
+                el.innerHTML = head + (rows || '<p class="text-sm text-zinc-500">No notifications yet.</p>');
+                el.querySelectorAll('[data-mark-read]').forEach(function (btn) {
+                    btn.addEventListener('click', async function () {
+                        var id = btn.getAttribute('data-mark-read');
+                        await fetch('/api/alerts/notifications/' + encodeURIComponent(id), {
+                            method: 'PATCH',
+                            credentials: 'same-origin',
+                            headers: hdr(),
+                            body: JSON.stringify({ read: true })
+                        });
+                        loadNotifications();
+                        hideMsg();
+                    });
+                });
+            }
+            async function loadAlerts() {
+                var el = document.getElementById('alerts-list');
+                if (!el) return;
+                var r = await fetch('/api/alerts', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+                if (!r.ok) { el.innerHTML = '<p class="text-sm text-red-600">Could not load alerts.</p>'; return; }
+                var j = await r.json();
+                if (!j.success || !j.alerts || !j.alerts.length) {
+                    el.innerHTML = '<p class="text-sm text-zinc-500">No alerts yet. Add one above.</p>';
+                    return;
+                }
+                var thead = '<table class="w-full text-sm min-w-[520px]"><thead><tr class="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs uppercase tracking-wider">' +
+                    '<th class="text-left py-2 pr-2">Symbol</th><th class="text-left py-2 pr-2">Type</th><th class="text-left py-2 pr-2">Rule</th><th class="text-right py-2 pr-2">Target</th><th class="text-center py-2 pr-2">Active</th><th class="text-right py-2">Actions</th></tr></thead><tbody>';
+                var body = j.alerts.map(function (a) {
+                    var dir = a.direction === 'above' ? '≥' : '≤';
+                    var active = a.active ? 'Yes' : 'No';
+                    var tgt = (a.target_price != null) ? Number(a.target_price).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—';
+                    return '<tr class="border-b border-zinc-200 dark:border-zinc-800 last:border-0">' +
+                        '<td class="py-2 pr-2 font-semibold">' + esc(a.symbol || '') + '</td>' +
+                        '<td class="py-2 pr-2">' + esc(a.asset_type || '') + '</td>' +
+                        '<td class="py-2 pr-2">' + dir + '</td>' +
+                        '<td class="py-2 pr-2 text-right tabular-nums">' + esc(tgt) + '</td>' +
+                        '<td class="py-2 pr-2 text-center">' + esc(active) + '</td>' +
+                        '<td class="py-2 text-right whitespace-nowrap">' +
+                        '<button type="button" class="text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:underline mr-3 min-h-11 sm:min-h-9 px-1" data-toggle-alert="' + esc(a.alert_id) + '" data-next-active="' + (a.active ? 'false' : 'true') + '">' + (a.active ? 'Pause' : 'Resume') + '</button>' +
+                        '<button type="button" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline min-h-11 sm:min-h-9 px-1" data-del-alert="' + esc(a.alert_id) + '">Delete</button>' +
+                        '</td></tr>';
+                }).join('');
+                el.innerHTML = thead + body + '</tbody></table>';
+                el.querySelectorAll('[data-del-alert]').forEach(function (btn) {
+                    btn.addEventListener('click', async function () {
+                        if (!confirm('Delete this alert?')) return;
+                        var id = btn.getAttribute('data-del-alert');
+                        var rr = await fetch('/api/alerts/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'same-origin', headers: hdr() });
+                        if (rr.ok) { showMsg('Alert deleted.', false); loadAlerts(); loadNotifications(); }
+                        else { showMsg('Could not delete alert.', true); }
+                    });
+                });
+                el.querySelectorAll('[data-toggle-alert]').forEach(function (btn) {
+                    btn.addEventListener('click', async function () {
+                        var id = btn.getAttribute('data-toggle-alert');
+                        var na = btn.getAttribute('data-next-active') === 'true';
+                        var rr = await fetch('/api/alerts/' + encodeURIComponent(id), {
+                            method: 'PATCH',
+                            credentials: 'same-origin',
+                            headers: hdr(),
+                            body: JSON.stringify({ active: na })
+                        });
+                        if (rr.ok) { hideMsg(); loadAlerts(); }
+                        else { showMsg('Could not update alert.', true); }
+                    });
+                });
+            }
+            var form = document.getElementById('alerts-create-form');
+            if (form) {
+                form.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    hideMsg();
+                    var fd = new FormData(form);
+                    var payload = {
+                        symbol: (fd.get('symbol') || '').toString().trim().toUpperCase(),
+                        direction: fd.get('direction'),
+                        target_price: parseFloat(fd.get('target_price')),
+                        asset_type: fd.get('asset_type')
+                    };
+                    var rr = await fetch('/api/alerts', { method: 'POST', credentials: 'same-origin', headers: hdr(), body: JSON.stringify(payload) });
+                    var jj = await rr.json().catch(function () { return {}; });
+                    if (rr.ok && jj.success) {
+                        showMsg('Alert created.', false);
+                        form.reset();
+                        loadAlerts();
+                    } else {
+                        showMsg((jj && jj.error) ? jj.error : 'Could not create alert.', true);
+                    }
+                });
+            }
+            var refBtn = document.getElementById('alerts-refresh');
+            if (refBtn) {
+                refBtn.addEventListener('click', function () { hideMsg(); loadAlerts(); loadNotifications(); });
+            }
+            loadAlerts();
+            loadNotifications();
+        })();
+        </script>
+
         <!-- Watchlist tab pills -->
         {% if watchlists %}
         <div class="flex flex-wrap gap-2 mb-6">
