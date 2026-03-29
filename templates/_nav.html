@@ -29,13 +29,13 @@
             {% endfor %}
         </nav>
         <div class="flex gap-3 items-center">
-            <button onclick="toggleTheme()" class="p-2 rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
+            <button onclick="toggleTheme()" class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
                 <span class="material-symbols-outlined dark:block hidden" style="font-size:18px">light_mode</span>
                 <span class="material-symbols-outlined dark:hidden block" style="font-size:18px">dark_mode</span>
             </button>
             {% if current_user.is_authenticated %}
             <div class="relative" id="avatar-dropdown-wrapper">
-                <button id="avatar-btn" class="size-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-semibold text-xs flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                <button id="avatar-btn" class="size-11 md:size-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-semibold text-xs flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
                     {{ current_user.username[:2] | upper }}
                 </button>
                 <div id="avatar-dropdown" class="hidden absolute right-0 top-full mt-2 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-card-lg py-1.5 z-50">
@@ -73,21 +73,21 @@
         </div>
     </div>
     <div class="md:hidden flex items-center gap-2">
-        <button onclick="toggleTheme()" class="p-2 rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
+        <button onclick="toggleTheme()" class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
             <span class="material-symbols-outlined dark:block hidden" style="font-size:18px">light_mode</span>
             <span class="material-symbols-outlined dark:hidden block" style="font-size:18px">dark_mode</span>
         </button>
-        <button type="button" id="mobile-menu-btn" aria-expanded="false" aria-controls="mobile-menu-panel" class="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+        <button type="button" id="mobile-menu-btn" aria-expanded="false" aria-controls="mobile-menu-panel" class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
             <span class="material-symbols-outlined" aria-hidden="true" style="font-size:22px">menu</span>
         </button>
     </div>
 </header>
 
 <div id="mobile-menu-overlay" class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm hidden" aria-hidden="true"></div>
-<div id="mobile-menu-panel" role="dialog" aria-label="Mobile menu" aria-hidden="true" class="fixed top-0 right-0 z-50 h-full w-64 max-w-[85vw] bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col transition-transform duration-200 ease-out -translate-x-full hidden">
+<div id="mobile-menu-panel" role="dialog" aria-label="Mobile menu" aria-hidden="true" class="fixed top-0 right-0 z-50 h-full w-64 max-w-[85vw] bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col transition-transform duration-200 ease-out translate-x-full hidden">
     <div class="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
         <span class="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Menu</span>
-        <button type="button" id="mobile-menu-close" class="p-2 rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Close menu">
+        <button type="button" id="mobile-menu-close" class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Close menu">
             <span class="material-symbols-outlined" style="font-size:20px">close</span>
         </button>
     </div>
@@ -96,8 +96,8 @@
             ('index', 'Markets', ['index']),
             ('report_history', 'Reports', ['report_history']),
             ('chat', 'AI Agent', ['chat', 'continue_conversation', 'chat_with_report']),
-            ('portfolio', 'Portfolio', ['portfolio', 'portfolio_detail', 'add_transaction', 'import_csv', 'holding_detail']),
-            ('watchlist', 'Watchlist', ['watchlist', 'watchlist_create', 'watchlist_rename', 'watchlist_delete', 'watchlist_add_symbol', 'watchlist_remove_item', 'watchlist_toggle_pin'])
+            ('portfolio', 'Portfolio', ['portfolio', 'portfolio_detail', 'add_transaction', 'import_csv', 'holding_detail', 'delete_transaction', 'create_portfolio_route']),
+            ('watchlist', 'Watchlist', ['watchlist', 'watchlist_create', 'watchlist_rename', 'watchlist_delete', 'watchlist_add_symbol', 'watchlist_remove_item', 'watchlist_toggle_pin', 'watchlist_create_section', 'watchlist_rename_section', 'watchlist_delete_section'])
         ] %}
         {% for route, label, endpoints in mobile_nav %}
         <a class="mobile-menu-link text-sm py-2.5 px-3 rounded-md {{ 'text-zinc-950 dark:text-zinc-50 font-semibold bg-zinc-100 dark:bg-zinc-800' if request.endpoint in endpoints else 'text-zinc-600 dark:text-zinc-400 font-medium hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/50' }} transition-colors" href="{{ url_for(route) }}">{{ label }}</a>
@@ -126,7 +126,7 @@
     function openMenu() {
         overlay.classList.remove('hidden');
         overlay.setAttribute('aria-hidden', 'false');
-        panel.classList.remove('hidden', '-translate-x-full');
+        panel.classList.remove('hidden', 'translate-x-full');
         panel.classList.add('translate-x-0');
         panel.setAttribute('aria-hidden', 'false');
         btn.setAttribute('aria-expanded', 'true');
@@ -136,7 +136,7 @@
     function closeMenu() {
         overlay.classList.add('hidden');
         overlay.setAttribute('aria-hidden', 'true');
-        panel.classList.add('-translate-x-full');
+        panel.classList.add('translate-x-full');
         panel.classList.remove('translate-x-0');
         panel.setAttribute('aria-hidden', 'true');
         btn.setAttribute('aria-expanded', 'false');
