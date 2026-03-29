@@ -1784,6 +1784,14 @@ def watchlist_delete_section(section_id):
     return redirect(url_for("watchlist", wl=row["watchlist_id"]))
 
 
+try:
+    from realtime.ws_prices import register_ws_routes
+
+    register_ws_routes(app)
+except ImportError as e:
+    app.logger.warning("WebSocket /ws/prices not registered: %s", e)
+
+
 def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
