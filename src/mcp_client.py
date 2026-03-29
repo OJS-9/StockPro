@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Optional
 import requests
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
+from retry_utils import run_with_exponential_backoff
+
 
 class MCPClient:
     """Client for communicating with Alpha Vantage MCP server via HTTP."""
@@ -76,26 +78,30 @@ class MCPClient:
             )
         )
 
-        for attempt in range(retries):
-            try:
-                if method.upper() == "GET":
-                    response = self.session.get(url, timeout=30)
-                elif method.upper() == "POST":
-                    response = self.session.post(url, json=data, timeout=30)
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
+        def _do_request() -> Dict[str, Any]:
+            if method.upper() == "GET":
+                response = self.session.get(url, timeout=30)
+            elif method.upper() == "POST":
+                response = self.session.post(url, json=data, timeout=30)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+            response.raise_for_status()
+            return response.json()
 
-                response.raise_for_status()
-                return response.json()
-
-            except requests.exceptions.RequestException as e:
-                if attempt < retries - 1:
-                    wait_time = 2**attempt  # Exponential backoff
-                    time.sleep(wait_time)
-                    continue
-                raise RuntimeError(
-                    f"MCP request failed after {retries} attempts: {str(e)}"
-                )
+        try:
+            return run_with_exponential_backoff(
+                _do_request,
+                max_retries=retries,
+                base_delay_seconds=1.0,
+                is_retriable=lambda e: isinstance(
+                    e, requests.exceptions.RequestException
+                ),
+                log_label=f"MCP {method} {endpoint}",
+            )
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(
+                f"MCP request failed after {retries} attempts: {str(e)}"
+            ) from e
 
     def list_tools(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """

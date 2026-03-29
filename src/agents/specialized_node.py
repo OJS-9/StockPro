@@ -7,15 +7,13 @@ Called in parallel for each research subject via the Send() API in research_grap
 
 import logging
 import os
-import time
-from typing import Optional
-
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 
 from research_subjects import ResearchSubject, get_research_subject_by_id
 from date_utils import get_datetime_context_string
+from retry_utils import is_rate_limit_error, run_with_exponential_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -94,16 +92,6 @@ Your specific research task: {subject.description}
 Begin your research now."""
 
 
-def _is_rate_limit_error(exc: Exception) -> bool:
-    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
-    if status == 429:
-        return True
-    message = str(exc).lower()
-    return (
-        "resource exhausted" in message or "rate limit" in message or "429" in message
-    )
-
-
 def specialized_node(state: dict) -> dict:
     """
     LangGraph node: runs a ReAct agent for one research subject.
@@ -158,93 +146,88 @@ def specialized_node(state: dict) -> dict:
 
     max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
     base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
-    last_exc: Optional[Exception] = None
 
-    for attempt in range(max_retries):
-        try:
-            agent = create_react_agent(
-                llm,
-                tools,
-                prompt=instructions,
-            )
-            result = agent.invoke(
-                {"messages": [HumanMessage(content=research_prompt)]},
-                config={"recursion_limit": int(effective_max_turns) * 2},
-            )
-            # Extract the last AI message as the research output.
-            # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
-            output_text = ""
-            input_tok = 0
-            output_tok = 0
-            for msg in result["messages"]:
-                usage = getattr(msg, "usage_metadata", None) or {}
-                input_tok += usage.get("input_tokens", 0)
-                output_tok += usage.get("output_tokens", 0)
+    def _run_specialized_once() -> dict:
+        agent = create_react_agent(
+            llm,
+            tools,
+            prompt=instructions,
+        )
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=research_prompt)]},
+            config={"recursion_limit": int(effective_max_turns) * 2},
+        )
+        # Extract the last AI message as the research output.
+        # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
+        output_text = ""
+        input_tok = 0
+        output_tok = 0
+        for msg in result["messages"]:
+            usage = getattr(msg, "usage_metadata", None) or {}
+            input_tok += usage.get("input_tokens", 0)
+            output_tok += usage.get("output_tokens", 0)
 
-            for msg in reversed(result["messages"]):
-                if (
-                    hasattr(msg, "content")
-                    and msg.content
-                    and not getattr(msg, "tool_calls", None)
-                ):
-                    content = msg.content
-                    if isinstance(content, list):
-                        output_text = "\n".join(
-                            (
-                                part.get("text", "")
-                                if isinstance(part, dict)
-                                else str(part)
-                            )
-                            for part in content
-                        )
-                    else:
-                        output_text = str(content)
-                    break
-
-            logger.info(
-                "%s: %s chars, %s/%s tokens",
-                subject.name,
-                len(output_text),
-                input_tok,
-                output_tok,
-            )
-            return {
-                "research_outputs": {
-                    subject_id: {
-                        "subject_id": subject_id,
-                        "subject_name": subject.name,
-                        "research_output": output_text,
-                        "sources": [],
-                        "ticker": ticker,
-                        "trade_type": trade_type,
-                        "focus_hint": focus_hint,
-                    }
-                },
-                "actual_input_tokens": input_tok,
-                "actual_output_tokens": output_tok,
-            }
-
-        except Exception as exc:
-            last_exc = exc
-            if not _is_rate_limit_error(exc) or attempt == max_retries - 1:
+        for msg in reversed(result["messages"]):
+            if (
+                hasattr(msg, "content")
+                and msg.content
+                and not getattr(msg, "tool_calls", None)
+            ):
+                content = msg.content
+                if isinstance(content, list):
+                    output_text = "\n".join(
+                        (part.get("text", "") if isinstance(part, dict) else str(part))
+                        for part in content
+                    )
+                else:
+                    output_text = str(content)
                 break
-            delay = base_delay * (2**attempt)
-            logger.warning("[%s] Rate limit, retrying in %.1fs", subject_id, delay)
-            time.sleep(delay)
 
-    error_msg = f"Error in research for {subject.name}: {last_exc}"
-    logger.error("%s", error_msg)
-    return {
-        "research_outputs": {
-            subject_id: {
-                "subject_id": subject_id,
-                "subject_name": subject.name,
-                "research_output": error_msg,
-                "sources": [],
-                "ticker": ticker,
-                "trade_type": trade_type,
-                "focus_hint": focus_hint,
-                "error": str(last_exc),
+        logger.info(
+            "%s: %s chars, %s/%s tokens",
+            subject.name,
+            len(output_text),
+            input_tok,
+            output_tok,
+        )
+        return {
+            "research_outputs": {
+                subject_id: {
+                    "subject_id": subject_id,
+                    "subject_name": subject.name,
+                    "research_output": output_text,
+                    "sources": [],
+                    "ticker": ticker,
+                    "trade_type": trade_type,
+                    "focus_hint": focus_hint,
+                }
+            },
+            "actual_input_tokens": input_tok,
+            "actual_output_tokens": output_tok,
+        }
+
+    try:
+        return run_with_exponential_backoff(
+            _run_specialized_once,
+            max_retries=max_retries,
+            base_delay_seconds=base_delay,
+            is_retriable=is_rate_limit_error,
+            log_label=subject_id,
+        )
+    except Exception as last_exc:
+        error_msg = f"Error in research for {subject.name}: {last_exc}"
+        logger.error("%s", error_msg)
+        return {
+            "research_outputs": {
+                subject_id: {
+                    "subject_id": subject_id,
+                    "subject_name": subject.name,
+                    "research_output": error_msg,
+                    "sources": [],
+                    "ticker": ticker,
+                    "trade_type": trade_type,
+                    "focus_hint": focus_hint,
+                    "error": str(last_exc),
+                }
             }
         }
-    }
