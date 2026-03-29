@@ -106,6 +106,11 @@ def _popup_start_rate_limit():
     return os.getenv("STOCKPRO_RATE_LIMIT_POPUP_START", "60 per hour")
 
 
+def _continue_conversation_rate_limit():
+    """Limit POST /continue (chat agent turns + SSE) — same abuse class as research."""
+    return os.getenv("STOCKPRO_RATE_LIMIT_CONTINUE", "60 per hour")
+
+
 def flash_status(message: str, status_type: str = "info"):
     """Set a status message and type in the session for the next page render.
     status_type: 'success', 'error', or 'info'
@@ -530,6 +535,7 @@ def start_research():
 
 @app.route("/continue", methods=["POST"])
 @login_required
+@limiter.limit(_continue_conversation_rate_limit, key_func=get_remote_address)
 def continue_conversation():
     """Start a conversation turn in a background thread; return SSE session info."""
     user_input = request.form.get("user_response", "").strip()
