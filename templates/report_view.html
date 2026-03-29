@@ -6,6 +6,8 @@
 <style>
     .markdown-content {
         color-scheme: light dark;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .markdown-content h1 {
@@ -137,13 +139,13 @@
 
 <main class="flex-1 flex flex-col w-full max-w-4xl mx-auto px-4 md:px-10 py-8 pb-32">
     <!-- Back Link -->
-    <a href="{{ url_for('report_history') }}" class="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm mb-6">
+    <a href="{{ url_for('report_history') }}" class="inline-flex items-center gap-2 min-h-11 text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm mb-6 -ml-1 px-1 rounded-md">
         <span class="material-symbols-outlined text-lg">arrow_back</span>
         Back to Reports
     </a>
 
     <!-- Report Header -->
-    <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-8 border border-zinc-200 dark:border-zinc-800 mb-8">
+    <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-6 sm:p-8 border border-zinc-200 dark:border-zinc-800 mb-8">
         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
             <div class="flex items-start gap-4">
                 <div class="size-16 rounded-lg bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
@@ -169,28 +171,28 @@
     </div>
 
     <!-- Report Content -->
-    <article class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-8 md:p-10 border border-zinc-200 dark:border-zinc-800">
+    <article class="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-6 sm:p-8 md:p-10 border border-zinc-200 dark:border-zinc-800 min-w-0 overflow-x-auto">
         <div class="markdown-content text-zinc-950 dark:text-zinc-50">{{ report.report_text | markdown }}</div>
     </article>
 </main>
 
 <!-- Sticky Action Bar -->
-<div class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 py-4 px-4 md:px-10 z-40">
-    <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-3">
+<div class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 py-3 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-10 z-40">
+    <div class="max-w-4xl mx-auto flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-center gap-2 sm:gap-3">
         <a href="{{ url_for('download_report_pdf', report_id=report.report_id) }}"
-           class="flex items-center gap-2 px-6 py-3 bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 font-semibold rounded-lg hover:opacity-90 transition-all">
+           class="inline-flex items-center justify-center gap-2 min-h-11 px-6 py-3 w-full sm:w-auto bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 font-semibold rounded-lg hover:opacity-90 transition-all">
             <span class="material-symbols-outlined">download</span>
             Download PDF
         </a>
 
-        <button onclick="copyShareLink()" id="copy-link-btn"
-                class="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 font-semibold rounded-lg hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
+        <button type="button" onclick="copyShareLink()" id="copy-link-btn"
+                class="inline-flex items-center justify-center gap-2 min-h-11 px-6 py-3 w-full sm:w-auto bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 font-semibold rounded-lg hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
             <span class="material-symbols-outlined" id="copy-icon">link</span>
             <span id="copy-text">Copy Link</span>
         </button>
 
         <a href="{{ url_for('chat_with_report', report_id=report.report_id) }}"
-           class="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 font-semibold rounded-lg hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
+           class="inline-flex items-center justify-center gap-2 min-h-11 px-6 py-3 w-full sm:w-auto bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 font-semibold rounded-lg hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
             <span class="material-symbols-outlined">chat</span>
             Ask Questions
         </a>
