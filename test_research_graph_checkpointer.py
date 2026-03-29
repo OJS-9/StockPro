@@ -340,7 +340,8 @@ def test_synthesis_node_truncation_retry_succeeds(monkeypatch):
     continuation = " ...rest. END_OF_REPORT"
 
     call_count = {"n": 0}
-    def fake_invoke(messages):
+
+    def fake_invoke(messages, config=None):
         call_count["n"] += 1
         if call_count["n"] == 1:
             return MagicMock(content=truncated)

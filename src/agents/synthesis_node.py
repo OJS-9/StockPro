@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from langsmith_service import StepEmitter
+from langsmith_service import StepEmitter, synthesis_invoke_config
 from report_quality import assess_report_structure
 from research_plan import ResearchPlan
 from research_subjects import get_research_subject_by_id
@@ -282,6 +282,8 @@ def synthesis_node(state: dict) -> dict:
         max_output_tokens=SYNTHESIS_MAX_OUTPUT_TOKENS,
     )
 
+    _ls_config = synthesis_invoke_config(ticker, trade_type)
+
     total_input_tok = 0
     total_output_tok = 0
 
@@ -294,7 +296,8 @@ def synthesis_node(state: dict) -> dict:
             [
                 SystemMessage(content=system_instructions),
                 HumanMessage(content=synthesis_prompt),
-            ]
+            ],
+            config=_ls_config,
         )
         i, o = _extract_usage(response)
         total_input_tok += i
@@ -319,7 +322,8 @@ def synthesis_node(state: dict) -> dict:
                                 "Complete all remaining sections and end with: END_OF_REPORT"
                             )
                         ),
-                    ]
+                    ],
+                    config=_ls_config,
                 )
                 ri, ro = _extract_usage(retry_response)
                 total_input_tok += ri

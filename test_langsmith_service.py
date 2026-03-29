@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from langsmith_service import StepEmitter, create_emitter
+from langsmith_service import StepEmitter, create_emitter, synthesis_invoke_config
 
 
 def test_create_emitter_defaults_to_no_queue():
@@ -37,6 +37,14 @@ def test_emit_swallows_full_queue():
 
     em = StepEmitter(step_queue=BadQueue())
     em.emit("x")  # must not raise
+
+
+def test_synthesis_invoke_config_metadata():
+    cfg = synthesis_invoke_config("aapl", "Investment")
+    assert "synthesis" in cfg["tags"]
+    assert cfg["metadata"]["ticker"] == "AAPL"
+    assert cfg["metadata"]["trade_type"] == "Investment"
+    assert cfg["metadata"]["stockpro_node"] == "synthesis"
 
 
 def test_emit_swallows_generic_put_error():
