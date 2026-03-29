@@ -5,6 +5,7 @@ Consolidates all specialized research outputs into a final report.
 No tools — pure synthesis LLM call.
 """
 
+import logging
 import os
 from typing import Dict, Any, List
 
@@ -13,6 +14,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from research_plan import ResearchPlan
 from research_subjects import get_research_subject_by_id
+
+logger = logging.getLogger(__name__)
 
 SYNTHESIS_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-2.5-pro")
 SYNTHESIS_MAX_OUTPUT_TOKENS = int(
@@ -233,8 +236,10 @@ def synthesis_node(state: dict) -> dict:
     if emitter:
         emitter.emit("Synthesizing report...")
 
-    print(
-        f"[SynthesisNode] Synthesizing {len(research_outputs)} research outputs for {ticker}..."
+    logger.info(
+        "Synthesizing %s research outputs for %s...",
+        len(research_outputs),
+        ticker,
     )
 
     failed_subjects = state.get("failed_subjects", [])
@@ -268,12 +273,12 @@ def synthesis_node(state: dict) -> dict:
         total_output_tok += o
 
         report_text = response.content or ""
-        print(f"[SynthesisNode] Report: {len(report_text)} chars, {i}/{o} tokens")
+        logger.info("Report: %s chars, %s/%s tokens", len(report_text), i, o)
 
         if _END_MARKER not in report_text:
             if _is_truncated(report_text, SYNTHESIS_MAX_OUTPUT_TOKENS):
-                print(
-                    "[SynthesisNode] Truncation detected — retrying with continuation prompt"
+                logger.warning(
+                    "Truncation detected — retrying with continuation prompt"
                 )
                 retry_response = llm.invoke(
                     [
@@ -294,17 +299,15 @@ def synthesis_node(state: dict) -> dict:
 
                 combined = report_text + "\n" + (retry_response.content or "")
                 if _END_MARKER in combined:
-                    print(
-                        f"[SynthesisNode] Continuation successful: {len(combined)} chars"
-                    )
+                    logger.info("Continuation successful: %s chars", len(combined))
                     return {
                         "report_text": combined,
                         "actual_input_tokens": total_input_tok,
                         "actual_output_tokens": total_output_tok,
                     }
                 else:
-                    print(
-                        "[SynthesisNode] Continuation did not complete report — flagging as incomplete"
+                    logger.warning(
+                        "Continuation did not complete report — flagging as incomplete"
                     )
                     return {
                         "report_text": "[INCOMPLETE REPORT — synthesis was truncated]\n\n"
@@ -314,8 +317,9 @@ def synthesis_node(state: dict) -> dict:
                         "actual_output_tokens": total_output_tok,
                     }
             else:
-                print(
-                    f"[SynthesisNode] END_OF_REPORT absent but output is short ({len(report_text)} chars) — proceeding"
+                logger.info(
+                    "END_OF_REPORT absent but output is short (%s chars) — proceeding",
+                    len(report_text),
                 )
 
         return {
@@ -325,7 +329,7 @@ def synthesis_node(state: dict) -> dict:
         }
     except Exception as e:
         error_msg = f"Error synthesizing report: {e}"
-        print(error_msg)
+        logger.exception("Synthesis failed")
         return {
             "report_text": error_msg,
             "is_partial_report": True,

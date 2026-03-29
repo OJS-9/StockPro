@@ -3,11 +3,14 @@ MCP server connection and management for Alpha Vantage.
 """
 
 import json
+import logging
 import os
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 from src.mcp_client import MCPClient, create_mcp_client
+
+logger = logging.getLogger(__name__)
 
 # or, if you prefer absolute inside the package:
 # from src.mcp_client import MCPClient, create_mcp_client
@@ -153,7 +156,7 @@ class MCPManager:
             client = self.get_mcp_client()
             return client.test_connection()
         except Exception as e:
-            print(f"Connection test failed: {e}")
+            logger.warning("Connection test failed: %s", e)
             return False
 
     # Convenience methods for common operations

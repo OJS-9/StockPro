@@ -6,6 +6,7 @@ asks clarifying questions, and triggers the research pipeline via the
 generate_report tool when ready.
 """
 
+import logging
 import os
 from typing import Optional, List, Dict, Any
 
@@ -19,6 +20,8 @@ from research_prompt import get_orchestration_instructions
 from research_graph import run_research
 from agents.chat_agent import ReportChatAgent
 from langsmith_service import StepEmitter
+
+logger = logging.getLogger(__name__)
 
 ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-2.5-flash")
 ORCHESTRATOR_MAX_OUTPUT_TOKENS = int(os.getenv("ORCHESTRATOR_MAX_OUTPUT_TOKENS", "600"))
@@ -182,7 +185,7 @@ class OrchestratorSession:
             return response_text
         except Exception as e:
             error_msg = f"Error generating response: {e}"
-            print(f"[OrchestratorGraph] {error_msg}")
+            logger.exception("Orchestrator response failed")
             return error_msg
 
     def generate_report(
@@ -217,7 +220,7 @@ class OrchestratorSession:
             return self.last_report_text
         except Exception as e:
             error_msg = f"Error generating report: {e}"
-            print(error_msg)
+            logger.exception("Report generation failed")
             return error_msg
 
     def chat_with_report(self, question: str) -> str:

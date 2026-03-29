@@ -2,11 +2,14 @@
 Report storage service integrating database, chunking, and embeddings.
 """
 
+import logging
 from typing import Dict, Any, Optional, List
 
 from database import get_database_manager
 from report_chunker import ReportChunker
 from embedding_service import EmbeddingService
+
+logger = logging.getLogger(__name__)
 
 
 class ReportStorage:
@@ -56,12 +59,12 @@ class ReportStorage:
         )
 
         # Chunk the report
-        print(f"Chunking report {report_id}...")
+        logger.info("Chunking report %s...", report_id)
         chunks = self.chunker.chunk_report(report_text, preserve_sections=True)
-        print(f"Created {len(chunks)} chunks")
+        logger.info("Created %s chunks", len(chunks))
 
         # Create embeddings for chunks
-        print(f"Creating embeddings for {len(chunks)} chunks...")
+        logger.info("Creating embeddings for %s chunks...", len(chunks))
         chunk_texts = [chunk["chunk_text"] for chunk in chunks]
         embeddings = self.embedding_service.create_embeddings_batch(chunk_texts)
 
@@ -70,10 +73,10 @@ class ReportStorage:
             chunk["embedding"] = embeddings[i] if i < len(embeddings) else None
 
         # Save chunks to database
-        print("Saving chunks to database...")
+        logger.info("Saving chunks to database...")
         self.db.save_chunks(report_id, chunks)
 
-        print(f"✓ Report {report_id} stored with {len(chunks)} chunks")
+        logger.info("Report %s stored with %s chunks", report_id, len(chunks))
 
         return report_id
 

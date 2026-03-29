@@ -8,6 +8,7 @@ Parallel fan-out is implemented via the Send() API so each research subject
 runs as a separate, concurrent node invocation.
 """
 
+import logging
 import operator
 import os
 import re
@@ -23,6 +24,8 @@ from agents.planner_node import planner_node
 from agents.specialized_node import specialized_node
 from agents.synthesis_node import synthesis_node
 from langsmith_service import StepEmitter
+
+logger = logging.getLogger(__name__)
 
 
 class ResearchState(TypedDict):
@@ -113,7 +116,7 @@ def storage_node(state: ResearchState) -> dict:
                 actual_output_tokens / 1000
             ) * rates["output_rate"]
     except Exception as exc:
-        print(f"[StorageNode] Could not compute actual cost: {exc}")
+        logger.warning("Could not compute actual cost: %s", exc)
     actual_cost_usd = _sanitize_json_float(actual_cost_usd)
 
     if emitter:
@@ -147,9 +150,9 @@ def storage_node(state: ResearchState) -> dict:
             metadata=metadata,
             user_id=user_id,
         )
-        print(f"[StorageNode] Report stored: {report_id}")
+        logger.info("Report stored: %s", report_id)
     except Exception as e:
-        print(f"[StorageNode] Storage failed (report still available): {e}")
+        logger.warning("Storage failed (report still available): %s", e)
 
     return {"report_id": report_id}
 
@@ -173,8 +176,10 @@ def quality_gate_node(state: ResearchState) -> dict:
             failed.append(sid)
         elif len(result.get("research_output", "")) < _MIN_OUTPUT_CHARS:
             char_count = len(result.get("research_output", ""))
-            print(
-                f"[QualityGate] {sid}: output too short ({char_count} chars) — treating as failure"
+            logger.warning(
+                "%s: output too short (%s chars) — treating as failure",
+                sid,
+                char_count,
             )
             failed.append(sid)
         else:
@@ -195,7 +200,7 @@ def quality_gate_node(state: ResearchState) -> dict:
             f"{failed_count} of {total} subjects returned errors "
             f"({', '.join(failed)}). Please try again."
         )
-        print(f"[QualityGate] Aborting synthesis — too many failures: {failed}")
+        logger.error("Aborting synthesis — too many failures: %s", failed)
         return {
             "research_outputs": clean_outputs,
             "failed_subjects": failed,
@@ -204,7 +209,7 @@ def quality_gate_node(state: ResearchState) -> dict:
         }
 
     if failed_count:
-        print(f"[QualityGate] Proceeding with partial results. Failed: {failed}")
+        logger.warning("Proceeding with partial results. Failed: %s", failed)
 
     return {
         "research_outputs": clean_outputs,

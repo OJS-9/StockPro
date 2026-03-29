@@ -3,6 +3,7 @@ RAG-lite chat agent for answering questions about stored reports.
 Merges report_chat_agent.py + conversation_handler_agent.py into one LangChain chain.
 """
 
+import logging
 import os
 from typing import List, Dict, Any, Optional
 
@@ -12,6 +13,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from embedding_service import EmbeddingService
 from vector_search import VectorSearch
 from date_utils import get_datetime_context_string
+
+logger = logging.getLogger(__name__)
 
 CHAT_MODEL = os.getenv("CHAT_AGENT_MODEL", "gemini-2.5-flash")
 
@@ -118,7 +121,7 @@ class ReportChatAgent:
             return response.content or ""
         except Exception as e:
             error_msg = f"Error generating answer: {e}"
-            print(error_msg)
+            logger.exception("Chat answer generation failed")
             return error_msg
 
     def chat_with_report(

@@ -3,6 +3,7 @@ Portfolio value history service - computes monthly portfolio values.
 """
 
 import calendar
+import logging
 import json
 import os
 import requests
@@ -11,6 +12,8 @@ from datetime import datetime, date
 from typing import List, Dict, Optional
 
 from data_providers.crypto_provider import CryptoDataProvider
+
+logger = logging.getLogger(__name__)
 
 # Module-level price cache: symbol -> {'prices': {date_str: float}, 'fetched_at': datetime}
 _price_cache: Dict[str, dict] = {}
@@ -52,7 +55,7 @@ def _save_disk_cache() -> None:
         with open(_CACHE_FILE, "w") as f:
             json.dump(serializable, f)
     except Exception as e:
-        print(f"[history_service] failed to save disk cache: {e}")
+        logger.warning("failed to save disk cache: %s", e)
 
 
 _load_disk_cache()
@@ -199,7 +202,7 @@ class PortfolioHistoryService:
             _save_disk_cache()
             return prices
         except Exception as e:
-            print(f"[history_service] yfinance error for {symbol}: {e}")
+            logger.warning("yfinance error for %s: %s", symbol, e)
             return {}
 
     def _get_crypto_prices(self, symbol: str) -> Dict[str, float]:

@@ -2,6 +2,7 @@
 Stock data provider using Alpha Vantage MCP.
 """
 
+import logging
 import os
 import sys
 import time  # used for batch delay sleep
@@ -12,6 +13,8 @@ from typing import Any, Dict, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from .base_provider import BaseDataProvider
+
+logger = logging.getLogger(__name__)
 
 MARKETWATCH_NIMBLE_AGENT_ID = os.getenv(
     "NIMBLE_MARKETWATCH_INFO_AGENT_ID",
@@ -119,14 +122,16 @@ class StockDataProvider(BaseDataProvider):
                 result["change_percent"] = self._parse_decimal(change_raw)
 
             if PRICE_FETCH_DEBUG and result.get("price") is not None:
-                print(
-                    f"[price_debug] nimble hit for {symbol.upper()} "
-                    f"(price={result.get('price')}, change_percent={result.get('change_percent')})"
+                logger.debug(
+                    "[price_debug] nimble hit for %s (price=%s, change_percent=%s)",
+                    symbol.upper(),
+                    result.get("price"),
+                    result.get("change_percent"),
                 )
             return result
         except Exception:
             if PRICE_FETCH_DEBUG:
-                print(f"[price_debug] nimble miss for {symbol.upper()}")
+                logger.debug("[price_debug] nimble miss for %s", symbol.upper())
             return result
 
     def _get_price_from_seekingalpha(self, symbol: str) -> dict:
@@ -150,14 +155,16 @@ class StockDataProvider(BaseDataProvider):
                 item.get("price_change_percent")
             )
             if PRICE_FETCH_DEBUG and result.get("price") is not None:
-                print(
-                    f"[price_debug] seekingalpha hit for {symbol.upper()} "
-                    f"(price={result.get('price')}, change_percent={result.get('change_percent')})"
+                logger.debug(
+                    "[price_debug] seekingalpha hit for %s (price=%s, change_percent=%s)",
+                    symbol.upper(),
+                    result.get("price"),
+                    result.get("change_percent"),
                 )
             return result
         except Exception:
             if PRICE_FETCH_DEBUG:
-                print(f"[price_debug] seekingalpha miss for {symbol.upper()}")
+                logger.debug("[price_debug] seekingalpha miss for %s", symbol.upper())
             return result
 
     def _get_price_from_alpha_vantage(self, symbol: str) -> dict:
@@ -194,7 +201,9 @@ class StockDataProvider(BaseDataProvider):
                     result["change_percent"] = Decimal(str(change_str))
         except Exception as e:
             if PRICE_FETCH_DEBUG:
-                print(f"[price_debug] alpha vantage miss for {symbol.upper()}: {e}")
+                logger.debug(
+                    "[price_debug] alpha vantage miss for %s: %s", symbol.upper(), e
+                )
         return result
 
     def _fetch_price_nimble_with_av_fallback(self, symbol: str) -> dict:
@@ -219,19 +228,23 @@ class StockDataProvider(BaseDataProvider):
                     result = fut.result()
                     if result.get("price") is not None:
                         if PRICE_FETCH_DEBUG:
-                            print(
-                                f"[price_debug] warmup nimble hit {symbol.upper()} via {futures[fut]}"
+                            logger.debug(
+                                "[price_debug] warmup nimble hit %s via %s",
+                                symbol.upper(),
+                                futures[fut],
                             )
                         return result
             except TimeoutError:
                 if PRICE_FETCH_DEBUG:
-                    print(
-                        f"[price_debug] warmup nimble timeout for {symbol.upper()}, falling back to AV"
+                    logger.debug(
+                        "[price_debug] warmup nimble timeout for %s, falling back to AV",
+                        symbol.upper(),
                     )
 
         if PRICE_FETCH_DEBUG:
-            print(
-                f"[price_debug] warmup nimble miss for {symbol.upper()}, falling back to AV"
+            logger.debug(
+                "[price_debug] warmup nimble miss for %s, falling back to AV",
+                symbol.upper(),
             )
         return self._get_price_from_alpha_vantage(symbol)
 
@@ -280,8 +293,9 @@ class StockDataProvider(BaseDataProvider):
         nimble_data = self._get_price_with_change_from_nimble(symbol)
         if nimble_data.get("price") is not None:
             if PRICE_FETCH_DEBUG:
-                print(
-                    f"[price_debug] get_current_price using nimble for {symbol.upper()}"
+                logger.debug(
+                    "[price_debug] get_current_price using nimble for %s",
+                    symbol.upper(),
                 )
             return nimble_data["price"]
 
@@ -292,13 +306,17 @@ class StockDataProvider(BaseDataProvider):
             # Check for rate limit or error messages
             if isinstance(result, dict):
                 if "Note" in result or "Information" in result:
-                    print(
-                        f"Alpha Vantage rate limit hit for {symbol}: {result.get('Note') or result.get('Information')}"
+                    logger.warning(
+                        "Alpha Vantage rate limit hit for %s: %s",
+                        symbol,
+                        result.get("Note") or result.get("Information"),
                     )
                     return None
                 if "Error Message" in result:
-                    print(
-                        f"Alpha Vantage error for {symbol}: {result.get('Error Message')}"
+                    logger.warning(
+                        "Alpha Vantage error for %s: %s",
+                        symbol,
+                        result.get("Error Message"),
                     )
                     return None
 
@@ -325,7 +343,7 @@ class StockDataProvider(BaseDataProvider):
                 return Decimal(str(price_str))
 
         except Exception as e:
-            print(f"GLOBAL_QUOTE failed for {symbol}: {e}")
+            logger.warning("GLOBAL_QUOTE failed for %s: %s", symbol, e)
 
         # Fallback to OVERVIEW with 50DayMovingAverage
         try:
@@ -345,7 +363,7 @@ class StockDataProvider(BaseDataProvider):
                         return market_cap / shares
 
         except Exception as e:
-            print(f"OVERVIEW fallback failed for {symbol}: {e}")
+            logger.warning("OVERVIEW fallback failed for %s: %s", symbol, e)
 
         return None
 
@@ -367,13 +385,16 @@ class StockDataProvider(BaseDataProvider):
             result = nimble_data
             if result.get("change_percent") is not None:
                 if PRICE_FETCH_DEBUG:
-                    print(
-                        f"[price_debug] final source=nimble for {symbol.upper()} result={result}"
+                    logger.debug(
+                        "[price_debug] final source=nimble for %s result=%s",
+                        symbol.upper(),
+                        result,
                     )
                 return result
             if PRICE_FETCH_DEBUG:
-                print(
-                    f"[price_debug] get_price_with_change using nimble price for {symbol.upper()}, AV needed for change%"
+                logger.debug(
+                    "[price_debug] get_price_with_change using nimble price for %s, AV needed for change%%",
+                    symbol.upper(),
                 )
 
         # AV fallback: only reached if Nimble missed price or change_percent
@@ -404,7 +425,7 @@ class StockDataProvider(BaseDataProvider):
                 if change_str and result["change_percent"] is None:
                     result["change_percent"] = Decimal(str(change_str))
         except Exception as e:
-            print(f"get_price_with_change failed for {symbol}: {e}")
+            logger.warning("get_price_with_change failed for %s: %s", symbol, e)
 
         if PRICE_FETCH_DEBUG:
             source = (
@@ -412,8 +433,11 @@ class StockDataProvider(BaseDataProvider):
                 if nimble_data.get("price") is not None
                 else "alphavantage"
             )
-            print(
-                f"[price_debug] final source={source} for {symbol.upper()} result={result}"
+            logger.debug(
+                "[price_debug] final source=%s for %s result=%s",
+                source,
+                symbol.upper(),
+                result,
             )
         return result
 
@@ -490,5 +514,5 @@ class StockDataProvider(BaseDataProvider):
             }
 
         except Exception as e:
-            print(f"Error fetching asset info for {symbol}: {e}")
+            logger.warning("Error fetching asset info for %s: %s", symbol, e)
             return None

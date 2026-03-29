@@ -4,6 +4,7 @@ create_all_tools() returns List[StructuredTool] for use with LangGraph agents.
 """
 
 import json
+import logging
 from typing import Dict, Any, List, Optional
 
 from langchain_core.tools import StructuredTool
@@ -11,6 +12,8 @@ from langchain_core.tools import StructuredTool
 from mcp_client import MCPClient
 from mcp_tools import execute_tool_by_name
 from nimble_client import NimbleClient
+
+logger = logging.getLogger(__name__)
 
 MAX_SERIES_ITEMS = 5
 MAX_NEWS_ITEMS = 5
@@ -108,7 +111,7 @@ def create_mcp_tools(mcp_client: MCPClient) -> List[StructuredTool]:
             )
             tools.append(structured_tool)
         except Exception as e:
-            print(f"Warning: Could not create tool for {mcp_tool_name}: {e}")
+            logger.warning("Could not create tool for %s: %s", mcp_tool_name, e)
 
     return tools
 

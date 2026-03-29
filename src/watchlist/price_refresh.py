@@ -3,12 +3,15 @@ Background price refresh job — updates price_cache every 15 minutes.
 Respects Alpha Vantage 5 calls/min rate limit by staggering stock fetches.
 """
 
+import logging
 import sys
 import os
 import threading
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = logging.getLogger(__name__)
 
 REFRESH_INTERVAL = 900  # 15 minutes
 
@@ -62,8 +65,8 @@ class PriceRefreshJob:
     def _run_refresh(self):
         try:
             self._do_refresh()
-        except Exception as e:
-            print(f"[price_refresh] Error: {e}")
+        except Exception:
+            logger.exception("price_refresh cycle failed")
         finally:
             self._schedule_next()
 
@@ -104,9 +107,7 @@ class PriceRefreshJob:
         stocks = [(s, n) for s, n in stocks if _is_stale(s)]
         cryptos = [(s, n) for s, n in cryptos if _is_stale(s)]
 
-        print(
-            f"[price_refresh] Refreshing {len(stocks)} stocks, {len(cryptos)} cryptos"
-        )
+        logger.info("Refreshing %s stocks, %s cryptos", len(stocks), len(cryptos))
 
         # Crypto: batch fetch with change%
         if cryptos:
@@ -124,7 +125,7 @@ class PriceRefreshJob:
                         crypto_names.get(sym),
                     )
             except Exception as e:
-                print(f"[price_refresh] Crypto batch error: {e}")
+                logger.warning("Crypto batch error: %s", e)
 
         # Concurrent batch fetch for stocks
         if stocks:
@@ -150,5 +151,5 @@ def start_price_refresh():
     if _refresh_job is None:
         _refresh_job = PriceRefreshJob()
         _refresh_job.start()
-        print("[price_refresh] Background price refresh started")
+        logger.info("Background price refresh started")
     return _refresh_job

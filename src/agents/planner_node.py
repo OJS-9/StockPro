@@ -6,6 +6,7 @@ and conversation context. Single structured-JSON LLM call, no tools.
 """
 
 import json
+import logging
 import os
 from typing import List
 
@@ -14,6 +15,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from research_plan import ResearchPlan
 from research_subjects import ResearchSubject, get_research_subjects_for_trade_type
+
+logger = logging.getLogger(__name__)
 
 PLANNER_MODEL = os.getenv("PLANNER_MODEL", "gemini-2.5-flash")
 PLANNER_MAX_SUBJECTS = int(os.getenv("PLANNER_MAX_SUBJECTS", "8"))
@@ -89,7 +92,7 @@ def _parse_response(
     try:
         data = json.loads(raw_json)
     except (json.JSONDecodeError, TypeError) as exc:
-        print(f"[PlannerNode] JSON parse failed ({exc}); using fallback.")
+        logger.warning("JSON parse failed (%s); using fallback.", exc)
         return _fallback_plan(ticker, trade_type, eligible)
 
     raw_ids = data.get("selected_subject_ids", [])
@@ -195,12 +198,16 @@ def planner_node(state: dict) -> dict:
                 raw_json = raw_json[4:]
         plan = _parse_response(raw_json, ticker, trade_type, eligible)
     except Exception as exc:
-        print(f"[PlannerNode] LLM call failed ({exc}); using fallback.")
+        logger.warning("LLM call failed (%s); using fallback.", exc)
         plan = _fallback_plan(ticker, trade_type, eligible)
 
     subject_names = ", ".join(plan.selected_subject_ids)
-    print(
-        f"[PlannerNode] Plan: {len(plan.selected_subject_ids)} subjects — {subject_names}, {input_tok}/{output_tok} tokens"
+    logger.info(
+        "Plan: %s subjects — %s, %s/%s tokens",
+        len(plan.selected_subject_ids),
+        subject_names,
+        input_tok,
+        output_tok,
     )
     if emitter:
         emitter.emit(f"Researching: {subject_names}...")
@@ -227,7 +234,7 @@ def planner_node(state: dict) -> dict:
             spend_budget_usd=spend_budget_usd,
         )
     except Exception as exc:
-        print(f"[PlannerNode] Budget computation failed ({exc}); using defaults.")
+        logger.warning("Budget computation failed (%s); using defaults.", exc)
         budget = {
             "effective_max_turns": int(_os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8")),
             "effective_max_output_tokens": int(
@@ -236,7 +243,7 @@ def planner_node(state: dict) -> dict:
             "estimated_spend_usd": None,
             "budget_exhausted": False,
         }
-    print(f"[PlannerNode] Budget: {budget}")
+    logger.debug("Budget: %s", budget)
 
     return {
         "plan": plan,

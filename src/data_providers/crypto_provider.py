@@ -2,11 +2,14 @@
 Crypto data provider using CoinGecko API.
 """
 
+import logging
 import requests
 from decimal import Decimal
 from typing import Dict, Optional
 
 from .base_provider import BaseDataProvider
+
+logger = logging.getLogger(__name__)
 
 
 class CryptoDataProvider(BaseDataProvider):
@@ -122,7 +125,7 @@ class CryptoDataProvider(BaseDataProvider):
                     return Decimal(str(data[coin_id]["usd"]))
 
         except Exception as e:
-            print(f"Error fetching crypto price for {symbol}: {e}")
+            logger.warning("Error fetching crypto price for %s: %s", symbol, e)
 
         return None
 
@@ -171,7 +174,7 @@ class CryptoDataProvider(BaseDataProvider):
                 return prices
 
         except Exception as e:
-            print(f"Error fetching batch crypto prices: {e}")
+            logger.warning("Error fetching batch crypto prices: %s", e)
 
         return {}
 
@@ -220,7 +223,7 @@ class CryptoDataProvider(BaseDataProvider):
                         }
                 return result
         except Exception as e:
-            print(f"Error fetching crypto prices with change: {e}")
+            logger.warning("Error fetching crypto prices with change: %s", e)
 
         return {}
 
@@ -288,6 +291,6 @@ class CryptoDataProvider(BaseDataProvider):
                 }
 
         except Exception as e:
-            print(f"Error fetching asset info for {symbol}: {e}")
+            logger.warning("Error fetching asset info for %s: %s", symbol, e)
 
         return None

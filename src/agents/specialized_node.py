@@ -5,6 +5,7 @@ Uses LangGraph's create_react_agent to run a ReAct loop with MCP + Nimble tools.
 Called in parallel for each research subject via the Send() API in research_graph.py.
 """
 
+import logging
 import os
 import time
 from typing import Optional
@@ -15,6 +16,8 @@ from langgraph.prebuilt import create_react_agent
 
 from research_subjects import ResearchSubject, get_research_subject_by_id
 from date_utils import get_datetime_context_string
+
+logger = logging.getLogger(__name__)
 
 SPECIALIZED_MODEL = os.getenv("SPECIALIZED_AGENT_MODEL", "gemini-2.5-pro")
 SPECIALIZED_MAX_TURNS = int(os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8"))
@@ -34,16 +37,16 @@ def _get_clients():
         mcp_manager = MCPManager()
         mcp_client = mcp_manager.get_mcp_client()
     except Exception as e:
-        print(f"[SpecializedNode] Warning: Could not initialize MCP client: {e}")
+        logger.warning("Could not initialize MCP client: %s", e)
 
     try:
         from nimble_client import NimbleClient
 
         nimble_client = NimbleClient()
     except ValueError as e:
-        print(f"[SpecializedNode] Info: Nimble not configured ({e}).")
+        logger.info("Nimble not configured (%s).", e)
     except Exception as e:
-        print(f"[SpecializedNode] Warning: Could not initialize Nimble client: {e}")
+        logger.warning("Could not initialize Nimble client: %s", e)
 
     return mcp_client, nimble_client
 
@@ -120,7 +123,7 @@ def specialized_node(state: dict) -> dict:
     try:
         subject = get_research_subject_by_id(subject_id)
     except ValueError as exc:
-        print(f"[SpecializedNode] Unknown subject '{subject_id}': {exc}")
+        logger.error("Unknown subject '%s': %s", subject_id, exc)
         return {
             "research_outputs": {
                 subject_id: {
@@ -198,8 +201,12 @@ def specialized_node(state: dict) -> dict:
                         output_text = str(content)
                     break
 
-            print(
-                f"[SpecializedNode] {subject.name}: {len(output_text)} chars, {input_tok}/{output_tok} tokens"
+            logger.info(
+                "%s: %s chars, %s/%s tokens",
+                subject.name,
+                len(output_text),
+                input_tok,
+                output_tok,
             )
             return {
                 "research_outputs": {
@@ -222,13 +229,11 @@ def specialized_node(state: dict) -> dict:
             if not _is_rate_limit_error(exc) or attempt == max_retries - 1:
                 break
             delay = base_delay * (2**attempt)
-            print(
-                f"[SpecializedNode:{subject_id}] Rate limit, retrying in {delay:.1f}s"
-            )
+            logger.warning("[%s] Rate limit, retrying in %.1fs", subject_id, delay)
             time.sleep(delay)
 
     error_msg = f"Error in research for {subject.name}: {last_exc}"
-    print(error_msg)
+    logger.error("%s", error_msg)
     return {
         "research_outputs": {
             subject_id: {

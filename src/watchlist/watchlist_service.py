@@ -2,11 +2,14 @@
 Watchlist service — CRUD for watchlists, sections, items, and pinned tickers.
 """
 
+import logging
 import sys
 import os
 from uuid import uuid4
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = logging.getLogger(__name__)
 
 # Defaults shown on homepage when user has fewer than 3 pins
 DEFAULT_PINS = [
@@ -151,7 +154,7 @@ class WatchlistService:
                     symbol, asset_type, price, change_percent, display_name
                 )
         except Exception as e:
-            print(f"Price fetch failed for {symbol}: {e}")
+            logger.warning("Price fetch failed for %s: %s", symbol, e)
 
     # ── Sections ─────────────────────────────────────────────
 
