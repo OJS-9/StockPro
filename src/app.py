@@ -67,6 +67,31 @@ from flask_limiter.util import get_remote_address
 limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri="memory://")
 
 
+@limiter.request_filter
+def _skip_rate_limits_in_tests():
+    """Pytest sets TESTING=True; avoid 429s on routes under tight limits."""
+    from flask import current_app
+
+    return bool(current_app.config.get("TESTING"))
+
+
+# Tunable via env for staging/production (defaults match Phase 1 roadmap abuse protection)
+def _research_rate_limit():
+    return os.getenv("STOCKPRO_RATE_LIMIT_RESEARCH", "30 per hour")
+
+
+def _report_gen_rate_limit():
+    return os.getenv("STOCKPRO_RATE_LIMIT_REPORT_GEN", "15 per hour")
+
+
+def _report_post_rate_limit():
+    return os.getenv("STOCKPRO_RATE_LIMIT_GENERATE_REPORT", "20 per hour")
+
+
+def _popup_start_rate_limit():
+    return os.getenv("STOCKPRO_RATE_LIMIT_POPUP_START", "60 per hour")
+
+
 def flash_status(message: str, status_type: str = 'info'):
     """Set a status message and type in the session for the next page render.
     status_type: 'success', 'error', or 'info'
@@ -401,6 +426,7 @@ def chat():
 
 @app.route('/start_research', methods=['POST'])
 @login_required
+@limiter.limit(_research_rate_limit, key_func=get_remote_address)
 def start_research():
     """Handle form submission to start research."""
     ticker = request.form.get('ticker', '').strip()
@@ -562,6 +588,7 @@ def commit_session():
 
 @app.route('/generate_report', methods=['POST'])
 @login_required
+@limiter.limit(_report_post_rate_limit, key_func=get_remote_address)
 def generate_report():
     """Handle form submission to generate report after followup questions."""
     try:
@@ -662,6 +689,7 @@ def clear_conversation():
 
 @app.route('/popup_start', methods=['POST'])
 @login_required
+@limiter.limit(_popup_start_rate_limit, key_func=get_remote_address)
 def popup_start():
     """Fetch clarifying questions for ticker + trade_type and initialize agent session."""
     ticker = (request.form.get('ticker') or '').strip().upper()
@@ -704,6 +732,7 @@ def popup_start():
 
 @app.route('/start_generation', methods=['POST'])
 @login_required
+@limiter.limit(_report_gen_rate_limit, key_func=get_remote_address)
 def start_generation():
     """Kick off background report generation with collected Q&A context."""
     data = request.get_json(force=True) or {}
@@ -1594,8 +1623,9 @@ def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
     if not os.getenv("GEMINI_API_KEY"):
-        print("Warning: GEMINI_API_KEY not found in environment variables.")
-        print("Please set it in your .env file or environment.")
+        app.logger.warning(
+            "GEMINI_API_KEY not set — research and embeddings will fail until it is configured."
+        )
 
     from watchlist.price_refresh import start_price_refresh
     start_price_refresh()

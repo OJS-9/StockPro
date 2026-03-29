@@ -368,3 +368,18 @@ class TestDeleteTransactionScoped:
             response = logged_in_client.post('/portfolio/p-1/transaction/txn-1/delete')
             assert response.status_code == 302
             assert '/portfolio/p-1' in response.headers['Location']
+
+    def test_delete_transaction_wrong_owner_does_not_delete(self, logged_in_client):
+        """Cannot delete a transaction on another user's portfolio."""
+        holding = {'holding_id': 'h-1', 'symbol': 'AAPL', 'portfolio_id': 'p-1'}
+        with patch('app.get_portfolio_service') as mock_svc:
+            svc = MagicMock()
+            svc.get_transaction.return_value = {'transaction_id': 'txn-1', 'holding_id': 'h-1'}
+            svc.get_holding_by_id.return_value = holding
+            svc.get_portfolio.return_value = make_portfolio('p-1', user_id='other-user')
+            mock_svc.return_value = svc
+
+            response = logged_in_client.post('/portfolio/p-1/transaction/txn-1/delete')
+            assert response.status_code == 302
+            assert response.headers['Location'].endswith('/portfolio')
+            svc.delete_transaction.assert_not_called()
