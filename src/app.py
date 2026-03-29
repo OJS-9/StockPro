@@ -111,6 +111,11 @@ def _continue_conversation_rate_limit():
     return os.getenv("STOCKPRO_RATE_LIMIT_CONTINUE", "60 per hour")
 
 
+def _chat_report_rate_limit():
+    """Limit POST /chat_report (Q&A against stored report)."""
+    return os.getenv("STOCKPRO_RATE_LIMIT_CHAT_REPORT", "40 per hour")
+
+
 def sse_user_facing_error(exc: BaseException) -> str:
     """Build a short SSE error string for the chat UI (no stack traces; cap API noise)."""
     msg = (str(exc) or "").strip()
@@ -712,6 +717,7 @@ def generate_report():
 
 @app.route("/chat_report", methods=["POST"])
 @login_required
+@limiter.limit(_chat_report_rate_limit, key_func=get_remote_address)
 def chat_report():
     """Handle form submission to chat with report."""
     question = request.form.get("chat_question", "").strip()
