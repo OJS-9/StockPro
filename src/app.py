@@ -379,6 +379,26 @@ def index():
     )
 
 
+@app.route('/waitlist', methods=['GET'])
+def waitlist():
+    """Waitlist landing page."""
+    return render_template(
+        'waitlist.html',
+        waitlist_success=request.args.get('success') == '1',
+        waitlist_error=None,
+    )
+
+
+@app.route('/waitlist/join', methods=['POST'])
+def waitlist_join():
+    """Handle waitlist email submission. Logs email; wire up a mail provider for production."""
+    email = request.form.get('email', '').strip().lower()
+    if not email or '@' not in email:
+        return render_template('waitlist.html', waitlist_success=False, waitlist_error='Please enter a valid email address.')
+    print(f'[waitlist] new signup: {email}')
+    return redirect('/waitlist?success=1')
+
+
 @app.route('/chat')
 @login_required
 def chat():
