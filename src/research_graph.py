@@ -215,7 +215,9 @@ def quality_gate_node(state: ResearchState) -> dict:
         emitter.emit(detail_line[:500])
 
     if total > 0 and failed_count / total > 0.5:
-        detail_bits = [_subject_failure_reason(sid, research_outputs[sid]) for sid in failed]
+        detail_bits = [
+            _subject_failure_reason(sid, research_outputs[sid]) for sid in failed
+        ]
         detail_blob = "; ".join(detail_bits)
         if len(detail_blob) > _MAX_ABORT_DETAIL_CHARS:
             detail_blob = detail_blob[: _MAX_ABORT_DETAIL_CHARS - 1] + "…"
