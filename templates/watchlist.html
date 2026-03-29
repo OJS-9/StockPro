@@ -16,12 +16,12 @@
         <!-- Page header + create watchlist form -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <h1 class="text-zinc-950 dark:text-zinc-50 text-2xl font-semibold">Watchlist</h1>
-            <form method="post" action="{{ url_for('watchlist_create') }}" class="flex items-center gap-2">
+            <form method="post" action="{{ url_for('watchlist_create') }}" class="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" placeholder="New watchlist name..." required
-                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 w-48">
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-base sm:text-sm rounded-md px-3 py-2.5 min-h-11 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 w-full sm:w-48">
                 <button type="submit"
-                    class="px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
+                    class="min-h-11 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer shrink-0">
                     New Watchlist
                 </button>
             </form>
@@ -44,18 +44,18 @@
 
         <!-- Active watchlist header: rename + delete -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <form method="post" action="{{ url_for('watchlist_rename', watchlist_id=active_watchlist.watchlist_id) }}" class="flex items-center gap-2 flex-1 min-w-0">
+            <form method="post" action="{{ url_for('watchlist_rename', watchlist_id=active_watchlist.watchlist_id) }}" class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" value="{{ active_watchlist.name }}" required
-                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none w-48">
-                <button type="submit" class="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer">
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-base sm:text-sm rounded-md px-3 py-2.5 min-h-11 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none w-full min-w-0 sm:w-48">
+                <button type="submit" class="min-h-11 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer">
                     Rename
                 </button>
             </form>
             <form method="post" action="{{ url_for('watchlist_delete', watchlist_id=active_watchlist.watchlist_id) }}"
                 onsubmit="return confirm('Delete this watchlist and all its symbols?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="px-3 py-2 text-red-600 dark:text-red-500 text-sm font-semibold rounded-md border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer">
+                <button type="submit" class="min-h-11 w-full sm:w-auto px-3 py-2 text-red-600 dark:text-red-500 text-sm font-semibold rounded-md border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer">
                     Delete Watchlist
                 </button>
             </form>
@@ -63,20 +63,20 @@
 
         <!-- Add symbol bar -->
         <div class="mb-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <form method="post" action="{{ url_for('watchlist_add_symbol', watchlist_id=active_watchlist.watchlist_id) }}" class="flex flex-wrap items-center gap-3">
+            <form method="post" action="{{ url_for('watchlist_add_symbol', watchlist_id=active_watchlist.watchlist_id) }}" class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="symbol" placeholder="Add symbol (e.g. AAPL, ETH)" required
-                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-4 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 uppercase w-56"
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-base sm:text-sm rounded-md px-4 py-2.5 min-h-11 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 uppercase w-full sm:w-56"
                     style="text-transform:uppercase">
                 {% if active_watchlist.sections %}
-                <select name="section_id" class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none">
+                <select name="section_id" class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-base sm:text-sm rounded-md px-3 py-2.5 min-h-11 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none w-full sm:w-auto">
                     <option value="">No section</option>
                     {% for sec in active_watchlist.sections %}
                     <option value="{{ sec.section_id }}">{{ sec.name }}</option>
                     {% endfor %}
                 </select>
                 {% endif %}
-                <button type="submit" class="px-5 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
+                <button type="submit" class="min-h-11 px-5 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer shrink-0">
                     Add
                 </button>
             </form>
@@ -85,7 +85,8 @@
         <!-- Unsectioned items -->
         {% if active_watchlist.unsectioned_items %}
         <div class="mb-6">
-            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div class="overflow-x-auto overscroll-x-contain touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden min-w-[560px]">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs uppercase tracking-wider">
@@ -131,7 +132,7 @@
                                     <form method="post" action="{{ url_for('watchlist_toggle_pin', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="{{ 'Unpin from homepage' if item.is_pinned else 'Pin to homepage' }}"
-                                            class="p-1.5 rounded-md {{ 'text-zinc-950 dark:text-zinc-50' if item.is_pinned else 'text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800' }} transition-colors cursor-pointer">
+                                            class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md {{ 'text-zinc-950 dark:text-zinc-50' if item.is_pinned else 'text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800' }} transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">{{ 'push_pin' if item.is_pinned else 'keep' }}</span>
                                         </button>
                                     </form>
@@ -139,7 +140,7 @@
                                     <form method="post" action="{{ url_for('watchlist_remove_item', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="Remove"
-                                            class="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+                                            class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">close</span>
                                         </button>
                                     </form>
@@ -149,6 +150,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
             </div>
         </div>
         {% endif %}
@@ -175,7 +177,8 @@
             </div>
 
             {% if section.section_items %}
-            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div class="overflow-x-auto overscroll-x-contain touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden min-w-[560px]">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs uppercase tracking-wider">
@@ -220,14 +223,14 @@
                                     <form method="post" action="{{ url_for('watchlist_toggle_pin', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="{{ 'Unpin from homepage' if item.is_pinned else 'Pin to homepage' }}"
-                                            class="p-1.5 rounded-md {{ 'text-zinc-950 dark:text-zinc-50' if item.is_pinned else 'text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800' }} transition-colors cursor-pointer">
+                                            class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md {{ 'text-zinc-950 dark:text-zinc-50' if item.is_pinned else 'text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800' }} transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">{{ 'push_pin' if item.is_pinned else 'keep' }}</span>
                                         </button>
                                     </form>
                                     <form method="post" action="{{ url_for('watchlist_remove_item', item_id=item.item_id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" title="Remove"
-                                            class="p-1.5 rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+                                            class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
                                             <span class="material-symbols-outlined text-base">close</span>
                                         </button>
                                     </form>
@@ -237,6 +240,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
             </div>
             {% else %}
             <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 text-zinc-500 text-sm text-center">
@@ -258,11 +262,11 @@
         <!-- Create section form -->
         <div class="mt-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
             <p class="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">Add Section</p>
-            <form method="post" action="{{ url_for('watchlist_create_section', watchlist_id=active_watchlist.watchlist_id) }}" class="flex items-center gap-3">
+            <form method="post" action="{{ url_for('watchlist_create_section', watchlist_id=active_watchlist.watchlist_id) }}" class="flex flex-col sm:flex-row sm:items-center gap-3">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" placeholder="Section name (e.g. Tech, Crypto)..." required
-                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-sm rounded-md px-4 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 flex-1">
-                <button type="submit" class="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-semibold rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer">
+                    class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 text-base sm:text-sm rounded-md px-4 py-2.5 min-h-11 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:outline-none placeholder:text-zinc-400 flex-1 min-w-0">
+                <button type="submit" class="min-h-11 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-semibold rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer shrink-0">
                     Create Section
                 </button>
             </form>

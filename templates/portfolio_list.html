@@ -7,9 +7,9 @@
 
     <main class="flex-1 px-4 md:px-8 py-8">
         <div class="max-w-7xl mx-auto">
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <h1 class="text-2xl font-semibold">Portfolios</h1>
-                <button onclick="document.getElementById('create-modal').classList.remove('hidden')" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
+                <button onclick="document.getElementById('create-modal').classList.remove('hidden')" class="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer w-full sm:w-auto">
                     <span class="material-symbols-outlined text-lg">add</span>
                     Create Portfolio
                 </button>
@@ -52,7 +52,8 @@
             </div>
             {% endif %}
 
-            <div class="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-card dark:shadow-none">
+            <div class="overflow-x-auto overscroll-x-contain touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div class="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-card dark:shadow-none min-w-[640px]">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
@@ -87,6 +88,7 @@
                     </tbody>
                 </table>
             </div>
+            </div>
             {% else %}
             <div class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 px-6 py-16 text-center max-w-lg mx-auto shadow-card dark:shadow-none">
                 <div class="w-14 h-14 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-4">
@@ -118,7 +120,7 @@
             <div class="space-y-1.5 mb-4">
                 <label for="portfolio-name" class="block text-xs font-medium text-zinc-500">Portfolio Name</label>
                 <input type="text" id="portfolio-name" name="name" required placeholder="e.g. Long-term stocks" autofocus
-                    class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
+                    class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2.5 min-h-11 text-base sm:text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
             </div>
             <div class="mb-4">
                 <label class="flex items-center gap-2 cursor-pointer">
@@ -130,7 +132,7 @@
                 <div class="space-y-1.5">
                     <label for="cash-balance" class="block text-xs font-medium text-zinc-500">Initial cash balance (optional)</label>
                     <input type="text" id="cash-balance" name="cash_balance" placeholder="0" inputmode="decimal"
-                        class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
+                        class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2.5 min-h-11 text-base sm:text-sm placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
                 </div>
             </div>
             <div class="flex items-center justify-end gap-3 mt-6">
