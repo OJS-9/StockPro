@@ -31,12 +31,12 @@ class TestWarmPortfolioCache(unittest.TestCase):
                       "_warm_portfolio_cache function not found in src/app.py")
 
     def test_warm_portfolio_cache_fetches_holdings_for_all_portfolios(self):
-        """_warm_portfolio_cache calls get_holdings(with_prices=True) for each portfolio."""
+        """_warm_portfolio_cache calls db.get_holdings(portfolio_id) for each portfolio."""
         mock_svc = MagicMock()
         mock_svc.list_portfolios.return_value = [
             {'portfolio_id': '1'}, {'portfolio_id': '2'}
         ]
-        mock_svc.get_holdings.return_value = []
+        mock_svc.db.get_holdings.return_value = []
 
         with patch('portfolio.portfolio_service.get_portfolio_service', return_value=mock_svc):
             # Import the function from app source without triggering Flask app
@@ -68,9 +68,9 @@ class TestWarmPortfolioCache(unittest.TestCase):
             ns['_warm_portfolio_cache']('user-abc')
 
         mock_svc.list_portfolios.assert_called_once_with('user-abc')
-        self.assertEqual(mock_svc.get_holdings.call_count, 2)
-        mock_svc.get_holdings.assert_any_call('1', with_prices=True)
-        mock_svc.get_holdings.assert_any_call('2', with_prices=True)
+        self.assertEqual(mock_svc.db.get_holdings.call_count, 2)
+        mock_svc.db.get_holdings.assert_any_call('1')
+        mock_svc.db.get_holdings.assert_any_call('2')
 
     def test_warm_portfolio_cache_swallows_all_exceptions(self):
         """_warm_portfolio_cache must not raise even when service throws."""

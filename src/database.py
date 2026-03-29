@@ -2,6 +2,7 @@
 PostgreSQL database connection and schema management for reports, chunks, and portfolios.
 """
 
+import logging
 import os
 import json
 import uuid
@@ -15,6 +16,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 
 class DatabaseManager:
     """Manages PostgreSQL database connections and operations for reports and chunks."""
@@ -27,7 +30,7 @@ class DatabaseManager:
 
         try:
             self._pool = psycopg2.pool.SimpleConnectionPool(1, 5, dsn=database_url)
-            print("✓ PostgreSQL connection pool initialized")
+            logger.info("PostgreSQL connection pool initialized")
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to create PostgreSQL connection pool: {e}")
 
@@ -264,7 +267,7 @@ class DatabaseManager:
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_price_cache_last_updated ON price_cache (last_updated)")
 
             conn.commit()
-            print("✓ Database schema initialized")
+            logger.info("Database schema initialized")
 
         except psycopg2.Error as e:
             if conn:

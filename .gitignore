@@ -9,7 +9,12 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
 build/
 develop-eggs/
 dist/

@@ -17,16 +17,17 @@
                         </p>
                     </div>
                     <div class="relative z-10 w-full max-w-2xl mt-4">
-                        <form id="research-form" class="flex items-center gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 p-2 rounded-lg shadow-card-lg transition-all focus-within:ring-2 ring-zinc-400/30 focus-within:border-zinc-500">
-                            <div class="flex items-center justify-center pl-3 text-zinc-400">
+                        <form id="research-form" class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 p-2 rounded-lg shadow-card-lg transition-all focus-within:ring-2 ring-zinc-400/30 focus-within:border-zinc-500">
+                            <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <div class="flex items-center justify-center pl-1 sm:pl-3 text-zinc-400 shrink-0">
                                 <span class="material-symbols-outlined text-xl">search</span>
                             </div>
-                            <div class="flex-1 flex flex-col justify-center h-10">
+                            <div class="flex-1 flex flex-col justify-center min-h-11">
                                 <input
                                     aria-label="Stock Ticker"
                                     name="ticker"
                                     id="ticker"
-                                    class="w-full bg-transparent border-none p-0 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-0 text-sm font-semibold"
+                                    class="w-full bg-transparent border-none p-0 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-0 text-base sm:text-sm font-semibold"
                                     placeholder="Search Ticker..."
                                     type="text"
                                     value="{{ current_ticker }}"
@@ -38,19 +39,22 @@
                                     <span>BTC-USD</span>
                                 </div>
                             </div>
+                            </div>
+                            <div class="flex gap-2 shrink-0">
                             <select
                                 name="trade_type"
                                 id="trade_type"
-                                class="h-10 px-3 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 rounded-md text-sm font-medium focus:ring-2 focus:ring-zinc-400/30 focus:outline-none"
+                                class="h-11 min-h-11 flex-1 sm:flex-none sm:h-10 px-3 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 rounded-md text-base sm:text-sm font-medium focus:ring-2 focus:ring-zinc-400/30 focus:outline-none"
                                 required
                             >
                                 <option value="Investment" {% if current_trade_type == 'Investment' or not current_trade_type %}selected{% endif %}>Investment</option>
                                 <option value="Day Trade" {% if current_trade_type == 'Day Trade' %}selected{% endif %}>Day Trade</option>
                                 <option value="Swing Trade" {% if current_trade_type == 'Swing Trade' %}selected{% endif %}>Swing Trade</option>
                             </select>
-                            <button class="h-10 px-5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-medium rounded-md transition-colors hover:bg-zinc-700 dark:hover:bg-zinc-300 text-sm flex items-center gap-2" type="submit">
+                            <button class="h-11 min-h-11 min-w-[5.5rem] px-4 sm:h-10 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-medium rounded-md transition-colors hover:bg-zinc-700 dark:hover:bg-zinc-300 text-sm flex items-center justify-center gap-2" type="submit">
                                 Analyze <span class="material-symbols-outlined text-sm">arrow_forward</span>
                             </button>
+                            </div>
                         </form>
                     </div>
                 </div>

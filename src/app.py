@@ -96,7 +96,7 @@ def login_required(f):
         if request_state.is_authenticated:
             clerk_user_id = request_state.payload['sub']
             if 'user_id' not in session or session['user_id'] != clerk_user_id:
-                # Upsert user in MySQL
+                # Upsert user in PostgreSQL (Supabase-compatible)
                 from database import get_database_manager
                 db = get_database_manager()
                 user = db.get_user_by_id(clerk_user_id)

@@ -1,20 +1,17 @@
 """
-Smoke test: ReportChatAgent retrieval and anti-hallucination.
+Manual smoke test: ReportChatAgent retrieval and anti-hallucination.
 
-Requires live API keys (GEMINI_API_KEY) and a running MySQL instance.
-Run from project root: python test_chat_smoke.py
+Requires live API keys (GEMINI_API_KEY) and PostgreSQL (DATABASE_URL).
 
-What is tested:
-  1. Report + chunks are written to DB with real Gemini embeddings.
-  2. ReportChatAgent retrieves relevant chunks via vector search.
-  3. Answers contain specific facts that were in the report.
-  4. Agent correctly declines to answer about facts NOT in the report (no hallucination).
+Run from repo root:
+  python scripts/chat_agent_smoke_manual.py
 """
 
 import sys
-import os
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 from dotenv import load_dotenv
 
@@ -22,7 +19,7 @@ load_dotenv()
 
 from database import DatabaseManager
 from embedding_service import EmbeddingService
-from report_chat_agent import ReportChatAgent
+from agents.chat_agent import ReportChatAgent
 
 # ---------------------------------------------------------------------------
 # Controlled test report with specific, checkable facts
@@ -170,7 +167,6 @@ def run():
 
     # ------------------------------------------------------------------
     # 7. Anti-hallucination check — fact NOT in the report
-    #    We ask about the CFO; only the CEO is mentioned in the report.
     # ------------------------------------------------------------------
     step("Anti-hallucination check: CFO (not in report)")
     answer3 = agent.answer_question(
@@ -179,7 +175,6 @@ def run():
     )
     print(f"  Answer: {answer3[:300]}")
 
-    # The agent should NOT invent a CFO name
     hallucination_phrases = ["not available", "not mentioned", "not provided",
                              "i don't know", "don't have", "no information",
                              "not in the report", "cannot find", "does not mention",
@@ -188,8 +183,6 @@ def run():
     if any(phrase in answer3_lower for phrase in hallucination_phrases):
         ok("agent correctly declined to answer (CFO not in report)")
     else:
-        # If the answer is suspiciously short and contains no invented name, also OK
-        # but print a warning so a human can review
         print(
             f"  WARN: answer did not contain an explicit 'not available' phrase. "
             f"Review manually: {answer3[:300]}"
@@ -197,7 +190,6 @@ def run():
 
     # ------------------------------------------------------------------
     # 8. Anti-hallucination check — out-of-scope financial metric
-    #    Gross margin is never mentioned; only operating margin (14%) is.
     # ------------------------------------------------------------------
     step("Anti-hallucination check: gross margin (not in report)")
     answer4 = agent.answer_question(
@@ -207,14 +199,12 @@ def run():
     print(f"  Answer: {answer4[:300]}")
 
     answer4_lower = answer4.lower()
-    # Should NOT claim a specific gross margin number
     hallucination_signals = ["14%", "14.0%", "gross margin is", "gross margin was",
-                             "gross margin of", "65%", "70%", "75%"]  # common LLM guesses
+                             "gross margin of", "65%", "70%", "75%"]
     invented = [s for s in hallucination_signals if s.lower() in answer4_lower]
     if not invented:
         ok("agent did not hallucinate a gross margin figure")
     else:
-        # Distinguish: if answer uses 14% it might be confusing operating margin
         if "14" in answer4 and "operating" in answer4_lower:
             print("  WARN: agent cited operating margin (14%) when asked about gross margin — review.")
         else:

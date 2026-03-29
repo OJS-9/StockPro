@@ -71,7 +71,7 @@ class TestPortfolioList:
         """Unauthenticated access redirects to login."""
         response = client.get('/portfolio')
         assert response.status_code == 302
-        assert '/login' in response.headers['Location']
+        assert '/sign-in' in response.headers['Location']
 
     def test_portfolio_list_renders_for_logged_in_user(self, logged_in_client):
         """Logged-in user sees portfolio list page."""
@@ -163,10 +163,11 @@ class TestPortfolioList:
             assert response.status_code == 200
             assert b'Total Value' in response.data
             assert b'Unrealized P&L' in response.data
-            assert b'10000.50' in response.data
-            assert b'11.1%' in response.data or b'11.2%' in response.data
+            # Overall recap strip shows cost basis (currency-filtered)
+            assert b'9,000.00' in response.data or b'9000.00' in response.data
+            assert b'Total Holdings' in response.data
             assert b'5' in response.data
-            assert b'holding' in response.data
+            assert b'holding' in response.data.lower()
 
 
 class TestCreatePortfolio:
@@ -175,7 +176,7 @@ class TestCreatePortfolio:
     def test_create_portfolio_redirects_if_not_logged_in(self, client):
         response = client.post('/portfolio/create', data={'name': 'Test'})
         assert response.status_code == 302
-        assert '/login' in response.headers['Location']
+        assert '/sign-in' in response.headers['Location']
 
     def test_create_portfolio_redirects_to_detail(self, logged_in_client):
         """POST /portfolio/create redirects to /portfolio/<id>."""
@@ -206,7 +207,7 @@ class TestPortfolioDetail:
     def test_portfolio_detail_redirects_if_not_logged_in(self, client):
         response = client.get('/portfolio/p-1')
         assert response.status_code == 302
-        assert '/login' in response.headers['Location']
+        assert '/sign-in' in response.headers['Location']
 
     def test_portfolio_detail_shows_404_for_wrong_user(self, logged_in_client):
         """Portfolio belonging to different user returns 404."""
