@@ -12,6 +12,7 @@ from typing import Dict, Any, List
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from report_quality import assess_report_structure
 from research_plan import ResearchPlan
 from research_subjects import get_research_subject_by_id
 
@@ -25,6 +26,20 @@ SYNTHESIS_MAX_OUTPUT_TOKENS = int(
 _END_MARKER = "END_OF_REPORT"
 # Rough chars-per-token for Gemini (~4). If output >= 90% of the token limit, assume truncation.
 _TRUNCATION_THRESHOLD = 0.9
+
+
+def _log_structure_quality(report_text: str) -> None:
+    """Log when Markdown section headings look incomplete (Phase 1.7 quality signal)."""
+    if not report_text or report_text.startswith("[INCOMPLETE REPORT"):
+        return
+    if report_text.strip().startswith("Error synthesizing report:"):
+        return
+    ok, missing = assess_report_structure(report_text)
+    if not ok:
+        logger.warning(
+            "Report structure quality: Markdown headings missing expected topics: %s",
+            ", ".join(missing),
+        )
 
 
 def _is_truncated(text: str, max_tokens: int) -> bool:
@@ -300,6 +315,7 @@ def synthesis_node(state: dict) -> dict:
                 combined = report_text + "\n" + (retry_response.content or "")
                 if _END_MARKER in combined:
                     logger.info("Continuation successful: %s chars", len(combined))
+                    _log_structure_quality(combined)
                     return {
                         "report_text": combined,
                         "actual_input_tokens": total_input_tok,
@@ -322,6 +338,7 @@ def synthesis_node(state: dict) -> dict:
                     len(report_text),
                 )
 
+        _log_structure_quality(report_text)
         return {
             "report_text": report_text,
             "actual_input_tokens": total_input_tok,
