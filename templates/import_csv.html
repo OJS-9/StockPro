@@ -38,7 +38,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="p-6">
                     <label for="csv_file" class="block">
-                        <div class="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-12 text-center hover:border-zinc-500 transition-colors cursor-pointer" id="dropzone">
+                        <div class="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-8 sm:p-12 text-center hover:border-zinc-500 transition-colors cursor-pointer" id="dropzone">
                             <span class="material-symbols-outlined text-4xl text-zinc-400 mb-3">upload_file</span>
                             <p class="text-sm font-medium mb-1">Drop your CSV file here</p>
                             <p class="text-xs text-zinc-400 mb-4">or click to browse</p>
@@ -48,19 +48,19 @@
                     </label>
                 </div>
 
-                <div class="px-6 py-4 bg-zinc-100/50 dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-end gap-3 rounded-b-lg">
-                    <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 font-medium transition-colors">
+                <div class="px-6 py-4 bg-zinc-100/50 dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 rounded-b-lg">
+                    <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="min-h-11 px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 font-medium transition-colors inline-flex items-center justify-center">
                         Cancel
                     </a>
-                    <button type="submit" id="submit-btn" disabled class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    <button type="submit" id="submit-btn" disabled class="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                         <span class="material-symbols-outlined text-sm">upload</span>
                         Import Transactions
                     </button>
                 </div>
             </form>
 
-            <div class="mt-6 flex justify-end">
-                <button onclick="downloadTemplate()" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 text-sm font-medium rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+            <div class="mt-6 flex justify-stretch sm:justify-end">
+                <button onclick="downloadTemplate()" type="button" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 text-sm font-medium rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
                     <span class="material-symbols-outlined text-base">download</span>
                     Download CSV Template
                 </button>
