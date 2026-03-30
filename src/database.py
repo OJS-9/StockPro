@@ -9,7 +9,7 @@ import json
 import uuid
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 import psycopg2
 import psycopg2.pool
 import psycopg2.extras
@@ -74,8 +74,19 @@ class DatabaseManager:
                         password_hash VARCHAR(255),
                         google_id     VARCHAR(255) UNIQUE,
                         tier          VARCHAR(20)  NOT NULL DEFAULT 'free',
+                        is_pro        BOOLEAN      NOT NULL DEFAULT FALSE,
                         created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
                     )
+                """)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'is_pro'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN is_pro BOOLEAN NOT NULL DEFAULT FALSE;
+                        END IF;
+                    END $$
                 """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
@@ -366,6 +377,19 @@ class DatabaseManager:
                         created_at TIMESTAMPTZ DEFAULT now()
                     )
                 """)
+
+                # Monthly research report usage (free tier quota)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS report_usage (
+                        user_id      VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        period       CHAR(7)     NOT NULL,
+                        report_count INT         NOT NULL DEFAULT 0,
+                        PRIMARY KEY (user_id, period)
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_report_usage_period ON report_usage (period)"
+                )
 
             conn.commit()
             logger.info("Database schema initialized")
@@ -770,7 +794,8 @@ class DatabaseManager:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    SELECT user_id, username, email, password_hash, google_id, tier,
+                           COALESCE(is_pro, FALSE) AS is_pro, created_at
                     FROM users WHERE username = %s
                 """,
                     (username,),
@@ -789,7 +814,8 @@ class DatabaseManager:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    SELECT user_id, username, email, password_hash, google_id, tier,
+                           COALESCE(is_pro, FALSE) AS is_pro, created_at
                     FROM users WHERE user_id = %s
                 """,
                     (user_id,),
@@ -808,7 +834,8 @@ class DatabaseManager:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    SELECT user_id, username, email, password_hash, google_id, tier,
+                           COALESCE(is_pro, FALSE) AS is_pro, created_at
                     FROM users WHERE email = %s
                 """,
                     (email,),
@@ -827,7 +854,8 @@ class DatabaseManager:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT user_id, username, email, password_hash, google_id, tier, created_at
+                    SELECT user_id, username, email, password_hash, google_id, tier,
+                           COALESCE(is_pro, FALSE) AS is_pro, created_at
                     FROM users WHERE google_id = %s
                 """,
                     (google_id,),
@@ -855,6 +883,74 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to update user: {e}")
+        finally:
+            self._release(conn)
+
+    def user_is_pro(self, user_id: str) -> bool:
+        """Paid / pro users bypass free-tier report quota (stub until billing)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COALESCE(is_pro, FALSE) FROM users WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return bool(row and row[0])
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read user tier: {e}")
+        finally:
+            self._release(conn)
+
+    def get_report_usage_count(self, user_id: str, period: str) -> int:
+        """Monthly report count for quota (period = YYYY-MM)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT report_count FROM report_usage
+                    WHERE user_id = %s AND period = %s
+                    """,
+                    (user_id, period),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read report usage: {e}")
+        finally:
+            self._release(conn)
+
+    def increment_report_usage(self, user_id: str, period: Optional[str] = None) -> None:
+        """
+        Count one successful report toward the user's monthly quota.
+        No-op for pro users. Caller passes period (default: current UTC month).
+        """
+        if self.user_is_pro(user_id):
+            return
+
+        if period is None:
+            period = datetime.now(timezone.utc).strftime("%Y-%m")
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO report_usage (user_id, period, report_count)
+                    VALUES (%s, %s, 1)
+                    ON CONFLICT (user_id, period) DO UPDATE SET
+                        report_count = report_usage.report_count + 1
+                    """,
+                    (user_id, period),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to increment report usage: {e}")
         finally:
             self._release(conn)
 

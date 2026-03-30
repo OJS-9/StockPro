@@ -278,7 +278,10 @@
                 <span class="material-symbols-outlined text-base">close</span>
             </button>
         </div>
-        <p id="popup-step-indicator" class="text-zinc-500 text-xs font-mono mb-4">Step 1 of 2</p>
+        <p id="popup-step-indicator" class="text-zinc-500 text-xs font-mono mb-2">Step 1 of 2</p>
+        {% if current_user.is_authenticated %}
+        <p id="report-usage-hint" class="text-zinc-500 text-xs mb-4 hidden" aria-live="polite"></p>
+        {% endif %}
 
         <div id="popup-loading" class="flex items-center gap-3 py-6 text-zinc-400">
             <span class="material-symbols-outlined animate-spin text-xl">autorenew</span>
@@ -345,6 +348,30 @@
     let pollInterval = null;
     let toastTimeout = null;
 
+    const usageHintEl = document.getElementById('report-usage-hint');
+    async function refreshReportUsageHint() {
+        if (!usageHintEl) return;
+        try {
+            const resp = await fetch('/api/usage');
+            if (!resp.ok) {
+                usageHintEl.classList.add('hidden');
+                return;
+            }
+            const u = await resp.json();
+            if (u.is_pro === true) {
+                usageHintEl.textContent = 'Pro — unlimited research reports.';
+                usageHintEl.classList.remove('hidden');
+            } else if (u.reports_limit != null && u.reports_limit > 0) {
+                usageHintEl.textContent = u.reports_used + ' of ' + u.reports_limit + ' free reports used this month.';
+                usageHintEl.classList.remove('hidden');
+            } else {
+                usageHintEl.classList.add('hidden');
+            }
+        } catch (e) {
+            usageHintEl.classList.add('hidden');
+        }
+    }
+
     function openPopup() {
         backdrop.classList.remove('hidden');
         loadingEl.classList.remove('hidden');
@@ -354,6 +381,7 @@
         questionsList.innerHTML = '';
         popupTitle.textContent = 'Select research topics';
         stepIndicator.textContent = 'Step 1 of 2';
+        refreshReportUsageHint();
     }
 
     function closePopup() {
@@ -464,7 +492,7 @@
         showToast('in_progress', 'Generating report...');
 
         try {
-            await fetch('/start_generation', {
+            const genResp = await fetch('/start_generation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
@@ -473,6 +501,16 @@
                     selected_subject_ids: selectedIds && selectedIds.length ? selectedIds : null
                 })
             });
+            if (genResp.status === 403) {
+                var errJson = {};
+                try { errJson = await genResp.json(); } catch (e2) {}
+                toastIcon.textContent = 'error';
+                toastIcon.className = 'material-symbols-outlined text-lg text-amber-600 dark:text-amber-500';
+                toastText.textContent = errJson.message || 'Report limit reached.';
+                toast.classList.remove('hidden');
+                toast.onclick = null;
+                return;
+            }
         } catch (e) {
             console.error('start_generation error', e);
         }
@@ -547,11 +585,21 @@
         closePopup();
         showToast('in_progress', 'Generating report...');
         try {
-            await fetch('/start_generation', {
+            const genResp = await fetch('/start_generation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({ questions: [], answers: [], selected_subject_ids: null })
             });
+            if (genResp.status === 403) {
+                var errJson2 = {};
+                try { errJson2 = await genResp.json(); } catch (e2) {}
+                toastIcon.textContent = 'error';
+                toastIcon.className = 'material-symbols-outlined text-lg text-amber-600 dark:text-amber-500';
+                toastText.textContent = errJson2.message || 'Report limit reached.';
+                toast.classList.remove('hidden');
+                toast.onclick = null;
+                return;
+            }
         } catch (e) {
             console.error('start_generation error', e);
         }

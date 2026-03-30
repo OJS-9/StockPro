@@ -78,6 +78,12 @@ class ReportStorage:
 
         logger.info("Report %s stored with %s chunks", report_id, len(chunks))
 
+        if user_id:
+            try:
+                self.db.increment_report_usage(user_id)
+            except Exception as exc:
+                logger.warning("increment_report_usage failed (report already stored): %s", exc)
+
         return report_id
 
     def get_report(

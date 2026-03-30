@@ -144,6 +144,33 @@ def pop_status():
     }
 
 
+def _free_tier_quota_message() -> str:
+    from report_usage import get_free_tier_report_limit
+
+    limit = get_free_tier_report_limit()
+    if limit == 3:
+        return "You've used your 3 free reports this month."
+    return f"You've used your {limit} free reports this month."
+
+
+def _session_hits_report_quota() -> bool:
+    uid = session.get("user_id")
+    if not uid:
+        return False
+    from database import get_database_manager
+    from report_usage import quota_exceeded_for_user
+
+    db = get_database_manager()
+    exceeded, _, _ = quota_exceeded_for_user(db, uid)
+    return exceeded
+
+
+def _report_quota_json_error():
+    return jsonify(
+        {"error": "limit_reached", "message": _free_tier_quota_message()}
+    ), 403
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -582,6 +609,10 @@ def start_research():
 
     ticker = ticker.upper()
 
+    if _session_hits_report_quota():
+        flash_status(_free_tier_quota_message(), "error")
+        return redirect(url_for("index"))
+
     try:
         session_id = get_or_create_session_id()
         agent = initialize_session(session_id)
@@ -734,6 +765,10 @@ def commit_session():
 @limiter.limit(_report_post_rate_limit, key_func=get_remote_address)
 def generate_report():
     """Handle form submission to generate report after followup questions."""
+    if _session_hits_report_quota():
+        flash_status(_free_tier_quota_message(), "error")
+        return redirect(url_for("chat"))
+
     try:
         session_id = get_or_create_session_id()
         agent = initialize_session(session_id)
@@ -898,6 +933,9 @@ def start_generation():
         data.get("selected_subject_ids") or None
     )  # None = no user selection
 
+    if _session_hits_report_quota():
+        return _report_quota_json_error()
+
     session_id = get_or_create_session_id()
     agent = initialize_session(session_id)
     agent.user_id = session.get("user_id")
@@ -948,6 +986,37 @@ def report_status(session_id: str):
     if session.get("session_id") != session_id:
         return jsonify({"error": "forbidden"}), 403
     return jsonify(_generation_status.get(session_id, {"status": "unknown"}))
+
+
+@app.route("/api/usage", methods=["GET"])
+@login_required
+def api_usage():
+    """Monthly free-tier research report usage for the signed-in user."""
+    from database import get_database_manager
+    from report_usage import current_period_month, get_free_tier_report_limit
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    period = current_period_month()
+    limit = get_free_tier_report_limit()
+    if db.user_is_pro(uid):
+        return jsonify(
+            {
+                "reports_used": 0,
+                "reports_limit": None,
+                "period": period,
+                "is_pro": True,
+            }
+        )
+    used = db.get_report_usage_count(uid, period)
+    return jsonify(
+        {
+            "reports_used": used,
+            "reports_limit": limit if limit > 0 else None,
+            "period": period,
+            "is_pro": False,
+        }
+    )
 
 
 # ==================== Portfolio Routes ====================

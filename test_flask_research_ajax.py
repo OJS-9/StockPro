@@ -65,18 +65,19 @@ def test_start_generation_returns_success_and_schedules_thread(api_client):
     mock_agent = MagicMock()
     mock_thread = MagicMock()
 
-    with patch.object(app_module, "initialize_session", return_value=mock_agent):
-        with patch.object(app_module, "get_or_create_session_id", return_value="sid-gen"):
-            with patch("spend_budget.get_spend_budget_usd", return_value=2.5):
-                with patch.object(app_module.threading, "Thread", return_value=mock_thread):
-                    with api_client.session_transaction() as sess:
-                        sess["user_id"] = "u1"
-                        sess["username"] = "nu"
-                    resp = api_client.post(
-                        "/start_generation",
-                        json={"questions": ["Q?"], "answers": ["A"]},
-                        content_type="application/json",
-                    )
+    with patch.object(app_module, "_session_hits_report_quota", return_value=False):
+        with patch.object(app_module, "initialize_session", return_value=mock_agent):
+            with patch.object(app_module, "get_or_create_session_id", return_value="sid-gen"):
+                with patch("spend_budget.get_spend_budget_usd", return_value=2.5):
+                    with patch.object(app_module.threading, "Thread", return_value=mock_thread):
+                        with api_client.session_transaction() as sess:
+                            sess["user_id"] = "u1"
+                            sess["username"] = "nu"
+                        resp = api_client.post(
+                            "/start_generation",
+                            json={"questions": ["Q?"], "answers": ["A"]},
+                            content_type="application/json",
+                        )
 
     assert resp.status_code == 200
     assert resp.get_json() == {"success": True}
