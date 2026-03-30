@@ -117,6 +117,39 @@ python src/app.py
 
 Default: app listens on `http://127.0.0.1:5000`. Open that URL in a browser.
 
+### WeasyPrint system dependencies (PDF export)
+
+WeasyPrint requires Pango and HarfBuzz system libraries. If the PDF download returns a 500 error with `cannot load library 'libpango-1.0-0'`, install the missing libraries:
+
+**macOS (Anaconda Python)**
+
+```bash
+conda install -c conda-forge pango harfbuzz
+```
+
+**macOS (Homebrew Python / pyenv)**
+
+```bash
+brew install pango harfbuzz
+```
+
+**Linux (Debian/Ubuntu)**
+
+```bash
+apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b
+```
+
+**Linux (production server / Docker)**
+
+Add to your Dockerfile or server provisioning script:
+
+```dockerfile
+RUN apt-get update && apt-get install -y \
+    libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+    libcairo2 libgdk-pixbuf2.0-0 libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+```
+
 ---
 
 ## 7. Production Deployment Checklist
@@ -128,6 +161,7 @@ Default: app listens on `http://127.0.0.1:5000`. Open that URL in a browser.
 - [ ] Run **schema init** against the production DB once (`python recreate_schema.py` or `init_db.py` after DB exists).
 - [ ] Run the app with **debug=False** and bind to the correct host/port (e.g. via Gunicorn/uWSGI behind a reverse proxy; avoid `debug=True` in production).
 - [ ] Restrict **MYSQL** access (firewall, user grants) and keep `.env` and secrets out of version control.
+- [ ] Install **WeasyPrint system dependencies** on the server (`libpango`, `libharfbuzz`, `libcairo`) — see section 6 for platform-specific commands.
 
 ---
 
