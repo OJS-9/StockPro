@@ -171,7 +171,7 @@ class PortfolioService:
         crypto_symbols = [h['symbol'] for h in cryptos]
         all_symbols = stock_symbols + crypto_symbols
 
-        # --- Cache-first lookup ---
+        # --- Cache lookup (fresh or stale) ---
         cached = self.db.get_cached_prices(all_symbols) if all_symbols else {}
 
         def _is_fresh(row):
@@ -180,31 +180,40 @@ class PortfolioService:
                 return False
             return datetime.utcnow() - last < timedelta(minutes=self.CACHE_TTL_MINUTES)
 
-        fresh_cache = {sym: row for sym, row in cached.items() if _is_fresh(row)}
-        stale_stocks = [s for s in stock_symbols if s not in fresh_cache]
-        stale_cryptos = [s for s in crypto_symbols if s not in fresh_cache]
-
-        # --- Fetch only stale/missing from providers ---
-        fetched_stock_prices: Dict[str, Decimal] = {}
-        if stale_stocks:
-            stock_provider = self.provider_factory.get_provider('stock')
-            fetched_stock_prices = stock_provider.get_prices_batch(stale_stocks) or {}
-            for symbol, price in fetched_stock_prices.items():
-                self.db.upsert_price_cache(symbol, 'stock', float(price), None, None)
-
-        fetched_crypto_prices: Dict[str, Decimal] = {}
-        if stale_cryptos:
-            crypto_provider = self.provider_factory.get_provider('crypto')
-            fetched_crypto_prices = crypto_provider.get_prices_batch(stale_cryptos) or {}
-            for symbol, price in fetched_crypto_prices.items():
-                self.db.upsert_price_cache(symbol, 'crypto', float(price), None, None)
-
-        # --- Merge: cache wins for fresh, provider result for stale ---
+        # Use any cached price immediately — blank only if symbol has no cache record at all
         price_map: Dict[str, Decimal] = {
-            sym: Decimal(str(row['price'])) for sym, row in fresh_cache.items()
+            sym: Decimal(str(row['price'])) for sym, row in cached.items()
         }
-        price_map.update(fetched_stock_prices)
-        price_map.update(fetched_crypto_prices)
+
+        # Fetch prices only for symbols completely absent from cache (parallel, no sleep)
+        missing_stocks = [s for s in stock_symbols if s not in cached]
+        missing_cryptos = [s for s in crypto_symbols if s not in cached]
+
+        if missing_stocks:
+            stock_provider = self.provider_factory.get_provider('stock')
+            fetched = stock_provider.get_prices_batch_warmup(missing_stocks) or {}
+            for symbol, data in fetched.items():
+                price = data['price']
+                self.db.upsert_price_cache(symbol, 'stock', float(price), data.get('change_percent'), None)
+                price_map[symbol] = price
+
+        if missing_cryptos:
+            crypto_provider = self.provider_factory.get_provider('crypto')
+            fetched = crypto_provider.get_prices_batch(missing_cryptos) or {}
+            for symbol, price in fetched.items():
+                self.db.upsert_price_cache(symbol, 'crypto', float(price), None, None)
+                price_map[symbol] = price
+
+        # Background-refresh stale cached prices (fire and forget — next call will be fresh)
+        stale_stocks = [s for s in stock_symbols if s in cached and not _is_fresh(cached[s])]
+        stale_cryptos = [s for s in crypto_symbols if s in cached and not _is_fresh(cached[s])]
+        if stale_stocks or stale_cryptos:
+            import threading
+            threading.Thread(
+                target=self._refresh_stale_prices,
+                args=(stale_stocks, stale_cryptos),
+                daemon=True,
+            ).start()
 
         # Apply prices to holdings
         for h in stocks:
@@ -238,6 +247,22 @@ class PortfolioService:
                     h['unrealized_gain_pct'] = Decimal('0')
 
         return holdings
+
+    def _refresh_stale_prices(self, stale_stocks: List[str], stale_cryptos: List[str]) -> None:
+        """Background refresh of stale cached prices."""
+        try:
+            if stale_stocks:
+                stock_provider = self.provider_factory.get_provider('stock')
+                fetched = stock_provider.get_prices_batch_warmup(stale_stocks) or {}
+                for symbol, data in fetched.items():
+                    self.db.upsert_price_cache(symbol, 'stock', float(data['price']), data.get('change_percent'), None)
+            if stale_cryptos:
+                crypto_provider = self.provider_factory.get_provider('crypto')
+                fetched = crypto_provider.get_prices_batch(stale_cryptos) or {}
+                for symbol, price in fetched.items():
+                    self.db.upsert_price_cache(symbol, 'crypto', float(price), None, None)
+        except Exception:
+            pass
 
     def get_holding(self, portfolio_id: str, symbol: str) -> Optional[Dict]:
         """
