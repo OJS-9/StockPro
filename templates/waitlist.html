@@ -24,9 +24,9 @@
         </p>
 
         <!-- Email capture form -->
-        <form id="waitlist-form" action="/waitlist/join" method="POST"
+        <form id="waitlist-form" action="{{ url_for('waitlist_join') }}" method="POST"
               class="w-full max-w-md flex flex-col sm:flex-row gap-2 mt-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input
                 type="email"
                 name="email"
@@ -40,13 +40,10 @@
             </button>
         </form>
 
-        {% if waitlist_success %}
-        <p class="text-gain dark:text-gain-dark text-sm font-medium">
-            You're on the list. We'll be in touch soon.
+        {% if status_message %}
+        <p class="text-sm font-medium {% if status_type == 'error' %}text-loss dark:text-loss-dark{% else %}text-gain dark:text-gain-dark{% endif %}">
+            {{ status_message }}
         </p>
-        {% endif %}
-        {% if waitlist_error %}
-        <p class="text-loss dark:text-loss-dark text-sm font-medium">{{ waitlist_error }}</p>
         {% endif %}
 
         <p class="text-zinc-400 text-xs">No spam. Unsubscribe anytime.</p>
@@ -167,9 +164,9 @@
     <section class="w-full max-w-5xl px-4 md:px-8 py-16 flex flex-col items-center gap-5">
         <h2 class="text-2xl md:text-3xl font-bold text-zinc-950 dark:text-zinc-50 text-center">Be first when we launch</h2>
         <p class="text-zinc-500 text-sm text-center max-w-sm">Early access users get priority onboarding and locked-in pricing.</p>
-        <form action="/waitlist/join" method="POST"
+        <form action="{{ url_for('waitlist_join') }}" method="POST"
               class="w-full max-w-md flex flex-col sm:flex-row gap-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input
                 type="email"
                 name="email"
@@ -190,7 +187,7 @@
 {% include '_footer.html' %}
 
 <script>
-document.querySelectorAll('form[action="/waitlist/join"]').forEach(function(form) {
+document.querySelectorAll('form[action="{{ url_for('waitlist_join') }}"]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
         var btn = form.querySelector('button[type="submit"]');
         if (btn) {

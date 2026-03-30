@@ -28,6 +28,7 @@ import threading
 import queue
 import json
 import time
+import requests
 from functools import wraps
 from dotenv import load_dotenv
 import uuid
@@ -458,38 +459,59 @@ def sign_out():
     return redirect(url_for("sign_in"))
 
 
-@app.route("/waitlist", methods=["GET"])
+# --- Waitlist (ConvertKit) ---
+
+_WAITLIST_EMAIL_RE = re.compile(
+    r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
+)
+
+
+def _subscribe_waitlist_convertkit(email: str) -> None:
+    """Send email to ConvertKit when configured; otherwise log only. Logs API failures."""
+    api_key = (os.getenv("CONVERTKIT_API_KEY") or "").strip()
+    form_id = (os.getenv("CONVERTKIT_FORM_ID") or "").strip()
+    if not api_key or not form_id:
+        app.logger.info("Waitlist signup (ConvertKit disabled): %s", email)
+        return
+    url = f"https://api.convertkit.com/v3/forms/{form_id}/subscribe"
+    try:
+        resp = requests.post(
+            url,
+            json={"api_key": api_key, "email": email},
+            timeout=15,
+        )
+        if resp.status_code >= 400:
+            app.logger.warning(
+                "ConvertKit subscribe failed: status=%s body=%s",
+                resp.status_code,
+                (resp.text or "")[:500],
+            )
+    except Exception as exc:
+        app.logger.warning("ConvertKit subscribe error: %s", exc, exc_info=True)
+
+
+@app.route("/waitlist")
 def waitlist():
-    """Waitlist landing page."""
-    return render_template(
-        "waitlist.html",
-        waitlist_success=request.args.get("success") == "1",
-        waitlist_error=None,
-    )
+    """Public waitlist landing page."""
+    return render_template("waitlist.html", **pop_status())
 
 
 @app.route("/waitlist/join", methods=["POST"])
+@limiter.limit("30 per minute", key_func=get_remote_address)
 def waitlist_join():
-    """Handle waitlist email submission; stores email in PostgreSQL."""
-    email = request.form.get("email", "").strip().lower()
-    if not email or "@" not in email:
-        return render_template(
-            "waitlist.html",
-            waitlist_success=False,
-            waitlist_error="Please enter a valid email address.",
-        )
-    try:
-        from database import get_database_manager
+    """Accept waitlist signup; sync to ConvertKit when configured."""
+    email = (request.form.get("email") or "").strip()
+    if not email or not _WAITLIST_EMAIL_RE.match(email):
+        flash_status("Please enter a valid email address.", "error")
+        return redirect(url_for("waitlist"))
+    _subscribe_waitlist_convertkit(email)
+    return redirect(url_for("waitlist_thanks"))
 
-        get_database_manager().add_waitlist_email(email)
-    except Exception:
-        app.logger.exception("waitlist signup failed")
-        return render_template(
-            "waitlist.html",
-            waitlist_success=False,
-            waitlist_error="Something went wrong. Please try again in a moment.",
-        )
-    return redirect("/waitlist?success=1")
+
+@app.route("/waitlist/thanks")
+def waitlist_thanks():
+    """Thank-you page after waitlist signup."""
+    return render_template("waitlist_thanks.html")
 
 
 @app.route("/")

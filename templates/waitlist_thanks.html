@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}StockPro — You're on the list{% endblock %}
+
+{% block content %}
+<header class="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md px-4 sm:px-10 py-3">
+    <a href="{{ url_for('sign_in') }}" class="flex items-center gap-3 text-zinc-950 dark:text-zinc-50">
+        <div class="size-7">
+            <svg class="w-full h-full" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8.57829 8.57829C5.52816 11.6284 3.451 15.5145 2.60947 19.7452C1.76794 23.9758 2.19984 28.361 3.85056 32.3462C5.50128 36.3314 8.29667 39.7376 11.8832 42.134C15.4698 44.5305 19.6865 45.8096 24 45.8096C28.3135 45.8096 32.5302 44.5305 36.1168 42.134C39.7033 39.7375 42.4987 36.3314 44.1494 32.3462C45.8002 28.361 46.2321 23.9758 45.3905 19.7452C44.549 15.5145 42.4718 11.6284 39.4217 8.57829L24 24L8.57829 8.57829Z" fill="currentColor"></path>
+            </svg>
+        </div>
+        <span class="text-lg font-semibold leading-tight tracking-[-0.015em]">StockPro</span>
+    </a>
+    <button onclick="toggleTheme()" class="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle theme">
+        <span class="material-symbols-outlined dark:block hidden" style="font-size:18px">light_mode</span>
+        <span class="material-symbols-outlined dark:hidden block" style="font-size:18px">dark_mode</span>
+    </button>
+</header>
+<div class="min-h-[calc(100vh-57px)] flex items-center justify-center px-4 py-10">
+    <div class="w-full max-w-sm text-center">
+        <div class="inline-flex size-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 mb-4" aria-hidden="true">
+            <span class="material-symbols-outlined text-zinc-700 dark:text-zinc-200" style="font-size:28px">mark_email_read</span>
+        </div>
+        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50 tracking-tight mb-2">You're on the list</h1>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400 mb-8">Thanks — we'll be in touch with StockPro updates.</p>
+        <a href="{{ url_for('sign_in') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-cta px-6 text-cta-text text-sm font-medium hover:bg-cta-hover transition-colors">
+            Back to sign in
+        </a>
+    </div>
+</div>
+{% endblock %}
