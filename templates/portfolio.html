@@ -109,6 +109,7 @@
                                 <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Market Value</th>
                                 <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">P&amp;L</th>
                                 <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">P&amp;L %</th>
+                                <th class="text-right px-5 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wide">Portfolio %</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -131,6 +132,7 @@
                                 <td class="px-5 py-4 text-right font-mono text-sm font-semibold cursor-pointer cash-edit-cell text-zinc-950 dark:text-zinc-50" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ summary.cash_balance|currency }}</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
+                                <td id="cash-portfolio-pct" class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                             </tr>
                             {% endif %}
                             {% for holding in holdings %}
@@ -152,6 +154,7 @@
                                 <td class="px-5 py-4 text-right font-mono text-sm font-semibold market-value-cell text-zinc-400 animate-pulse">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm pnl-cell text-zinc-400 animate-pulse">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm pnl-pct-cell text-zinc-400 animate-pulse">—</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm portfolio-pct-cell text-zinc-400 animate-pulse">—</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -231,7 +234,22 @@
                 pnlCell.classList.add(gain >= 0 ? 'text-green-600' : 'text-red-600', gain >= 0 ? 'dark:text-green-500' : 'dark:text-red-500');
                 pnlPctCell.textContent = (gainPct >= 0 ? '+' : '') + fmt(gainPct, 1) + '%';
                 pnlPctCell.classList.add(gainPct >= 0 ? 'text-green-600' : 'text-red-600', gainPct >= 0 ? 'dark:text-green-500' : 'dark:text-red-500');
+                var pctCell = row.querySelector('.portfolio-pct-cell');
+                pctCell.classList.remove('animate-pulse', 'text-zinc-400');
+                if (!h.price_available || !data.total_market_value) {
+                    pctCell.innerHTML = '<span class="text-zinc-400 text-xs">N/A</span>';
+                } else {
+                    pctCell.textContent = fmt((h.market_value / data.total_market_value) * 100, 1) + '%';
+                    pctCell.classList.add('text-zinc-700', 'dark:text-zinc-300');
+                }
             });
+            // Update cash row portfolio %
+            var cashPctEl = document.getElementById('cash-portfolio-pct');
+            if (cashPctEl && data.cash_allocation_pct != null) {
+                cashPctEl.textContent = fmt(data.cash_allocation_pct, 1) + '%';
+                cashPctEl.classList.remove('text-zinc-400');
+                cashPctEl.classList.add('text-zinc-700', 'dark:text-zinc-300');
+            }
             // Update summary strip
             var totalVal = document.getElementById('summary-total-value');
             if (totalVal) {
@@ -264,7 +282,7 @@
                 var el = document.getElementById(id);
                 if (el) { el.classList.remove('animate-pulse'); el.innerHTML = '<span class="text-zinc-400 text-xs">N/A</span>'; }
             });
-            document.querySelectorAll('.price-cell, .market-value-cell, .pnl-cell, .pnl-pct-cell').forEach(function (c) {
+            document.querySelectorAll('.price-cell, .market-value-cell, .pnl-cell, .pnl-pct-cell, .portfolio-pct-cell').forEach(function (c) {
                 c.classList.remove('animate-pulse');
                 c.innerHTML = '<span class="text-zinc-400 text-xs">N/A</span>';
             });
