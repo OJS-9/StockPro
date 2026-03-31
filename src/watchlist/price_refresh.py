@@ -65,9 +65,13 @@ class PriceRefreshJob:
             self._schedule_next()
 
     def _do_refresh(self):
-        # Collect all symbols from watchlist + defaults
+        # Collect all symbols from watchlist
         watched = self.db.get_all_watched_symbols()
         symbol_map = {row['symbol']: row['asset_type'] for row in watched}
+
+        # Include all symbols already in price_cache (portfolio holdings, etc.)
+        for sym, row in self.db.get_all_cached_prices().items():
+            symbol_map.setdefault(sym, row['asset_type'])
 
         # Ensure defaults are always refreshed
         for sym, asset_type, display_name in DEFAULT_SYMBOLS:
