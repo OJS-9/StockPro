@@ -4,7 +4,11 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from alerts.evaluation import condition_met, evaluate_alerts_for_symbols
+from alerts.evaluation import (
+    _send_telegram_alert_if_connected,
+    condition_met,
+    evaluate_alerts_for_symbols,
+)
 
 
 def test_condition_met_above_below():
@@ -88,3 +92,19 @@ def test_evaluate_skips_asset_type_mismatch(monkeypatch):
     n = evaluate_alerts_for_symbols(db, ["BTC"])
     assert n == 0
     db.record_price_alert_trigger.assert_not_called()
+
+
+def test_send_telegram_alert_if_connected(monkeypatch):
+    db = MagicMock()
+    db.get_user_by_id.return_value = {"user_id": "u1", "telegram_chat_id": "12345"}
+
+    sent = {"count": 0}
+
+    def _fake_send(chat_id, text):
+        sent["count"] += 1
+        assert chat_id == "12345"
+        assert "AAPL" in text
+
+    monkeypatch.setattr("telegram_service.send_telegram_text_sync", _fake_send)
+    _send_telegram_alert_if_connected(db, "u1", "AAPL", "AAPL is now $101")
+    assert sent["count"] == 1

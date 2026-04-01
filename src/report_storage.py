@@ -168,3 +168,21 @@ class ReportStorage:
         return self.db.get_all_reports(
             ticker, trade_type, sort_order, limit, offset, user_id=user_id
         )
+
+    def get_report_ticker_summaries(
+        self,
+        *,
+        user_id: str,
+        ticker: str = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0,
+    ):
+        """Get one summary row per researched ticker for a user."""
+        return self.db.get_report_ticker_summaries(
+            user_id=user_id,
+            ticker=ticker,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+        )

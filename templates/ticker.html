@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}{{ symbol }} Research - StockPro{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+{% include "_nav.html" %}
+
+<main class="flex-1 flex flex-col w-full max-w-7xl mx-auto px-4 md:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">{{ symbol }} Research</h1>
+        <p class="text-zinc-500 mt-2">All your reports and notes for this ticker.</p>
+    </div>
+
+    <section class="mb-10">
+        <h2 class="text-sm uppercase tracking-[0.12em] text-zinc-500 mb-3">Reports</h2>
+        {% if reports and reports|length > 0 %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {% for report in reports %}
+            <article class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
+                <a href="{{ url_for('view_report', report_id=report.report_id) }}" class="block p-5">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="text-xs font-mono px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{{ report.trade_type }}</span>
+                        <time class="text-xs text-zinc-500">{{ report.created_at.strftime('%b %d, %Y %I:%M %p') if report.created_at else 'Unknown date' }}</time>
+                    </div>
+                    <p class="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-4">{{ report.report_text | markdown_preview }}</p>
+                </a>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 py-8 px-6 text-center text-zinc-500">
+            No reports found for {{ symbol }} yet.
+        </div>
+        {% endif %}
+    </section>
+
+    <section>
+        <h2 class="text-sm uppercase tracking-[0.12em] text-zinc-500 mb-3">Notes &amp; Thesis</h2>
+        <form id="ticker-notes-form" method="POST" action="{{ url_for('save_ticker_notes', symbol=symbol) }}" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+            {{ csrf_token() }}
+            <div id="toolbar" class="border-b border-zinc-200 dark:border-zinc-800">
+                <span class="ql-formats">
+                    <button class="ql-bold"></button>
+                    <button class="ql-italic"></button>
+                    <button class="ql-underline"></button>
+                </span>
+                <span class="ql-formats">
+                    <select class="ql-size">
+                        <option value="small"></option>
+                        <option selected></option>
+                        <option value="large"></option>
+                    </select>
+                </span>
+            </div>
+            <div id="editor" class="min-h-[220px]"></div>
+            <input type="hidden" id="content" name="content">
+            <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
+                <button type="submit" class="px-4 py-2 rounded-md bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">Save Notes</button>
+            </div>
+        </form>
+    </section>
+</main>
+
+{% include "_footer.html" %}
+
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+(() => {
+  const form = document.getElementById("ticker-notes-form");
+  const hidden = document.getElementById("content");
+  if (!form || !hidden || !window.Quill) return;
+
+  const quill = new Quill("#editor", {
+    theme: "snow",
+    modules: { toolbar: "#toolbar" }
+  });
+
+  const initialContent = {{ (notes_content or "")|tojson|safe }};
+  if (initialContent) {
+    quill.clipboard.dangerouslyPasteHTML(initialContent);
+  }
+
+  form.addEventListener("submit", () => {
+    hidden.value = quill.root.innerHTML;
+  });
+})();
+</script>
+{% endblock %}
+

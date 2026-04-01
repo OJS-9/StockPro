@@ -541,10 +541,14 @@ def waitlist_thanks():
     return render_template("waitlist_thanks.html")
 
 
-@app.route("/")
-@login_required
-def index():
-    """Render the main landing page."""
+@app.route("/login")
+def login():
+    """Compatibility redirect for legacy /login links."""
+    return redirect(url_for("sign_in"))
+
+
+def _render_authenticated_home():
+    """Render the current authenticated app homepage (Markets)."""
     # Initialize session ID if needed
     get_or_create_session_id()
 
@@ -552,7 +556,7 @@ def index():
     current_ticker = session.get("current_ticker", "")
     current_trade_type = session.get("current_trade_type", "Investment")
 
-    # Pinned tickers for Market Overview (None for guests — section hidden)
+    # Pinned tickers for Market Overview
     pinned_tickers = None
     user_id = session.get("user_id")
     if user_id:
@@ -568,6 +572,58 @@ def index():
         current_trade_type=current_trade_type,
         pinned_tickers=pinned_tickers,
     )
+
+
+@app.route("/")
+def index():
+    """Unified home page at '/'.
+
+    - Authenticated: show the existing app homepage (Markets).
+    - Unauthenticated: show a public landing page with waitlist signup.
+    """
+    if "user_id" in session:
+        return _render_authenticated_home()
+
+    # If the user has a Clerk session cookie but no Flask session yet, hydrate
+    # the session and redirect to the authenticated homepage.
+    try:
+        request_state = clerk_client.authenticate_request(
+            request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
+        )
+        if request_state.is_authenticated:
+            clerk_user_id = request_state.payload["sub"]
+            from database import get_database_manager
+
+            db = get_database_manager()
+            user = db.get_user_by_id(clerk_user_id)
+            if not user:
+                clerk_user = clerk_client.users.get(user_id=clerk_user_id)
+                email = ""
+                username = clerk_user_id
+                if clerk_user.email_addresses:
+                    email = clerk_user.email_addresses[0].email_address or ""
+                if clerk_user.username:
+                    username = clerk_user.username
+                elif clerk_user.first_name or clerk_user.last_name:
+                    username = (
+                        f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip()
+                        or clerk_user_id
+                    )
+                db.create_user(user_id=clerk_user_id, username=username, email=email)
+            else:
+                username = user.get("username", clerk_user_id)
+
+            session["user_id"] = clerk_user_id
+            session["username"] = username
+            threading.Thread(
+                target=_warm_portfolio_cache, args=(clerk_user_id,), daemon=True
+            ).start()
+            get_or_create_session_id()
+            return redirect(url_for("index"))
+    except Exception as exc:
+        app.logger.warning("Clerk auth check on '/' failed: %s", exc, exc_info=True)
+
+    return render_template("home_public.html", **pop_status())
 
 
 @app.route("/chat")
@@ -1211,30 +1267,39 @@ def import_csv(portfolio_id: str):
                 filename=file.filename,
             )
 
+            session["import_summary"] = {
+                "success_count": result.success_count,
+                "error_count": result.error_count,
+            }
             if result.error_count > 0:
                 flash_status(
-                    f"Imported {result.success_count} transactions, {result.error_count} errors",
+                    f"{result.success_count} rows imported successfully, {result.error_count} rows failed",
                     "info",
                 )
-                session["import_errors"] = result.errors[:10]
+                session["import_errors"] = result.errors
             else:
                 flash_status(
-                    f"Successfully imported {result.success_count} transactions",
+                    f"{result.success_count} rows imported successfully, 0 rows failed",
                     "success",
                 )
+                session["import_errors"] = []
 
         except Exception as e:
             flash_status(f"Import failed: {str(e)}", "error")
+            session["import_summary"] = None
+            session["import_errors"] = []
 
-        return redirect(url_for("portfolio_detail", portfolio_id=portfolio_id))
+        return redirect(url_for("import_csv", portfolio_id=portfolio_id))
 
     # GET request - show import form
     status = pop_status()
+    import_summary = session.pop("import_summary", None)
     import_errors = session.pop("import_errors", None)
     return render_template(
         "import_csv.html",
         portfolio=portfolio_data,
         **status,
+        import_summary=import_summary,
         import_errors=import_errors,
     )
 
@@ -1390,6 +1455,17 @@ def portfolio_prices(portfolio_id):
         return jsonify({"error": "Not found"}), 404
 
     summary = portfolio_service.get_portfolio_summary(portfolio_id, with_prices=True)
+    breakdowns = {}
+    try:
+        breakdowns = portfolio_service.get_allocation_breakdowns_from_summary(summary)
+        if not isinstance(breakdowns, dict):
+            breakdowns = {}
+    except Exception:
+        breakdowns = {
+            "prices_loaded": bool(summary.get("prices_loaded")),
+            "sector": [],
+            "market": [],
+        }
 
     def to_float(v):
         return float(v) if v is not None else None
@@ -1418,6 +1494,11 @@ def portfolio_prices(portfolio_id):
             "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
             "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
             "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
+            "breakdowns": {
+                "sector": breakdowns.get("sector", []),
+                "market": breakdowns.get("market", []),
+                "prices_loaded": bool(breakdowns.get("prices_loaded")),
+            },
         }
     )
 
@@ -1588,12 +1669,28 @@ def api_patch_alert_notification(notification_id):
 
 
 # ============================================================================
+# Telegram linking (STOA-35)
+# ============================================================================
+
+
+@app.route("/api/telegram/connect-token", methods=["GET"])
+@login_required
+def api_telegram_connect_token():
+    """Generate a short-lived token a user can paste into Telegram `/connect <token>`."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    token = db.create_telegram_connect_token(session["user_id"], ttl_minutes=10)
+    return jsonify({"success": True, "token": token, "ttl_minutes": 10})
+
+
+# ============================================================================
 # Report History & Export Routes
 # ============================================================================
 @app.route("/reports")
 @login_required
 def report_history():
-    """Render the report history page with filters."""
+    """Render ticker-centric research history page."""
     get_or_create_session_id()
 
     # Get filter parameters from query string
@@ -1612,13 +1709,12 @@ def report_history():
     try:
         storage = ReportStorage()
         user_id = session.get("user_id")
-        reports, total_count = storage.get_all_reports(
+        reports, total_count = storage.get_report_ticker_summaries(
+            user_id=user_id,
             ticker=ticker,
-            trade_type=trade_type,
             sort_order=sort_order,
             limit=per_page,
             offset=offset,
-            user_id=user_id,
         )
 
         # Calculate pagination info
@@ -1796,6 +1892,72 @@ def chat_with_report(report_id):
     except Exception as e:
         flash_status(f"Error loading report: {str(e)}", "error")
         return redirect(url_for("report_history"))
+
+
+# ==================== Ticker-Centric Report View & Notes ====================
+
+
+@app.route("/ticker/<symbol>")
+@login_required
+def ticker_detail(symbol: str):
+    """Ticker-centric page showing all reports + per-user notes."""
+    from database import get_database_manager
+
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        abort(404)
+
+    get_or_create_session_id()
+
+    storage = ReportStorage()
+    user_id = session.get("user_id")
+
+    reports, _ = storage.get_all_reports(
+        ticker=symbol,
+        trade_type=None,
+        sort_order="DESC",
+        limit=50,
+        offset=0,
+        user_id=user_id,
+    )
+
+    db = get_database_manager()
+    raw_notes = db.get_ticker_note(user_id, symbol) if user_id else None
+
+    return render_template(
+        "ticker.html",
+        symbol=symbol,
+        reports=reports,
+        notes_content=raw_notes or "",
+    )
+
+
+@app.route("/ticker/<symbol>/notes", methods=["POST"])
+@login_required
+def save_ticker_notes(symbol: str):
+    """Persist rich-text ticker notes for the current user."""
+    from database import get_database_manager
+
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        abort(404)
+
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("sign_in"))
+
+    raw_content = request.form.get("content", "") or ""
+    cleaned = bleach.clean(
+        raw_content,
+        tags=_MD_ALLOWED_TAGS,
+        attributes=_MD_ALLOWED_ATTRS,
+        strip=True,
+    )
+
+    db = get_database_manager()
+    db.upsert_ticker_note(user_id, symbol, cleaned)
+    flash_status(f"Notes updated for {symbol}.", "success")
+    return redirect(url_for("ticker_detail", symbol=symbol))
 
 
 # ==================== Watchlist Routes ====================
@@ -2060,6 +2222,64 @@ def watchlist_delete_section(section_id):
     watchlist_svc.delete_section(section_id)
     flash_status("Section deleted", "success")
     return redirect(url_for("watchlist", wl=row["watchlist_id"]))
+
+
+@app.route("/api/watchlist/<watchlist_id>/news-recap", methods=["GET"])
+@login_required
+@limiter.limit(lambda: os.getenv("STOCKPRO_RATE_LIMIT_WATCHLIST_NEWS_RECAP", "30 per hour"), key_func=get_remote_address)
+def api_watchlist_news_recap(watchlist_id: str):
+    """Return a compact digest of recent news for all symbols in a watchlist."""
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl["user_id"] != session["user_id"]:
+        abort(403)
+
+    items = watchlist_svc.db.get_watchlist_items(watchlist_id) or []
+    symbols = [row.get("symbol") for row in items if isinstance(row, dict)]
+
+    from watchlist.news_recap_service import get_watchlist_news_recap
+
+    try:
+        digest = get_watchlist_news_recap(
+            user_id=session["user_id"], watchlist_id=watchlist_id, symbols=symbols
+        )
+        return jsonify({"success": True, "items": digest})
+    except Exception as e:
+        app.logger.warning("watchlist news recap failed: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": "Failed to fetch news recap"}), 500
+
+
+@app.route("/api/watchlist/<watchlist_id>/earnings", methods=["GET"])
+@login_required
+@limiter.limit(
+    lambda: os.getenv("STOCKPRO_RATE_LIMIT_WATCHLIST_EARNINGS", "30 per hour"),
+    key_func=get_remote_address,
+)
+def api_watchlist_earnings_calendar(watchlist_id: str):
+    """Return upcoming earnings calendar for all symbols in a watchlist."""
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl["user_id"] != session["user_id"]:
+        abort(403)
+
+    items = watchlist_svc.db.get_watchlist_items(watchlist_id) or []
+    symbols = [row.get("symbol") for row in items if isinstance(row, dict)]
+
+    from watchlist.earnings_calendar_service import get_watchlist_earnings_calendar
+
+    try:
+        calendar = get_watchlist_earnings_calendar(
+            user_id=session["user_id"],
+            watchlist_id=watchlist_id,
+            symbols=symbols,
+        )
+        return jsonify({"success": True, "items": calendar})
+    except Exception as e:
+        app.logger.warning("watchlist earnings calendar failed: %s", e, exc_info=True)
+        return (
+            jsonify({"success": False, "error": "Failed to fetch earnings calendar"}),
+            500,
+        )
 
 
 try:

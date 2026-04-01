@@ -645,6 +645,114 @@ class PortfolioService:
         }
         return {"portfolios": portfolios, "overall": overall}
 
+    # ==================== Allocation Breakdowns ====================
+
+    def get_allocation_breakdowns_from_summary(self, summary: Dict) -> Dict:
+        """
+        Compute lightweight breakdowns for the portfolio detail page.
+
+        Returns:
+            Dict:
+              - prices_loaded: bool
+              - market: [{label, value, pct}]
+              - sector: [{label, value, pct}] (stocks only; pct is of total portfolio MV)
+        """
+
+        def _to_decimal(v) -> Decimal:
+            if v is None:
+                return Decimal("0")
+            if isinstance(v, Decimal):
+                return v
+            return Decimal(str(v))
+
+        prices_loaded = bool(summary.get("prices_loaded"))
+        holdings = summary.get("holdings") or []
+
+        if not prices_loaded:
+            return {"prices_loaded": False, "sector": [], "market": []}
+
+        total_market_value = _to_decimal(summary.get("total_market_value"))
+        if total_market_value <= 0:
+            return {"prices_loaded": True, "sector": [], "market": []}
+
+        # ---- Market (asset-class) breakdown ----
+        market_values: Dict[str, Decimal] = {
+            "US Stocks": Decimal("0"),
+            "Crypto": Decimal("0"),
+        }
+        for h in holdings:
+            if not h.get("price_available"):
+                continue
+            mv = h.get("market_value")
+            if mv is None:
+                continue
+            asset_type = (h.get("asset_type") or "").lower()
+            if asset_type == "crypto":
+                market_values["Crypto"] += _to_decimal(mv)
+            else:
+                # Default to stock bucket
+                market_values["US Stocks"] += _to_decimal(mv)
+
+        if summary.get("track_cash"):
+            market_values["Cash"] = _to_decimal(summary.get("cash_value"))
+
+        market = []
+        for label, value in market_values.items():
+            if value <= 0:
+                continue
+            pct = (value / total_market_value) * 100
+            market.append(
+                {"label": label, "value": float(value), "pct": float(pct)}
+            )
+        market.sort(key=lambda r: r["pct"], reverse=True)
+
+        # ---- Sector breakdown (stocks only) ----
+        sector_values: Dict[str, Decimal] = {}
+        try:
+            stock_provider = self.provider_factory.get_provider("stock")
+        except Exception:
+            stock_provider = None
+
+        sector_cache: Dict[str, str] = {}
+
+        for h in holdings:
+            if (h.get("asset_type") or "").lower() != "stock":
+                continue
+            if not h.get("price_available"):
+                continue
+            mv = h.get("market_value")
+            if mv is None:
+                continue
+
+            symbol = (h.get("symbol") or "").upper()
+            sector = sector_cache.get(symbol)
+            if sector is None:
+                sector = ""
+                if stock_provider is not None and symbol:
+                    try:
+                        info = stock_provider.get_asset_info(symbol)
+                        sector = (info or {}).get("sector") or ""
+                    except Exception:
+                        sector = ""
+                sector_cache[symbol] = sector
+
+            label = (sector or "Unknown").strip() or "Unknown"
+            sector_values[label] = sector_values.get(label, Decimal("0")) + _to_decimal(
+                mv
+            )
+
+        sector = []
+        for label, value in sector_values.items():
+            if value <= 0:
+                continue
+            pct = (value / total_market_value) * 100
+            sector.append(
+                {"label": label, "value": float(value), "pct": float(pct)}
+            )
+        sector.sort(key=lambda r: r["pct"], reverse=True)
+
+        return {"prices_loaded": True, "sector": sector, "market": market}
+
 
 # Global service instance
 _portfolio_service: Optional[PortfolioService] = None

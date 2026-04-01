@@ -9,7 +9,7 @@ import json
 import uuid
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import psycopg2
 import psycopg2.pool
 import psycopg2.extras
@@ -75,6 +75,7 @@ class DatabaseManager:
                         google_id     VARCHAR(255) UNIQUE,
                         tier          VARCHAR(20)  NOT NULL DEFAULT 'free',
                         is_pro        BOOLEAN      NOT NULL DEFAULT FALSE,
+                        telegram_chat_id VARCHAR(64),
                         created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
@@ -88,12 +89,35 @@ class DatabaseManager:
                         END IF;
                     END $$
                 """)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'telegram_chat_id'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(64);
+                        END IF;
+                    END $$
+                """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
                 )
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_email     ON users (email)")
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_google_id ON users (google_id)"
+                )
+
+                # Telegram connect tokens (one-time link codes)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS telegram_connect_tokens (
+                        token       VARCHAR(64) PRIMARY KEY,
+                        user_id     VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        expires_at  TIMESTAMP   NOT NULL,
+                        created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_telegram_connect_user_id ON telegram_connect_tokens (user_id)"
                 )
 
                 # Reports
@@ -298,6 +322,32 @@ class DatabaseManager:
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_items_symbol       ON watchlist_items (symbol)"
                 )
+
+                # Per-user ticker notes (rich text from /ticker/<symbol>)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS ticker_notes (
+                        user_id    VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        symbol     VARCHAR(20) NOT NULL,
+                        content    TEXT        NOT NULL DEFAULT '',
+                        created_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, symbol)
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_ticker_notes_symbol ON ticker_notes (symbol)"
+                )
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_trigger WHERE tgname = 'set_ticker_notes_updated_at'
+                        ) THEN
+                            CREATE TRIGGER set_ticker_notes_updated_at
+                            BEFORE UPDATE ON ticker_notes
+                            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+                        END IF;
+                    END $$
+                """)
 
                 # Price cache
                 cur.execute("""
@@ -568,6 +618,89 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
+    def get_report_ticker_summaries(
+        self,
+        *,
+        user_id: str,
+        ticker: Optional[str] = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get one row per ticker with latest report metadata and per-ticker report count.
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                where_parts = ["r.user_id = %s"]
+                params: List[Any] = [user_id]
+                if ticker:
+                    where_parts.append("r.ticker = %s")
+                    params.append(ticker.upper())
+                where_sql = " AND ".join(where_parts)
+                sort_order = (
+                    "DESC"
+                    if sort_order.upper() not in ("ASC", "DESC")
+                    else sort_order.upper()
+                )
+
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*) AS total
+                    FROM (
+                        SELECT DISTINCT r.ticker
+                        FROM reports r
+                        WHERE {where_sql}
+                    ) t
+                    """,
+                    params,
+                )
+                total_count = int(cur.fetchone()["total"])
+
+                cur.execute(
+                    f"""
+                    WITH filtered AS (
+                        SELECT r.*
+                        FROM reports r
+                        WHERE {where_sql}
+                    ),
+                    latest AS (
+                        SELECT DISTINCT ON (ticker)
+                            ticker,
+                            report_id,
+                            trade_type,
+                            report_text,
+                            created_at
+                        FROM filtered
+                        ORDER BY ticker, created_at DESC
+                    ),
+                    counts AS (
+                        SELECT ticker, COUNT(*) AS report_count
+                        FROM filtered
+                        GROUP BY ticker
+                    )
+                    SELECT
+                        l.ticker,
+                        l.report_id,
+                        l.trade_type,
+                        l.report_text,
+                        l.created_at,
+                        c.report_count
+                    FROM latest l
+                    JOIN counts c ON c.ticker = l.ticker
+                    ORDER BY l.created_at {sort_order}
+                    LIMIT %s OFFSET %s
+                    """,
+                    params + [limit, offset],
+                )
+                return list(cur.fetchall()), total_count
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to get report ticker summaries: {e}")
+        finally:
+            self._release(conn)
+
     def save_chunks(self, report_id: str, chunks: List[Dict[str, Any]]):
         """Save report chunks with embeddings."""
         conn = None
@@ -795,7 +928,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     SELECT user_id, username, email, password_hash, google_id, tier,
-                           COALESCE(is_pro, FALSE) AS is_pro, created_at
+                           COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at
                     FROM users WHERE username = %s
                 """,
                     (username,),
@@ -815,7 +948,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     SELECT user_id, username, email, password_hash, google_id, tier,
-                           COALESCE(is_pro, FALSE) AS is_pro, created_at
+                           COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at
                     FROM users WHERE user_id = %s
                 """,
                     (user_id,),
@@ -835,7 +968,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     SELECT user_id, username, email, password_hash, google_id, tier,
-                           COALESCE(is_pro, FALSE) AS is_pro, created_at
+                           COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at
                     FROM users WHERE email = %s
                 """,
                     (email,),
@@ -855,7 +988,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     SELECT user_id, username, email, password_hash, google_id, tier,
-                           COALESCE(is_pro, FALSE) AS is_pro, created_at
+                           COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at
                     FROM users WHERE google_id = %s
                 """,
                     (google_id,),
@@ -900,6 +1033,102 @@ class DatabaseManager:
                 return bool(row and row[0])
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to read user tier: {e}")
+        finally:
+            self._release(conn)
+
+    def set_user_telegram_chat_id(self, user_id: str, telegram_chat_id: str) -> None:
+        """Persist Telegram chat_id on the users table."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET telegram_chat_id = %s WHERE user_id = %s",
+                    (str(telegram_chat_id), user_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set telegram_chat_id: {e}")
+        finally:
+            self._release(conn)
+
+    def create_telegram_connect_token(
+        self, user_id: str, ttl_minutes: int = 10
+    ) -> str:
+        """Create a short-lived, one-time token for linking a Telegram chat to a user."""
+        token = uuid.uuid4().hex
+        expires_at = datetime.utcnow() + timedelta(minutes=int(ttl_minutes))
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO telegram_connect_tokens (token, user_id, expires_at)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (token, user_id, expires_at),
+                )
+            conn.commit()
+            return token
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to create telegram connect token: {e}")
+        finally:
+            self._release(conn)
+
+    def consume_telegram_connect_token(
+        self, token: str, telegram_chat_id: str
+    ) -> Optional[str]:
+        """
+        Atomically validate+consume a connect token and link the chat id.
+
+        Returns:
+            user_id if token was valid; otherwise None.
+        """
+        token = (token or "").strip()
+        if not token:
+            return None
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT token, user_id, expires_at
+                    FROM telegram_connect_tokens
+                    WHERE token = %s
+                    """,
+                    (token,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    conn.rollback()
+                    return None
+                if row["expires_at"] < datetime.utcnow():
+                    cur.execute(
+                        "DELETE FROM telegram_connect_tokens WHERE token = %s", (token,)
+                    )
+                    conn.commit()
+                    return None
+
+                user_id = row["user_id"]
+                cur.execute(
+                    "UPDATE users SET telegram_chat_id = %s WHERE user_id = %s",
+                    (str(telegram_chat_id), user_id),
+                )
+                cur.execute(
+                    "DELETE FROM telegram_connect_tokens WHERE token = %s", (token,)
+                )
+            conn.commit()
+            return user_id
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to consume telegram connect token: {e}")
         finally:
             self._release(conn)
 
@@ -1485,6 +1714,48 @@ class DatabaseManager:
                 return cur.fetchall()
         finally:
             self._release(conn)
+
+    def get_ticker_note(self, user_id: str, symbol: str) -> Optional[str]:
+        """Return saved rich-text note content for a user+ticker pair."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT content
+                    FROM ticker_notes
+                    WHERE user_id = %s AND symbol = %s
+                    """,
+                    (user_id, symbol.upper()),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+        finally:
+            self._release(conn)
+
+    def upsert_ticker_note(self, user_id: str, symbol: str, content: str) -> None:
+        """Create or update rich-text notes for a user+ticker pair."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO ticker_notes (user_id, symbol, content)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (user_id, symbol) DO UPDATE SET
+                        content = EXCLUDED.content
+                    """,
+                    (user_id, symbol.upper(), content or ""),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to upsert ticker note: {e}")
+        finally:
+            if conn:
+                self._release(conn)
 
     def get_watched_symbols_for_user(self, user_id):
         """Return all watched symbols for a specific user."""

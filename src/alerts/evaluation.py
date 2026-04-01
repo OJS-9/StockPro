@@ -40,6 +40,20 @@ def _cooldown() -> timedelta:
     return timedelta(seconds=sec)
 
 
+def _send_telegram_alert_if_connected(db, user_id: str, symbol: str, body: str) -> None:
+    """Best-effort Telegram delivery for users who linked a chat id."""
+    try:
+        user = db.get_user_by_id(user_id)
+        chat_id = (user or {}).get("telegram_chat_id") if user else None
+        if not chat_id:
+            return
+        from telegram_service import send_telegram_text_sync
+
+        send_telegram_text_sync(str(chat_id), f"{symbol} alert\n{body}")
+    except Exception:
+        logger.exception("Telegram send failed for user_id=%s symbol=%s", user_id, symbol)
+
+
 def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
     """
     Check active alerts for the given symbols against price_cache.
@@ -91,6 +105,7 @@ def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
             db.record_price_alert_trigger(
                 nid, alert["user_id"], alert["alert_id"], sym, body
             )
+            _send_telegram_alert_if_connected(db, alert["user_id"], sym, body)
             fired += 1
         except Exception:
             logger.exception(
