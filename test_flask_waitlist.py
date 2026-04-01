@@ -28,7 +28,7 @@ class TestWaitlistPages:
     def test_waitlist_renders(self, api_client):
         resp = api_client.get("/waitlist")
         assert resp.status_code == 200
-        assert b"Join the waitlist" in resp.data
+        assert b"Join Waitlist" in resp.data
 
     def test_waitlist_thanks_renders(self, api_client):
         resp = api_client.get("/waitlist/thanks")
