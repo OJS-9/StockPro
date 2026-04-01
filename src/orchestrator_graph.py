@@ -227,6 +227,8 @@ class OrchestratorSession:
         """Chat with the current report using RAG-lite."""
         if not self.current_report_id:
             return "Error: No report available. Please generate a report first."
+        if self._emitter:
+            self._emitter.emit("Searching report...")
         return self._chat_agent.chat_with_report(
             report_id=self.current_report_id,
             question=question,

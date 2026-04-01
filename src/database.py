@@ -30,22 +30,40 @@ class DatabaseManager:
             raise ValueError("DATABASE_URL environment variable not set")
 
         try:
-            self._pool = psycopg2.pool.SimpleConnectionPool(1, 5, dsn=database_url)
+            self._pool = psycopg2.pool.ThreadedConnectionPool(
+                1,
+                5,
+                dsn=database_url,
+                connect_timeout=10,
+                options="-c statement_timeout=30000",
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=3,
+            )
             logger.info("PostgreSQL connection pool initialized")
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to create PostgreSQL connection pool: {e}")
 
     def get_connection(self):
-        """Get a connection from the pool."""
+        """Get a connection from the pool, validating it is alive."""
         try:
-            return self._pool.getconn()
+            conn = self._pool.getconn()
+            # Check if connection is still alive; discard stale ones
+            if conn.closed:
+                self._pool.putconn(conn, close=True)
+                conn = self._pool.getconn()
+            return conn
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get connection from pool: {e}")
 
     def _release(self, conn):
         """Return a connection to the pool."""
         if conn is not None:
-            self._pool.putconn(conn)
+            try:
+                self._pool.putconn(conn)
+            except Exception:
+                pass
 
     def init_schema(self):
         """Initialize database schema (create tables if they don't exist)."""
@@ -151,6 +169,7 @@ class DatabaseManager:
                         section     VARCHAR(500),
                         chunk_index INT         NOT NULL,
                         embedding   JSONB,
+                        chunk_type  VARCHAR(20) DEFAULT 'report',
                         created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
@@ -159,6 +178,13 @@ class DatabaseManager:
                 )
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_chunk_section   ON report_chunks (section)"
+                )
+                # Idempotent migration for existing databases
+                cur.execute(
+                    "ALTER TABLE report_chunks ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(20) DEFAULT 'report'"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_chunk_type ON report_chunks (chunk_type)"
                 )
 
                 # Portfolios
@@ -712,8 +738,8 @@ class DatabaseManager:
                     cur.execute(
                         """
                         INSERT INTO report_chunks
-                        (chunk_id, report_id, chunk_text, section, chunk_index, embedding)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        (chunk_id, report_id, chunk_text, section, chunk_index, embedding, chunk_type)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                         (
                             chunk_id,
@@ -721,11 +747,8 @@ class DatabaseManager:
                             chunk["chunk_text"],
                             chunk.get("section"),
                             chunk["chunk_index"],
-                            (
-                                json.dumps(chunk.get("embedding"))
-                                if chunk.get("embedding")
-                                else None
-                            ),
+                            json.dumps(chunk.get("embedding")) if chunk.get("embedding") else None,
+                            chunk.get("chunk_type", "report"),
                         ),
                     )
             conn.commit()
@@ -747,7 +770,7 @@ class DatabaseManager:
                 if include_embeddings:
                     cur.execute(
                         """
-                        SELECT chunk_id, report_id, chunk_text, section, chunk_index, embedding, created_at
+                        SELECT chunk_id, report_id, chunk_text, section, chunk_index, embedding, chunk_type, created_at
                         FROM report_chunks WHERE report_id = %s ORDER BY chunk_index ASC
                     """,
                         (report_id,),
@@ -755,7 +778,7 @@ class DatabaseManager:
                 else:
                     cur.execute(
                         """
-                        SELECT chunk_id, report_id, chunk_text, section, chunk_index, created_at
+                        SELECT chunk_id, report_id, chunk_text, section, chunk_index, chunk_type, created_at
                         FROM report_chunks WHERE report_id = %s ORDER BY chunk_index ASC
                     """,
                         (report_id,),

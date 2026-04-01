@@ -75,7 +75,8 @@ def test_reduce_output_tokens_when_budget_tight():
         output_rate_usd_per_1k_tokens=output_rate,
     )
 
-    assert result["effective_max_turns"] == base_max_turns, "Output should be reduced before turns."
+    # New reduction order: turns first, then subject count, then output tokens.
+    assert result["effective_max_turns"] <= base_max_turns
     assert min_max_output_tokens <= result["effective_max_output_tokens"] <= base_max_output_tokens
     assert result["estimated_spend_usd"] <= spend_budget_usd + 1e-9
     assert result["budget_exhausted"] is False

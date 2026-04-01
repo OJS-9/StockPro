@@ -4,7 +4,7 @@ Vector search service for finding relevant chunks using cosine similarity.
 
 import json
 import numpy as np
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from database import get_database_manager
 
@@ -29,6 +29,7 @@ class VectorSearch:
         query_embedding: List[float],
         top_k: int = 5,
         min_score: float = 0.0,
+        chunk_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search for top-k most relevant chunks using cosine similarity.
@@ -38,6 +39,7 @@ class VectorSearch:
             query_embedding: Query embedding vector
             top_k: Number of top results to return
             min_score: Minimum similarity score threshold
+            chunk_type: Optional filter — 'report' or 'research'
 
         Returns:
             List of chunk dictionaries with similarity scores, sorted by relevance
@@ -47,6 +49,9 @@ class VectorSearch:
 
         if not chunks:
             return []
+
+        if chunk_type:
+            chunks = [c for c in chunks if c.get("chunk_type", "report") == chunk_type]
 
         # Convert query embedding to numpy array
         query_vec = np.array(query_embedding)
@@ -74,6 +79,7 @@ class VectorSearch:
                         "chunk_text": chunk["chunk_text"],
                         "section": chunk.get("section"),
                         "chunk_index": chunk["chunk_index"],
+                        "chunk_type": chunk.get("chunk_type", "report"),
                         "similarity_score": float(similarity),
                         "created_at": chunk.get("created_at"),
                     }

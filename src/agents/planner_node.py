@@ -252,5 +252,6 @@ def planner_node(state: dict) -> dict:
         "estimated_spend_usd": budget.get("estimated_spend_usd"),
         "effective_max_turns": budget.get("effective_max_turns"),
         "effective_max_output_tokens": budget.get("effective_max_output_tokens"),
+        "effective_subject_count": budget.get("effective_subject_count"),
         "budget_exhausted": budget.get("budget_exhausted", False),
     }

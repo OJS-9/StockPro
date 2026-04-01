@@ -47,9 +47,8 @@ class ResearchState(TypedDict):
     spend_budget_usd: Optional[float]  # estimated USD budget for this run
     estimated_spend_usd: Optional[float]  # estimated from prompt-size heuristics
     effective_max_turns: Optional[int]  # per-subject cap used by specialized_node
-    effective_max_output_tokens: Optional[
-        int
-    ]  # per-subject cap used by specialized_node
+    effective_max_output_tokens: Optional[int]  # per-subject cap used by specialized_node
+    effective_subject_count: Optional[int]  # subject count after budget trimming
     budget_exhausted: bool  # True when min caps still exceed budget
     actual_input_tokens: Annotated[int, operator.add]  # summed across all nodes
     actual_output_tokens: Annotated[int, operator.add]  # summed across all nodes
@@ -78,7 +77,15 @@ def _fan_out(state: ResearchState) -> List[Send]:
     plan = state["plan"]
     subject_ids = plan.selected_subject_ids[:_MAX_SUBJECTS]
 
-    # Budget settings were computed in planner_node and stored in state.
+    # Apply budget-driven subject cap (trims lowest-priority subjects first,
+    # since the planner orders them by priority).
+    effective_subject_count = state.get("effective_subject_count")
+    if effective_subject_count is not None and effective_subject_count < len(subject_ids):
+        trimmed = subject_ids[:effective_subject_count]
+        dropped = subject_ids[effective_subject_count:]
+        print(f"[FanOut] Budget trimmed subjects from {len(subject_ids)} → {effective_subject_count}. Dropped: {dropped}")
+        subject_ids = trimmed
+
     return [
         Send("specialized_node", {**state, "subject_id": sid}) for sid in subject_ids
     ]
@@ -99,6 +106,7 @@ def storage_node(state: ResearchState) -> dict:
     estimated_spend_usd = state.get("estimated_spend_usd")
     effective_max_turns = state.get("effective_max_turns")
     effective_max_output_tokens = state.get("effective_max_output_tokens")
+    effective_subject_count = state.get("effective_subject_count")
     budget_exhausted = state.get("budget_exhausted", False)
 
     # MySQL JSON column rejects non-standard JSON floats like Infinity/NaN.
@@ -147,6 +155,7 @@ def storage_node(state: ResearchState) -> dict:
         "estimated_spend_usd": estimated_spend_usd,
         "effective_max_turns": effective_max_turns,
         "effective_max_output_tokens": effective_max_output_tokens,
+        "effective_subject_count": effective_subject_count,
         "budget_exhausted": budget_exhausted,
         "actual_input_tokens": actual_input_tokens,
         "actual_output_tokens": actual_output_tokens,
@@ -163,6 +172,10 @@ def storage_node(state: ResearchState) -> dict:
             user_id=user_id,
         )
         logger.info("Report stored: %s", report_id)
+
+        research_outputs = state.get("research_outputs", {})
+        if research_outputs:
+            storage.store_research_chunks(report_id, research_outputs)
     except Exception as e:
         logger.warning("Storage failed (report still available): %s", e)
 
@@ -315,6 +328,7 @@ def run_research(
         "estimated_spend_usd": None,
         "effective_max_turns": None,
         "effective_max_output_tokens": None,
+        "effective_subject_count": None,
         "budget_exhausted": False,
         "actual_input_tokens": 0,
         "actual_output_tokens": 0,
