@@ -91,7 +91,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {% for report in reports %}
         <article class="flex flex-col bg-zinc-50 dark:bg-zinc-900 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 group cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-all hover:shadow-md">
-            <a href="{{ url_for('view_report', report_id=report.report_id) }}" class="flex flex-col h-full">
+            <a href="{{ url_for('ticker_detail', symbol=report.ticker) }}" class="flex flex-col h-full">
                 <!-- Card Header -->
                 <div class="p-6 pb-4 border-b border-zinc-200 dark:border-zinc-800">
                     <div class="flex items-start justify-between mb-3">
@@ -123,7 +123,7 @@
                 <!-- Card Footer -->
                 <div class="px-6 pb-6 pt-2 flex items-center justify-between">
                     <span class="text-zinc-950 dark:text-zinc-50 text-sm font-semibold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        View Report <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                        Open Ticker Page <span class="material-symbols-outlined text-sm">arrow_forward</span>
                     </span>
                     <div class="flex items-center gap-2">
                         <span class="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs rounded font-mono">
