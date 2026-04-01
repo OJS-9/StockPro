@@ -233,6 +233,8 @@ FLASK_SECRET_KEY=           # REQUIRED in production — random key per restart 
 
 Optional:
 ```
+PORT=5000                   # Flask dev server port (default 5000); use 5050 if 5000 is busy (e.g. macOS AirPlay Receiver)
+FLASK_HOST=127.0.0.1        # Bind address; set to 0.0.0.0 for access from other devices on the LAN
 RESEARCH_MAX_WORKERS=3      # ThreadPoolExecutor concurrency
 PLANNER_MAX_SUBJECTS=8     # Max subjects shown to PlannerAgent
 QUALITY_GATE_MIN_OUTPUT_CHARS=200  # Min chars for a specialized output to pass quality gate (default 200)
@@ -361,13 +363,6 @@ Research depth scales with trade horizon:
 - Price providers: `StockDataProvider` (Nimble MarketWatch agent first, Alpha Vantage fallback) / `CryptoDataProvider` (CoinGecko) via factory
 - Database tables: `portfolios`, `holdings`, `transactions`, `csv_imports`
 
-### Known Code Quality Issues
-- `print()` used everywhere instead of `logging` module
-- Model `"gpt-4o"` and `temperature=0.7` hardcoded across all agent files
-- Inconsistent import paths (`src.` prefix vs. bare imports)
-- Bare `except: pass` in `app.py` and `date_utils.py`
-- Dead code: no-op string replace in `mcp_tools.py`, unused inspect call in `agent_tools.py`, unused `style.css`
-- `requirements.txt` is incomplete (missing `flask`) and has unused deps (`gradio`)
 
 ## Testing
 
@@ -387,33 +382,123 @@ Research depth scales with trade horizon:
 |---|---|
 | `OVERVIEW.md` | Full product and architecture reference |
 | `DEPLOYMENT.md` | Deployment steps, env vars, Google OAuth redirect URIs (local and production) |
-| `CODE_REVIEW.md` | 33-issue code review with severity and recommendations |
 | `AGENTS.md` | Cursor rules for AI-assisted development |
 | `TOOL_SELECTION.md` | Alpha Vantage MCP tool documentation |
-| `PERPLEXITY_UPGRADE_PLAN.md` | Perplexity integration roadmap |
-| `PORTFOLIO_IMPLEMENTATION_PLAN.md` | Portfolio feature design |
 
 
-## Latest Code Review Findings (Priority)
+## StockPro – Supabase + Clerk + RLS Rules
+### Identity model
 
-A comprehensive code review was completed on 2026-02-27 (`CODE_REVIEW.md`). The codebase is architecturally sound but has **critical security vulnerabilities** and significant code quality issues that must be resolved before any feature work.
+- Each app user has a row in `public.users`.
+- `public.users.user_id` stores the **Clerk user id** (e.g. `user_abc123`).
+- Every authenticated request to Supabase includes a JWT where:
+  - The `sub` claim is the Clerk user id.
+- In SQL, the current user id is:
 
-**Immediate (blocking):**
-1. Fix XSS in `chat.html` — add DOMPurify, remove `| safe` on unsanitized markdown
-2. Add CSRF protection to all forms (Flask-WTF or manual tokens)
-3. Add ownership verification on all portfolio mutation endpoints (transaction delete has no auth check)
-4. Fix `requirements.txt` — add `flask`, `flask-wtf`, `pytest`, `bcrypt`; remove unused `gradio`; pin versions
+```sql
+auth.jwt()->>'sub'
 
-**High priority:**
-5. Add TTL eviction to `agent_sessions` dict in `app.py` (memory leak — sessions never expire)
-6. Add SRI attributes to all CDN `<script>`/`<link>` tags in `base.html`
-7. Fail loudly if `FLASK_SECRET_KEY` is not set (current fallback generates a random key per restart)
+### Base rules for RLS in `public` schema
 
-**Architecture debt (next sprint):**
-8. Extract shared retry logic from `agent.py` and `specialized_agent.py` into `agent_utils.py`
-9. Merge `report_chat_agent.py` and `conversation_handler_agent.py` into a single agent
-10. Replace `print()` with `logging` module across all files
-11. Centralize model/temperature config instead of hardcoding `"gpt-4o"` / `0.7` in every agent
-12. Refactor `DatabaseManager` (~940 lines) into domain-specific repositories
+For any table in `public` that is reachable from the client:
 
-See `CODE_REVIEW.md` for the full 33-issue list with severity ratings and recommendations.
+1. **Always enable RLS**:
+
+   ```sql
+   ALTER TABLE public.<table_name> ENABLE ROW LEVEL SECURITY;
+   ```
+
+2. **If the table has a direct `user_id` column** (owned by a single user):
+
+   ```sql
+   CREATE POLICY "<short description>"
+   ON public.<table_name>
+   FOR ALL
+   USING (user_id = auth.jwt()->>'sub')
+   WITH CHECK (user_id = auth.jwt()->>'sub');
+   ```
+
+   This means: the client can only see and change rows where `user_id` equals the Clerk id from `sub`.
+
+3. **If the table has no `user_id` but links to a parent that does**, join through the parent.
+
+   **Example: `holdings` → `portfolios` → `users`**
+
+   ```sql
+   CREATE POLICY "Users manage holdings of their portfolios"
+   ON public.holdings
+   FOR ALL
+   USING (
+     EXISTS (
+       SELECT 1
+       FROM public.portfolios p
+       WHERE p.portfolio_id = holdings.portfolio_id
+         AND p.user_id = auth.jwt()->>'sub'
+     )
+   )
+   WITH CHECK (
+     EXISTS (
+       SELECT 1
+       FROM public.portfolios p
+       WHERE p.portfolio_id = holdings.portfolio_id
+         AND p.user_id = auth.jwt()->>'sub'
+     )
+   );
+   ```
+
+   ### Shared vs per-user tables
+
+#### Shared read-only tables (e.g. `public.price_cache`)
+
+- Everyone can read, but only backend/service_role should write.
+
+```sql
+ALTER TABLE public.price_cache ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Everyone can read price cache"
+ON public.price_cache
+FOR SELECT
+USING (true);
+```
+
+- Do **not** create INSERT/UPDATE/DELETE policies for these tables.
+- All writes must go through trusted backend code using the service key.
+
+#### Sensitive token tables (e.g. `public.telegram_connect_tokens`)
+
+- Tokens are per-user and sensitive.
+- Pattern: “only this user (or backend) can read/write their tokens”.
+
+```sql
+ALTER TABLE public.telegram_connect_tokens ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage their telegram tokens"
+ON public.telegram_connect_tokens
+FOR ALL
+USING (user_id = auth.jwt()->>'sub')
+WITH CHECK (user_id = auth.jwt()->>'sub');
+```
+
+If tokens must never be readable from the browser, omit the `FOR SELECT` policy and rely only on backend/service_role access.
+
+#### Child content tables (e.g. `public.report_chunks` tied to `public.reports`)
+
+- `reports` has `user_id`.
+- `report_chunks` has `report_id` → `reports.report_id`.
+- Pattern: join via the parent:
+
+```sql
+ALTER TABLE public.report_chunks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users read their report chunks"
+ON public.report_chunks
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.reports r
+    WHERE r.report_id = report_chunks.report_id
+      AND r.user_id = auth.jwt()->>'sub'
+  )
+);
+```
