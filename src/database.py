@@ -1738,44 +1738,84 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
-    def get_ticker_note(self, user_id: str, symbol: str) -> Optional[str]:
-        """Return saved rich-text note content for a user+ticker pair."""
+    def get_ticker_notes(self, user_id: str, symbol: str) -> list:
+        """Return all notes for a user+ticker, newest first."""
         conn = self.get_connection()
         try:
-            with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT content
+                    SELECT id, title, content, created_at
                     FROM ticker_notes
                     WHERE user_id = %s AND symbol = %s
+                    ORDER BY created_at DESC
                     """,
                     (user_id, symbol.upper()),
                 )
-                row = cur.fetchone()
-                return row[0] if row else None
+                return cur.fetchall()
         finally:
             self._release(conn)
 
-    def upsert_ticker_note(self, user_id: str, symbol: str, content: str) -> None:
-        """Create or update rich-text notes for a user+ticker pair."""
+    def create_ticker_note(self, user_id: str, symbol: str, title: str, content: str) -> None:
+        """Insert a new note for a user+ticker."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO ticker_notes (user_id, symbol, content)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (user_id, symbol) DO UPDATE SET
-                        content = EXCLUDED.content
+                    INSERT INTO ticker_notes (user_id, symbol, title, content)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (user_id, symbol.upper(), content or ""),
+                    (user_id, symbol.upper(), title or "", content or ""),
                 )
             conn.commit()
         except psycopg2.Error as e:
             if conn:
                 conn.rollback()
-            raise RuntimeError(f"Failed to upsert ticker note: {e}")
+            raise RuntimeError(f"Failed to create ticker note: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
+    def update_ticker_note(self, note_id: int, user_id: str, title: str, content: str) -> None:
+        """Update an existing note — ownership enforced via user_id."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE ticker_notes
+                    SET title = %s, content = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (title or "", content or "", note_id, user_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update ticker note: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
+    def delete_ticker_note(self, note_id: int, user_id: str) -> None:
+        """Delete a note — ownership enforced via user_id."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM ticker_notes WHERE id = %s AND user_id = %s",
+                    (note_id, user_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to delete ticker note: {e}")
         finally:
             if conn:
                 self._release(conn)

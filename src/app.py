@@ -1897,20 +1897,30 @@ def ticker_detail(symbol: str):
     )
 
     db = get_database_manager()
-    raw_notes = db.get_ticker_note(user_id, symbol) if user_id else None
+    raw_notes = db.get_ticker_notes(user_id, symbol) if user_id else []
+    notes = []
+    for n in raw_notes:
+        preview = bleach.clean(n["content"], tags=[], strip=True)[:120]
+        notes.append({
+            "id": n["id"],
+            "title": n["title"] or "Untitled",
+            "content": n["content"],
+            "preview": preview,
+            "created_at": n["created_at"],
+        })
 
     return render_template(
         "ticker.html",
         symbol=symbol,
         reports=reports,
-        notes_content=raw_notes or "",
+        notes=notes,
     )
 
 
 @app.route("/ticker/<symbol>/notes", methods=["POST"])
 @login_required
 def save_ticker_notes(symbol: str):
-    """Persist rich-text ticker notes for the current user."""
+    """Create a new note for the ticker."""
     from database import get_database_manager
 
     symbol = (symbol or "").strip().upper()
@@ -1921,6 +1931,7 @@ def save_ticker_notes(symbol: str):
     if not user_id:
         return redirect(url_for("sign_in"))
 
+    title = (request.form.get("title", "") or "").strip()
     raw_content = request.form.get("content", "") or ""
     cleaned = bleach.clean(
         raw_content,
@@ -1930,8 +1941,51 @@ def save_ticker_notes(symbol: str):
     )
 
     db = get_database_manager()
-    db.upsert_ticker_note(user_id, symbol, cleaned)
-    flash_status(f"Notes updated for {symbol}.", "success")
+    db.create_ticker_note(user_id, symbol, title, cleaned)
+    flash_status("Note saved.", "success")
+    return redirect(url_for("ticker_detail", symbol=symbol))
+
+
+@app.route("/ticker/<symbol>/notes/<int:note_id>/edit", methods=["POST"])
+@login_required
+def edit_ticker_note(symbol: str, note_id: int):
+    """Update an existing ticker note."""
+    from database import get_database_manager
+
+    symbol = (symbol or "").strip().upper()
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("sign_in"))
+
+    title = (request.form.get("title", "") or "").strip()
+    raw_content = request.form.get("content", "") or ""
+    cleaned = bleach.clean(
+        raw_content,
+        tags=_MD_ALLOWED_TAGS,
+        attributes=_MD_ALLOWED_ATTRS,
+        strip=True,
+    )
+
+    db = get_database_manager()
+    db.update_ticker_note(note_id, user_id, title, cleaned)
+    flash_status("Note updated.", "success")
+    return redirect(url_for("ticker_detail", symbol=symbol))
+
+
+@app.route("/ticker/<symbol>/notes/<int:note_id>/delete", methods=["POST"])
+@login_required
+def delete_ticker_note(symbol: str, note_id: int):
+    """Delete a ticker note."""
+    from database import get_database_manager
+
+    symbol = (symbol or "").strip().upper()
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("sign_in"))
+
+    db = get_database_manager()
+    db.delete_ticker_note(note_id, user_id)
+    flash_status("Note deleted.", "success")
     return redirect(url_for("ticker_detail", symbol=symbol))
 
 
