@@ -618,6 +618,89 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
+    def get_report_ticker_summaries(
+        self,
+        *,
+        user_id: str,
+        ticker: Optional[str] = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get one row per ticker with latest report metadata and per-ticker report count.
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                where_parts = ["r.user_id = %s"]
+                params: List[Any] = [user_id]
+                if ticker:
+                    where_parts.append("r.ticker = %s")
+                    params.append(ticker.upper())
+                where_sql = " AND ".join(where_parts)
+                sort_order = (
+                    "DESC"
+                    if sort_order.upper() not in ("ASC", "DESC")
+                    else sort_order.upper()
+                )
+
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*) AS total
+                    FROM (
+                        SELECT DISTINCT r.ticker
+                        FROM reports r
+                        WHERE {where_sql}
+                    ) t
+                    """,
+                    params,
+                )
+                total_count = int(cur.fetchone()["total"])
+
+                cur.execute(
+                    f"""
+                    WITH filtered AS (
+                        SELECT r.*
+                        FROM reports r
+                        WHERE {where_sql}
+                    ),
+                    latest AS (
+                        SELECT DISTINCT ON (ticker)
+                            ticker,
+                            report_id,
+                            trade_type,
+                            report_text,
+                            created_at
+                        FROM filtered
+                        ORDER BY ticker, created_at DESC
+                    ),
+                    counts AS (
+                        SELECT ticker, COUNT(*) AS report_count
+                        FROM filtered
+                        GROUP BY ticker
+                    )
+                    SELECT
+                        l.ticker,
+                        l.report_id,
+                        l.trade_type,
+                        l.report_text,
+                        l.created_at,
+                        c.report_count
+                    FROM latest l
+                    JOIN counts c ON c.ticker = l.ticker
+                    ORDER BY l.created_at {sort_order}
+                    LIMIT %s OFFSET %s
+                    """,
+                    params + [limit, offset],
+                )
+                return list(cur.fetchall()), total_count
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to get report ticker summaries: {e}")
+        finally:
+            self._release(conn)
+
     def save_chunks(self, report_id: str, chunks: List[Dict[str, Any]]):
         """Save report chunks with embeddings."""
         conn = None

@@ -8,8 +8,8 @@
 <main class="flex-1 flex flex-col w-full max-w-7xl mx-auto px-4 md:px-8 py-8">
     <!-- Page Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">Research Reports</h1>
-        <p class="text-zinc-500 mt-2">Browse and export your generated stock analysis reports.</p>
+        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">Researched Tickers</h1>
+        <p class="text-zinc-500 mt-2">Browse tickers you've researched, then open each ticker page for full report history and notes.</p>
     </div>
 
     <!-- Filter Bar -->
@@ -72,7 +72,7 @@
     <div class="flex items-center justify-between mb-6">
         <p class="text-zinc-500 text-sm">
             {% if total_count > 0 %}
-                Showing {{ (current_page - 1) * per_page + 1 }}-{{ [current_page * per_page, total_count]|min }} of {{ total_count }} reports
+                Showing {{ (current_page - 1) * per_page + 1 }}-{{ [current_page * per_page, total_count]|min }} of {{ total_count }} tickers
             {% else %}
                 No reports found
             {% endif %}
@@ -127,7 +127,7 @@
                     </span>
                     <div class="flex items-center gap-2">
                         <span class="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs rounded font-mono">
-                            {{ report.report_id[:8] }}
+                            {{ report.report_count }} report{{ '' if report.report_count == 1 else 's' }}
                         </span>
                     </div>
                 </div>
@@ -174,12 +174,12 @@
         <div class="size-24 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-6">
             <span class="material-symbols-outlined text-5xl text-zinc-400">description</span>
         </div>
-        <h2 class="text-xl font-semibold text-zinc-950 dark:text-zinc-50 mb-2">No Reports Found</h2>
+        <h2 class="text-xl font-semibold text-zinc-950 dark:text-zinc-50 mb-2">No Tickers Found</h2>
         <p class="text-zinc-500 mb-6 max-w-md">
             {% if filter_ticker or filter_trade_type %}
-                No reports match your current filters. Try adjusting your search criteria.
+                No tickers match your current filters. Try adjusting your search criteria.
             {% else %}
-                You haven't generated any research reports yet. Start by analyzing a stock.
+                You haven't researched any tickers yet. Start by analyzing a stock.
             {% endif %}
         </p>
         <a href="{{ url_for('index') }}" class="px-6 py-2.5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors flex items-center gap-2">

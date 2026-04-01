@@ -1690,7 +1690,7 @@ def api_telegram_connect_token():
 @app.route("/reports")
 @login_required
 def report_history():
-    """Render the report history page with filters."""
+    """Render ticker-centric research history page."""
     get_or_create_session_id()
 
     # Get filter parameters from query string
@@ -1709,13 +1709,12 @@ def report_history():
     try:
         storage = ReportStorage()
         user_id = session.get("user_id")
-        reports, total_count = storage.get_all_reports(
+        reports, total_count = storage.get_report_ticker_summaries(
+            user_id=user_id,
             ticker=ticker,
-            trade_type=trade_type,
             sort_order=sort_order,
             limit=per_page,
             offset=offset,
-            user_id=user_id,
         )
 
         # Calculate pagination info
