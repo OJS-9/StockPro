@@ -105,7 +105,13 @@ class TestPortfolioApiJson:
 
         mock_svc = MagicMock()
         mock_svc.get_portfolio.return_value = {"portfolio_id": "p1", "user_id": "me"}
+        mock_svc.get_allocation_breakdowns_from_summary.return_value = {
+            "prices_loaded": True,
+            "sector": [{"label": "Technology", "value": 1000.0, "pct": 100.0}],
+            "market": [{"label": "US Stocks", "value": 1000.0, "pct": 100.0}],
+        }
         mock_svc.get_portfolio_summary.return_value = {
+            "prices_loaded": True,
             "holdings": [
                 {
                     "symbol": "AAPL",
@@ -131,6 +137,8 @@ class TestPortfolioApiJson:
         data = resp.get_json()
         assert data["holdings"][0]["symbol"] == "AAPL"
         assert data["total_market_value"] == 1000.0
+        assert data["breakdowns"]["sector"][0]["label"] == "Technology"
+        assert data["breakdowns"]["market"][0]["label"] == "US Stocks"
 
     def test_portfolios_prices_returns_list_per_portfolio(self, api_client):
         import app as app_module
@@ -184,3 +192,24 @@ class TestPortfolioApiJson:
                 resp = api_client.get("/api/portfolio/p1/history")
         assert resp.status_code == 200
         assert resp.get_json() == {"months": [], "values": []}
+
+
+class TestTelegramLinkingApi:
+    def test_connect_token_requires_login(self, api_client):
+        resp = api_client.get("/api/telegram/connect-token")
+        assert resp.status_code == 302
+        assert "/sign-in" in (resp.headers.get("Location") or "")
+
+    def test_connect_token_returns_token_when_logged_in(self, api_client):
+        import app as app_module
+
+        mock_db = MagicMock()
+        mock_db.create_telegram_connect_token.return_value = "tok-123"
+        with patch("database.get_database_manager", return_value=mock_db):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "me"
+            resp = api_client.get("/api/telegram/connect-token")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["token"] == "tok-123"

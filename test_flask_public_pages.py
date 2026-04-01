@@ -1,4 +1,4 @@
-"""Phase 1: Public auth pages and anonymous redirect from protected home."""
+"""Public auth pages and auth-aware '/' home."""
 
 import sys
 from pathlib import Path
@@ -39,10 +39,10 @@ class TestPublicAuthPages:
 
 
 class TestIndexAuth:
-    def test_root_redirects_anonymous_to_sign_in(self, api_client):
+    def test_root_renders_anonymous_public_home(self, api_client):
         resp = api_client.get("/")
-        assert resp.status_code == 302
-        assert "/sign-in" in (resp.headers.get("Location") or "")
+        assert resp.status_code == 200
+        assert b"Join the waitlist" in resp.data
 
     def test_root_renders_when_logged_in(self, api_client):
         import app as app_module
@@ -55,3 +55,8 @@ class TestIndexAuth:
                 sess["username"] = "user1"
             resp = api_client.get("/")
         assert resp.status_code == 200
+
+    def test_login_compat_redirects_to_sign_in(self, api_client):
+        resp = api_client.get("/login")
+        assert resp.status_code == 302
+        assert "/sign-in" in (resp.headers.get("Location") or "")
