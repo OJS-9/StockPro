@@ -87,6 +87,24 @@ class StockDataProvider(BaseDataProvider):
         except Exception:
             return None
 
+    def _get_price_from_yfinance(self, symbol: str) -> dict:
+        """yfinance lookup for current price and change%. Fast, no API key needed."""
+        result = {"price": None, "change_percent": None}
+        try:
+            import yfinance as yf
+
+            fi = yf.Ticker(symbol).fast_info
+            last = fi.last_price
+            if last:
+                result["price"] = Decimal(str(last))
+                prev = fi.regular_market_previous_close
+                if prev and prev > 0:
+                    pct = (last - prev) / prev * 100
+                    result["change_percent"] = Decimal(str(round(pct, 4)))
+        except Exception:
+            pass
+        return result
+
     def _get_price_with_change_from_nimble(self, symbol: str) -> dict:
         """
         Nimble-first lookup for current price (+ optional change%).
@@ -213,6 +231,11 @@ class StockDataProvider(BaseDataProvider):
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        # Try yfinance first (fast, no rate limits)
+        yf_data = self._get_price_from_yfinance(symbol)
+        if yf_data.get("price") is not None:
+            return yf_data
+
         client = self.nimble_client
         if not client:
             return self._get_price_from_alpha_vantage(symbol)
@@ -288,7 +311,16 @@ class StockDataProvider(BaseDataProvider):
         Returns:
             Current price as Decimal, or None if unavailable
         """
-        # Return cached price if still fresh
+        # Try yfinance first (fast, free, no rate limits)
+        yf_data = self._get_price_from_yfinance(symbol)
+        if yf_data.get("price") is not None:
+            if PRICE_FETCH_DEBUG:
+                logger.debug(
+                    "[price_debug] get_current_price using yfinance for %s",
+                    symbol.upper(),
+                )
+            return yf_data["price"]
+
         # Prefer Nimble (MarketWatch agent) if configured.
         nimble_data = self._get_price_with_change_from_nimble(symbol)
         if nimble_data.get("price") is not None:
@@ -352,16 +384,6 @@ class StockDataProvider(BaseDataProvider):
             if "50DayMovingAverage" in result and result["50DayMovingAverage"]:
                 return Decimal(str(result["50DayMovingAverage"]))
 
-            # Try calculating from market cap as last resort
-            if "MarketCapitalization" in result and "SharesOutstanding" in result:
-                market_cap = result.get("MarketCapitalization")
-                shares = result.get("SharesOutstanding")
-                if market_cap and shares:
-                    market_cap = Decimal(str(market_cap))
-                    shares = Decimal(str(shares))
-                    if shares > 0:
-                        return market_cap / shares
-
         except Exception as e:
             logger.warning("OVERVIEW fallback failed for %s: %s", symbol, e)
 
@@ -377,9 +399,15 @@ class StockDataProvider(BaseDataProvider):
         Returns:
             {'price': Decimal|None, 'change_percent': Decimal|None}
         """
-        result = {"price": None, "change_percent": None}
+        # Try yfinance first (fast, free, no rate limits)
+        yf_data = self._get_price_from_yfinance(symbol)
+        if yf_data.get("price") is not None and yf_data.get("change_percent") is not None:
+            return yf_data
 
-        # Nimble-first: returns both price and change_percent for most symbols
+        # Carry over price from yfinance if we got it (change_percent missing)
+        result = yf_data if yf_data.get("price") is not None else {"price": None, "change_percent": None}
+
+        # Nimble fallback: returns both price and change_percent for most symbols
         nimble_data = self._get_price_with_change_from_nimble(symbol)
         if nimble_data.get("price") is not None:
             result = nimble_data
@@ -475,9 +503,10 @@ class StockDataProvider(BaseDataProvider):
             True if valid, False otherwise
         """
         try:
-            result = self.mcp_manager.get_company_overview(symbol)
-            # Check if we got valid data back
-            return bool(result and result.get("Symbol"))
+            import yfinance as yf
+
+            info = yf.Ticker(symbol).info
+            return bool(info and info.get("symbol"))
         except Exception:
             return False
 
@@ -492,25 +521,26 @@ class StockDataProvider(BaseDataProvider):
             Dict with company info, or None if unavailable
         """
         try:
-            result = self.mcp_manager.get_company_overview(symbol)
+            import yfinance as yf
 
-            if not result or "Symbol" not in result:
+            info = yf.Ticker(symbol).info
+            if not info or not info.get("symbol"):
                 return None
 
             return {
-                "symbol": result.get("Symbol", "").upper(),
-                "name": result.get("Name", ""),
-                "description": result.get("Description", ""),
-                "exchange": result.get("Exchange", ""),
-                "sector": result.get("Sector", ""),
-                "industry": result.get("Industry", ""),
-                "market_cap": result.get("MarketCapitalization"),
-                "pe_ratio": result.get("PERatio"),
-                "dividend_yield": result.get("DividendYield"),
-                "52_week_high": result.get("52WeekHigh"),
-                "52_week_low": result.get("52WeekLow"),
-                "50_day_ma": result.get("50DayMovingAverage"),
-                "200_day_ma": result.get("200DayMovingAverage"),
+                "symbol": info.get("symbol", "").upper(),
+                "name": info.get("longName", ""),
+                "description": info.get("longBusinessSummary", ""),
+                "exchange": info.get("exchange", ""),
+                "sector": info.get("sector", ""),
+                "industry": info.get("industry", ""),
+                "market_cap": info.get("marketCap"),
+                "pe_ratio": info.get("trailingPE"),
+                "dividend_yield": info.get("dividendYield"),
+                "52_week_high": info.get("fiftyTwoWeekHigh"),
+                "52_week_low": info.get("fiftyTwoWeekLow"),
+                "50_day_ma": info.get("fiftyDayAverage"),
+                "200_day_ma": info.get("twoHundredDayAverage"),
             }
 
         except Exception as e:
