@@ -203,7 +203,7 @@ Every post follows this format:
 ---
 
 ### Warm-Up Post 2 — Strong Opinion / Thought Leadership
-**When to publish:** Week 2, Tuesday or Wednesday (Apr 8–13)
+**When to publish:** April 3, 2026 (today)
 **Goal:** Take a clear, polarizing stance. People follow people with convictions.
 **Content pillar:** Thought Leadership
 
@@ -256,7 +256,7 @@ Every post follows this format:
 ---
 
 ### Warm-Up Post 3 — Lessons Learned / Behind the Scenes
-**When to publish:** Week 3, Tuesday or Wednesday (Apr 15–20)
+**When to publish:** April 10, 2026
 **Goal:** Vulnerability + the pivot moment. Shows the depth of the problem and makes people root for you.
 **Content pillar:** Lessons Learned
 
@@ -319,7 +319,7 @@ Tone: Authentic, vulnerable where relevant, proud without being boastful. This i
 ---
 
 ### StockPro Post 1 — The Origin Story
-**When to publish:** Week 4 (Apr 22–27)
+**When to publish:** April 17, 2026
 **Goal:** First mention of StockPro. Connect the pain from warm-up posts directly to the product.
 **Content pillar:** Case Story / Behind-the-Scenes
 
@@ -367,7 +367,7 @@ Tone: Authentic, vulnerable where relevant, proud without being boastful. This i
 ---
 
 ### StockPro Post 2 — The Build Moment
-**When to publish:** Week 5 (Apr 29–May 4)
+**When to publish:** April 24, 2026
 **Goal:** The "it works" moment. Show the emotional payoff of building, and reveal the product more concretely.
 **Content pillar:** Behind-the-Scenes / Case Story
 
@@ -416,7 +416,7 @@ Tone: Authentic, vulnerable where relevant, proud without being boastful. This i
 ---
 
 ### StockPro Post 3 — Why This Matters
-**When to publish:** Week 6 (May 6–11)
+**When to publish:** May 1, 2026
 **Goal:** Zoom out to the democratization angle. Broadens appeal beyond existing followers.
 **Content pillar:** Thought Leadership
 
@@ -464,7 +464,7 @@ Tone: Authentic, vulnerable where relevant, proud without being boastful. This i
 ---
 
 ### StockPro Post 4 — Launch Day
-**When to publish:** Week 7 (May 13–18), 2–3 days before launch
+**When to publish:** May 8, 2026 (2–3 days before launch)
 **Goal:** Reward the people who followed the journey. Create urgency. Drive final sign-ups.
 **Content pillar:** Case Story / Milestone
 
@@ -514,11 +514,11 @@ Tone: Authentic, vulnerable where relevant, proud without being boastful. This i
 
 ### Phase 1 — Warm-Up (Weeks 1–3, LinkedIn Only)
 
-| Week | Platform | Post | Status |
+| Date | Platform | Post | Status |
 |------|----------|------|--------|
-| Week 1 (Mar 27) | LinkedIn | Warm-Up 1 — Who I Am | **PUBLISHED** |
-| Week 2 (Apr 8–13) | LinkedIn | Warm-Up 2 — Strong Opinion | Tuesday or Wednesday, 8–10am IL time |
-| Week 3 (Apr 15–20) | LinkedIn | Warm-Up 3 — Builder's Pivot Moment | Tuesday or Wednesday |
+| Mar 27 | LinkedIn | Warm-Up 1 — Who I Am | **PUBLISHED** |
+| Apr 3 | LinkedIn | Warm-Up 2 — Strong Opinion | Today — 8–10am IL time |
+| Apr 10 | LinkedIn | Warm-Up 3 — Builder's Pivot Moment | 8–10am IL time |
 
 *During warm-up weeks: engage genuinely on Reddit (comment, don't post yet). Follow and comment on Fintwit. Build presence without promoting.*
 
@@ -526,16 +526,16 @@ Tone: Authentic, vulnerable where relevant, proud without being boastful. This i
 
 ### Phase 2 — StockPro Launch (Weeks 4–7, All Channels)
 
-| Week | Platform | Post | Notes |
+| Date | Platform | Post | Notes |
 |------|----------|------|-------|
-| Week 4 (Apr 22–27) | LinkedIn | StockPro Post 1 — Origin Story | First mention of the product |
-| Week 4 (Apr 24–25) | Reddit | Reddit Post 1 — "Generic Research Isn't For Me" | r/investing — warm-up comments done by now |
-| Week 5 (Apr 29–May 4) | LinkedIn | StockPro Post 2 — The Build Moment | |
-| Week 5 (May 1–2) | Reddit | Reddit Post 2 — "Free Sample" Position-Aware Output | r/SecurityAnalysis — time to a filing event |
-| Week 6 (May 6–11) | LinkedIn | StockPro Post 3 — Why This Matters | |
-| Week 6 (May 8–9) | Reddit | Reddit Post 3 — "Asking for Feedback" | r/personalfinance |
-| Week 7 (May 13–18) | LinkedIn | StockPro Post 4 — Launch Countdown | 2–3 days before launch |
-| Launch Day | All | Launch announcement | Reddit comments + LinkedIn + Product Hunt |
+| Apr 17 | LinkedIn | StockPro Post 1 — Origin Story | First mention of the product |
+| Apr 18–19 | Reddit | Reddit Post 1 — "Generic Research Isn't For Me" | r/investing — warm-up comments done by now |
+| Apr 24 | LinkedIn | StockPro Post 2 — The Build Moment | |
+| Apr 25–26 | Reddit | Reddit Post 2 — "Free Sample" Position-Aware Output | r/SecurityAnalysis — time to a filing event |
+| May 1 | LinkedIn | StockPro Post 3 — Why This Matters | |
+| May 2–3 | Reddit | Reddit Post 3 — "Asking for Feedback" | r/personalfinance |
+| May 8 | LinkedIn | StockPro Post 4 — Launch Countdown | 2–3 days before launch |
+| ~May 12–15 | All | Launch announcement | Reddit comments + LinkedIn + Product Hunt |
 
 ---
 
