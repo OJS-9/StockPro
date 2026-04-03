@@ -94,33 +94,42 @@ class TestStaleCacheHitsProviders:
         service._mock_db.get_cached_prices.return_value = {
             'AAPL': make_cache_row('AAPL', 140.00, age_minutes=20),  # stale (> 15 min)
         }
-        service._mock_stock_provider.get_prices_batch.return_value = {
-            'AAPL': Decimal('155.00')
+        service._mock_stock_provider.get_prices_batch_warmup.return_value = {
+            'AAPL': {'price': Decimal('155.00'), 'change_percent': None}
         }
-        service._mock_stock_provider.get_change_percent = MagicMock(return_value=None)
 
-        result = service.get_holdings('p-1', with_prices=True)
+        # Stale refresh runs in a background thread; patch Thread to run synchronously.
+        class SyncThread:
+            def __init__(self, target, args=(), daemon=False, **kwargs):
+                self._target = target
+                self._args = args
+            def start(self):
+                self._target(*self._args)
 
-        service._mock_stock_provider.get_prices_batch.assert_called_once_with(['AAPL'])
-        assert result[0]['current_price'] == Decimal('155.00')
+        with patch('threading.Thread', SyncThread):
+            result = service.get_holdings('p-1', with_prices=True)
+
+        service._mock_stock_provider.get_prices_batch_warmup.assert_called_once_with(['AAPL'])
+        # Stale price (140.00) is returned immediately; fresh value is written to cache in background.
+        assert result[0]['current_price'] == Decimal('140.00')
 
     def test_missing_cache_fetches_from_provider(self, service):
         service._mock_db.get_holdings.return_value = [make_holding('TSLA')]
         service._mock_db.get_cached_prices.return_value = {}  # no cache at all
-        service._mock_stock_provider.get_prices_batch.return_value = {
-            'TSLA': Decimal('200.00')
+        service._mock_stock_provider.get_prices_batch_warmup.return_value = {
+            'TSLA': {'price': Decimal('200.00'), 'change_percent': None}
         }
 
         result = service.get_holdings('p-1', with_prices=True)
 
-        service._mock_stock_provider.get_prices_batch.assert_called_once_with(['TSLA'])
+        service._mock_stock_provider.get_prices_batch_warmup.assert_called_once_with(['TSLA'])
         assert result[0]['current_price'] == Decimal('200.00')
 
     def test_fetched_price_is_upserted_to_cache(self, service):
         service._mock_db.get_holdings.return_value = [make_holding('AAPL')]
         service._mock_db.get_cached_prices.return_value = {}
-        service._mock_stock_provider.get_prices_batch.return_value = {
-            'AAPL': Decimal('160.00')
+        service._mock_stock_provider.get_prices_batch_warmup.return_value = {
+            'AAPL': {'price': Decimal('160.00'), 'change_percent': None}
         }
 
         service.get_holdings('p-1', with_prices=True)
@@ -144,14 +153,14 @@ class TestPartialCacheHit:
             'AAPL': make_cache_row('AAPL', 150.00, age_minutes=5),   # fresh
             # TSLA missing from cache
         }
-        service._mock_stock_provider.get_prices_batch.return_value = {
-            'TSLA': Decimal('210.00')
+        service._mock_stock_provider.get_prices_batch_warmup.return_value = {
+            'TSLA': {'price': Decimal('210.00'), 'change_percent': None}
         }
 
         result = service.get_holdings('p-1', with_prices=True)
 
-        # Provider called only for TSLA
-        service._mock_stock_provider.get_prices_batch.assert_called_once_with(['TSLA'])
+        # Provider called only for TSLA (missing), not AAPL (fresh)
+        service._mock_stock_provider.get_prices_batch_warmup.assert_called_once_with(['TSLA'])
 
         aapl = next(h for h in result if h['symbol'] == 'AAPL')
         tsla = next(h for h in result if h['symbol'] == 'TSLA')
@@ -180,11 +189,19 @@ class TestCacheTTL:
         service._mock_db.get_cached_prices.return_value = {
             'AAPL': make_cache_row('AAPL', 140.00, age_minutes=15),
         }
-        service._mock_stock_provider.get_prices_batch.return_value = {}
+        service._mock_stock_provider.get_prices_batch_warmup.return_value = {}
 
-        service.get_holdings('p-1', with_prices=True)
+        class SyncThread:
+            def __init__(self, target, args=(), daemon=False, **kwargs):
+                self._target = target
+                self._args = args
+            def start(self):
+                self._target(*self._args)
 
-        service._mock_stock_provider.get_prices_batch.assert_called_once()
+        with patch('threading.Thread', SyncThread):
+            service.get_holdings('p-1', with_prices=True)
+
+        service._mock_stock_provider.get_prices_batch_warmup.assert_called_once()
 
     def test_just_under_15_min_is_fresh(self, service):
         service._mock_db.get_holdings.return_value = [make_holding('AAPL')]
