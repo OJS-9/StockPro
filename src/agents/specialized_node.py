@@ -76,7 +76,11 @@ Your specific research task: {subject.description}
 - For Investment: Focus on comprehensive, long-term analysis
 
 **Available Tools:**
-- Alpha Vantage MCP Tools: Use for structured financial data, company fundamentals, financial statements
+- yfinance_fundamentals: Company profile, valuation ratios, income statement, balance sheet, cash flow, EPS — use this first for all fundamental data
+- yfinance_analyst: Analyst price targets, buy/sell/hold recommendations, upgrades/downgrades
+- yfinance_ownership: Institutional holders, mutual fund holders, insider transactions
+- yfinance_options: Options chain summary (open interest, IV, volume) — use for technical and risk subjects
+- Alpha Vantage NEWS_SENTIMENT: News articles with sentiment scores — use for news and catalysts research
 - Perplexity Research: Use for real-time information, news, expert analysis, qualitative insights
 
 **Output Requirements:**
