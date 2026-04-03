@@ -747,7 +747,11 @@ class DatabaseManager:
                             chunk["chunk_text"],
                             chunk.get("section"),
                             chunk["chunk_index"],
-                            json.dumps(chunk.get("embedding")) if chunk.get("embedding") else None,
+                            (
+                                json.dumps(chunk.get("embedding"))
+                                if chunk.get("embedding")
+                                else None
+                            ),
                             chunk.get("chunk_type", "report"),
                         ),
                     )
@@ -1077,9 +1081,7 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
-    def create_telegram_connect_token(
-        self, user_id: str, ttl_minutes: int = 10
-    ) -> str:
+    def create_telegram_connect_token(self, user_id: str, ttl_minutes: int = 10) -> str:
         """Create a short-lived, one-time token for linking a Telegram chat to a user."""
         token = uuid.uuid4().hex
         expires_at = datetime.utcnow() + timedelta(minutes=int(ttl_minutes))
@@ -1175,7 +1177,9 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
-    def increment_report_usage(self, user_id: str, period: Optional[str] = None) -> None:
+    def increment_report_usage(
+        self, user_id: str, period: Optional[str] = None
+    ) -> None:
         """
         Count one successful report toward the user's monthly quota.
         No-op for pro users. Caller passes period (default: current UTC month).
@@ -1756,7 +1760,9 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
-    def create_ticker_note(self, user_id: str, symbol: str, title: str, content: str) -> None:
+    def create_ticker_note(
+        self, user_id: str, symbol: str, title: str, content: str
+    ) -> None:
         """Insert a new note for a user+ticker."""
         conn = None
         try:
@@ -1778,7 +1784,9 @@ class DatabaseManager:
             if conn:
                 self._release(conn)
 
-    def update_ticker_note(self, note_id: int, user_id: str, title: str, content: str) -> None:
+    def update_ticker_note(
+        self, note_id: int, user_id: str, title: str, content: str
+    ) -> None:
         """Update an existing note — ownership enforced via user_id."""
         conn = None
         try:

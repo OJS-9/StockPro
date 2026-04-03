@@ -166,9 +166,10 @@ def _session_hits_report_quota() -> bool:
 
 
 def _report_quota_json_error():
-    return jsonify(
-        {"error": "limit_reached", "message": _free_tier_quota_message()}
-    ), 403
+    return (
+        jsonify({"error": "limit_reached", "message": _free_tier_quota_message()}),
+        403,
+    )
 
 
 def login_required(f):
@@ -488,9 +489,7 @@ def sign_out():
 
 # --- Waitlist (ConvertKit) ---
 
-_WAITLIST_EMAIL_RE = re.compile(
-    r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
-)
+_WAITLIST_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
 
 def _subscribe_waitlist_convertkit(email: str) -> None:
@@ -686,7 +685,6 @@ def start_research():
         session.pop("report_chat_mode", None)
         flash_status(f"Research started for {ticker} ({trade_type})", "success")
 
-
     except Exception as e:
         flash_status(f"Error: {str(e)}", "error")
         session["conversation_history"] = []
@@ -722,10 +720,14 @@ def continue_conversation():
 
     def run_in_background():
         try:
-            print(f"[Continue] report_chat_mode={report_chat_mode}, previous_report_id={previous_report_id}")
+            print(
+                f"[Continue] report_chat_mode={report_chat_mode}, previous_report_id={previous_report_id}"
+            )
             if report_chat_mode and previous_report_id:
                 agent.current_report_id = previous_report_id
-                print(f"[Continue] Calling chat_with_report for report {previous_report_id}...")
+                print(
+                    f"[Continue] Calling chat_with_report for report {previous_report_id}..."
+                )
                 response = agent.chat_with_report(user_input)
                 print(f"[Continue] chat_with_report returned ({len(response)} chars)")
             else:
@@ -739,7 +741,11 @@ def continue_conversation():
             report_generated = False
             report_preview = None
 
-            if not report_chat_mode and current_report_id and current_report_id != previous_report_id:
+            if (
+                not report_chat_mode
+                and current_report_id
+                and current_report_id != previous_report_id
+            ):
                 report_text = getattr(agent, "last_report_text", None) or ""
                 if report_text:
                     report_preview = f"# Research Report\n\n{report_text}"
@@ -1901,13 +1907,15 @@ def ticker_detail(symbol: str):
     notes = []
     for n in raw_notes:
         preview = bleach.clean(n["content"], tags=[], strip=True)[:120]
-        notes.append({
-            "id": n["id"],
-            "title": n["title"] or "Untitled",
-            "content": n["content"],
-            "preview": preview,
-            "created_at": n["created_at"],
-        })
+        notes.append(
+            {
+                "id": n["id"],
+                "title": n["title"] or "Untitled",
+                "content": n["content"],
+                "preview": preview,
+                "created_at": n["created_at"],
+            }
+        )
 
     return render_template(
         "ticker.html",
@@ -2255,7 +2263,10 @@ def watchlist_delete_section(section_id):
 
 @app.route("/api/watchlist/<watchlist_id>/news-recap", methods=["GET"])
 @login_required
-@limiter.limit(lambda: os.getenv("STOCKPRO_RATE_LIMIT_WATCHLIST_NEWS_RECAP", "30 per hour"), key_func=get_remote_address)
+@limiter.limit(
+    lambda: os.getenv("STOCKPRO_RATE_LIMIT_WATCHLIST_NEWS_RECAP", "30 per hour"),
+    key_func=get_remote_address,
+)
 def api_watchlist_news_recap(watchlist_id: str):
     """Return a compact digest of recent news for all symbols in a watchlist."""
     watchlist_svc = get_watchlist_service()

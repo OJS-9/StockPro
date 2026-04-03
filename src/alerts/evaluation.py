@@ -51,7 +51,9 @@ def _send_telegram_alert_if_connected(db, user_id: str, symbol: str, body: str) 
 
         send_telegram_text_sync(str(chat_id), f"{symbol} alert\n{body}")
     except Exception:
-        logger.exception("Telegram send failed for user_id=%s symbol=%s", user_id, symbol)
+        logger.exception(
+            "Telegram send failed for user_id=%s symbol=%s", user_id, symbol
+        )
 
 
 def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:

@@ -77,7 +77,7 @@ class PriceRefreshJob:
 
         # Include all symbols already in price_cache (portfolio holdings, etc.)
         for sym, row in self.db.get_all_cached_prices().items():
-            symbol_map.setdefault(sym, row['asset_type'])
+            symbol_map.setdefault(sym, row["asset_type"])
 
         # Ensure defaults are always refreshed
         for sym, asset_type, display_name in DEFAULT_SYMBOLS:

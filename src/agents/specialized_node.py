@@ -168,7 +168,11 @@ def specialized_node(state: dict) -> dict:
             output_tok += usage.get("output_tokens", 0)
 
         for msg in reversed(result["messages"]):
-            if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
+            if (
+                isinstance(msg, AIMessage)
+                and msg.content
+                and not getattr(msg, "tool_calls", None)
+            ):
                 content = msg.content
                 if isinstance(content, list):
                     output_text = "\n".join(

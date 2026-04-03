@@ -190,7 +190,7 @@ class PortfolioService:
 
         # Use any cached price immediately — blank only if symbol has no cache record at all
         price_map: Dict[str, Decimal] = {
-            sym: Decimal(str(row['price'])) for sym, row in cached.items()
+            sym: Decimal(str(row["price"])) for sym, row in cached.items()
         }
 
         # Fetch prices only for symbols completely absent from cache (parallel, no sleep)
@@ -198,25 +198,32 @@ class PortfolioService:
         missing_cryptos = [s for s in crypto_symbols if s not in cached]
 
         if missing_stocks:
-            stock_provider = self.provider_factory.get_provider('stock')
+            stock_provider = self.provider_factory.get_provider("stock")
             fetched = stock_provider.get_prices_batch_warmup(missing_stocks) or {}
             for symbol, data in fetched.items():
-                price = data['price']
-                self.db.upsert_price_cache(symbol, 'stock', float(price), data.get('change_percent'), None)
+                price = data["price"]
+                self.db.upsert_price_cache(
+                    symbol, "stock", float(price), data.get("change_percent"), None
+                )
                 price_map[symbol] = price
 
         if missing_cryptos:
-            crypto_provider = self.provider_factory.get_provider('crypto')
+            crypto_provider = self.provider_factory.get_provider("crypto")
             fetched = crypto_provider.get_prices_batch(missing_cryptos) or {}
             for symbol, price in fetched.items():
-                self.db.upsert_price_cache(symbol, 'crypto', float(price), None, None)
+                self.db.upsert_price_cache(symbol, "crypto", float(price), None, None)
                 price_map[symbol] = price
 
         # Background-refresh stale cached prices (fire and forget — next call will be fresh)
-        stale_stocks = [s for s in stock_symbols if s in cached and not _is_fresh(cached[s])]
-        stale_cryptos = [s for s in crypto_symbols if s in cached and not _is_fresh(cached[s])]
+        stale_stocks = [
+            s for s in stock_symbols if s in cached and not _is_fresh(cached[s])
+        ]
+        stale_cryptos = [
+            s for s in crypto_symbols if s in cached and not _is_fresh(cached[s])
+        ]
         if stale_stocks or stale_cryptos:
             import threading
+
             threading.Thread(
                 target=self._refresh_stale_prices,
                 args=(stale_stocks, stale_cryptos),
@@ -258,19 +265,29 @@ class PortfolioService:
 
         return holdings
 
-    def _refresh_stale_prices(self, stale_stocks: List[str], stale_cryptos: List[str]) -> None:
+    def _refresh_stale_prices(
+        self, stale_stocks: List[str], stale_cryptos: List[str]
+    ) -> None:
         """Background refresh of stale cached prices."""
         try:
             if stale_stocks:
-                stock_provider = self.provider_factory.get_provider('stock')
+                stock_provider = self.provider_factory.get_provider("stock")
                 fetched = stock_provider.get_prices_batch_warmup(stale_stocks) or {}
                 for symbol, data in fetched.items():
-                    self.db.upsert_price_cache(symbol, 'stock', float(data['price']), data.get('change_percent'), None)
+                    self.db.upsert_price_cache(
+                        symbol,
+                        "stock",
+                        float(data["price"]),
+                        data.get("change_percent"),
+                        None,
+                    )
             if stale_cryptos:
-                crypto_provider = self.provider_factory.get_provider('crypto')
+                crypto_provider = self.provider_factory.get_provider("crypto")
                 fetched = crypto_provider.get_prices_batch(stale_cryptos) or {}
                 for symbol, price in fetched.items():
-                    self.db.upsert_price_cache(symbol, 'crypto', float(price), None, None)
+                    self.db.upsert_price_cache(
+                        symbol, "crypto", float(price), None, None
+                    )
         except Exception:
             pass
 
@@ -724,9 +741,7 @@ class PortfolioService:
             if value <= 0:
                 continue
             pct = (value / total_market_value) * 100
-            market.append(
-                {"label": label, "value": float(value), "pct": float(pct)}
-            )
+            market.append({"label": label, "value": float(value), "pct": float(pct)})
         market.sort(key=lambda r: r["pct"], reverse=True)
 
         # ---- Sector breakdown (stocks only) ----
@@ -769,9 +784,7 @@ class PortfolioService:
             if value <= 0:
                 continue
             pct = (value / total_market_value) * 100
-            sector.append(
-                {"label": label, "value": float(value), "pct": float(pct)}
-            )
+            sector.append({"label": label, "value": float(value), "pct": float(pct)})
         sector.sort(key=lambda r: r["pct"], reverse=True)
 
         return {"prices_loaded": True, "sector": sector, "market": market}

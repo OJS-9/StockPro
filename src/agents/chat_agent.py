@@ -55,7 +55,9 @@ def _build_rag_prompt(
             if chunk.get("section")
             else ""
         )
-        source_label = " | Raw Research" if chunk.get("chunk_type") == "research" else " | Report"
+        source_label = (
+            " | Raw Research" if chunk.get("chunk_type") == "research" else " | Report"
+        )
         prompt_parts.append(f"[Excerpt {i}{section_info}{source_label}]")
         prompt_parts.append(chunk["chunk_text"])
         prompt_parts.append("")
@@ -88,7 +90,9 @@ class ReportChatAgent:
     def __init__(self):
         self._embedding_service = EmbeddingService()
         self._vector_search = VectorSearch()
-        self._llm = ChatGoogleGenerativeAI(model=CHAT_MODEL, temperature=0.7, timeout=90)
+        self._llm = ChatGoogleGenerativeAI(
+            model=CHAT_MODEL, temperature=0.7, timeout=90
+        )
         self.conversation_history: List[Dict[str, str]] = []
 
     FALLBACK_THRESHOLD = float(os.getenv("RESEARCH_FALLBACK_THRESHOLD", "0.45"))
@@ -111,19 +115,21 @@ class ReportChatAgent:
             report_id=report_id,
             query_embedding=query_embedding,
             top_k=top_k,
-            chunk_type='report',
+            chunk_type="report",
         )
         print(f"[ReportChat] Phase 1: found {len(report_chunks)} report chunks")
 
         # Phase 2: conditionally fetch research chunks if report scores are low
-        best_score = report_chunks[0]['similarity_score'] if report_chunks else 0.0
+        best_score = report_chunks[0]["similarity_score"] if report_chunks else 0.0
         if best_score < self.FALLBACK_THRESHOLD or len(report_chunks) < 2:
-            print(f"[ReportChat] Phase 2: best_score={best_score:.3f} < threshold={self.FALLBACK_THRESHOLD}, fetching research chunks...")
+            print(
+                f"[ReportChat] Phase 2: best_score={best_score:.3f} < threshold={self.FALLBACK_THRESHOLD}, fetching research chunks..."
+            )
             research_chunks = self._vector_search.search_chunks(
                 report_id=report_id,
                 query_embedding=query_embedding,
                 top_k=3,
-                chunk_type='research',
+                chunk_type="research",
             )
             print(f"[ReportChat] Phase 2: found {len(research_chunks)} research chunks")
             all_chunks = report_chunks + research_chunks
@@ -133,11 +139,11 @@ class ReportChatAgent:
         # Deduplicate and cap
         seen = set()
         relevant_chunks = []
-        for c in sorted(all_chunks, key=lambda x: x['similarity_score'], reverse=True):
-            if c['chunk_id'] not in seen:
-                seen.add(c['chunk_id'])
+        for c in sorted(all_chunks, key=lambda x: x["similarity_score"], reverse=True):
+            if c["chunk_id"] not in seen:
+                seen.add(c["chunk_id"])
                 relevant_chunks.append(c)
-        relevant_chunks = relevant_chunks[:top_k + 2]
+        relevant_chunks = relevant_chunks[: top_k + 2]
         print(f"[ReportChat] {len(relevant_chunks)} chunks after dedup/cap")
         return relevant_chunks
 
@@ -150,7 +156,9 @@ class ReportChatAgent:
         top_k: int = CHAT_TOP_K,
     ) -> str:
         """Answer a question about a report using RAG-lite retrieval with conditional research fallback."""
-        print(f"[ReportChat] answer_question called — report_id={report_id}, question={user_question[:80]!r}")
+        print(
+            f"[ReportChat] answer_question called — report_id={report_id}, question={user_question[:80]!r}"
+        )
 
         relevant_chunks = self._retrieve_chunks(report_id, user_question, top_k)
 
@@ -172,7 +180,9 @@ class ReportChatAgent:
                     HumanMessage(content=prompt),
                 ]
             )
-            print(f"[ReportChat] LLM response received ({len(response.content or '')} chars)")
+            print(
+                f"[ReportChat] LLM response received ({len(response.content or '')} chars)"
+            )
             return response.content or ""
         except Exception as e:
             error_msg = f"Error generating answer: {e}"

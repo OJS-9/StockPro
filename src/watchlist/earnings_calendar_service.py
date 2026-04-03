@@ -34,6 +34,11 @@ def get_watchlist_earnings_calendar(
     # Provider integration can replace this fallback with real dates.
     next_week = (date.today() + timedelta(days=7)).isoformat()
     return [
-        {"symbol": symbol, "report_date": next_week, "time": "TBD", "source": "fallback"}
+        {
+            "symbol": symbol,
+            "report_date": next_week,
+            "time": "TBD",
+            "source": "fallback",
+        }
         for symbol in tracked
     ]

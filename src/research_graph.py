@@ -47,7 +47,9 @@ class ResearchState(TypedDict):
     spend_budget_usd: Optional[float]  # estimated USD budget for this run
     estimated_spend_usd: Optional[float]  # estimated from prompt-size heuristics
     effective_max_turns: Optional[int]  # per-subject cap used by specialized_node
-    effective_max_output_tokens: Optional[int]  # per-subject cap used by specialized_node
+    effective_max_output_tokens: Optional[
+        int
+    ]  # per-subject cap used by specialized_node
     effective_subject_count: Optional[int]  # subject count after budget trimming
     budget_exhausted: bool  # True when min caps still exceed budget
     actual_input_tokens: Annotated[int, operator.add]  # summed across all nodes
@@ -80,10 +82,14 @@ def _fan_out(state: ResearchState) -> List[Send]:
     # Apply budget-driven subject cap (trims lowest-priority subjects first,
     # since the planner orders them by priority).
     effective_subject_count = state.get("effective_subject_count")
-    if effective_subject_count is not None and effective_subject_count < len(subject_ids):
+    if effective_subject_count is not None and effective_subject_count < len(
+        subject_ids
+    ):
         trimmed = subject_ids[:effective_subject_count]
         dropped = subject_ids[effective_subject_count:]
-        print(f"[FanOut] Budget trimmed subjects from {len(subject_ids)} → {effective_subject_count}. Dropped: {dropped}")
+        print(
+            f"[FanOut] Budget trimmed subjects from {len(subject_ids)} → {effective_subject_count}. Dropped: {dropped}"
+        )
         subject_ids = trimmed
 
     return [

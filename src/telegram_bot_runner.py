@@ -55,7 +55,9 @@ async def connect_cmd(update, context):
         )
         return
 
-    await update.message.reply_text("Connected successfully. You will receive alerts here.")
+    await update.message.reply_text(
+        "Connected successfully. You will receive alerts here."
+    )
 
 
 async def research_cmd(update, context):
