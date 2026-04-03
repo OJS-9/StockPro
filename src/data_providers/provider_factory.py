@@ -18,17 +18,55 @@ class DataProviderFactory:
     # Known crypto symbols for quick detection
     CRYPTO_SYMBOLS = {
         # Major coins
-        'BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'MATIC', 'AVAX',
-        'LINK', 'UNI', 'ATOM', 'XRP', 'DOGE', 'SHIB', 'LTC',
-        'BCH', 'XLM', 'ALGO', 'VET', 'FIL', 'AAVE', 'MKR',
+        "BTC",
+        "ETH",
+        "SOL",
+        "ADA",
+        "DOT",
+        "MATIC",
+        "AVAX",
+        "LINK",
+        "UNI",
+        "ATOM",
+        "XRP",
+        "DOGE",
+        "SHIB",
+        "LTC",
+        "BCH",
+        "XLM",
+        "ALGO",
+        "VET",
+        "FIL",
+        "AAVE",
+        "MKR",
         # Layer 2s and newer chains
-        'NEAR', 'APT', 'ARB', 'OP', 'SUI', 'SEI', 'INJ', 'TIA',
+        "NEAR",
+        "APT",
+        "ARB",
+        "OP",
+        "SUI",
+        "SEI",
+        "INJ",
+        "TIA",
         # Memecoins
-        'PEPE', 'WIF', 'BONK', 'FLOKI', 'MEME',
+        "PEPE",
+        "WIF",
+        "BONK",
+        "FLOKI",
+        "MEME",
         # DeFi
-        'CRV', 'COMP', 'SNX', 'YFI', 'SUSHI', 'BAL',
+        "CRV",
+        "COMP",
+        "SNX",
+        "YFI",
+        "SUSHI",
+        "BAL",
         # Stablecoins (for reference, though typically not tracked)
-        'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD',
+        "USDT",
+        "USDC",
+        "DAI",
+        "BUSD",
+        "TUSD",
     }
 
     @classmethod
@@ -42,7 +80,7 @@ class DataProviderFactory:
         Returns:
             Appropriate data provider instance
         """
-        if asset_type == 'crypto':
+        if asset_type == "crypto":
             if cls._crypto_provider is None:
                 cls._crypto_provider = CryptoDataProvider()
             return cls._crypto_provider
@@ -70,18 +108,18 @@ class DataProviderFactory:
         symbol_upper = symbol.upper().strip()
 
         # Check for explicit CRYPTO: prefix
-        if symbol_upper.startswith('CRYPTO:'):
-            return 'crypto'
+        if symbol_upper.startswith("CRYPTO:"):
+            return "crypto"
 
         # Remove any prefix for lookup
-        clean_symbol = symbol_upper.replace('CRYPTO:', '')
+        clean_symbol = symbol_upper.replace("CRYPTO:", "")
 
         # Check known crypto symbols
         if clean_symbol in cls.CRYPTO_SYMBOLS:
-            return 'crypto'
+            return "crypto"
 
         # Default to stock
-        return 'stock'
+        return "stock"
 
     @classmethod
     def get_provider_for_symbol(cls, symbol: str) -> Tuple[BaseDataProvider, str]:
@@ -109,7 +147,7 @@ class DataProviderFactory:
         Returns:
             True if crypto, False otherwise
         """
-        return cls.detect_asset_type(symbol) == 'crypto'
+        return cls.detect_asset_type(symbol) == "crypto"
 
     @classmethod
     def is_stock(cls, symbol: str) -> bool:
@@ -122,7 +160,7 @@ class DataProviderFactory:
         Returns:
             True if stock, False otherwise
         """
-        return cls.detect_asset_type(symbol) == 'stock'
+        return cls.detect_asset_type(symbol) == "stock"
 
     @classmethod
     def add_crypto_symbol(cls, symbol: str):

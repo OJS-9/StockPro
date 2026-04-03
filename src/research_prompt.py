@@ -4,21 +4,22 @@ Research prompt templates and system instructions for the stock research agent.
 
 from src.date_utils import get_datetime_context_string
 
+
 def get_system_instructions(ticker: str, trade_type: str) -> str:
     """
     Generate system instructions for the agent based on ticker and trade type.
-    
+
     Args:
         ticker: Stock ticker symbol
         trade_type: Type of trade (Day Trade, Swing Trade, or Investment)
-    
+
     Returns:
         System instructions string for the agent
     """
-    
+
     # Get current date/time context
     datetime_context = get_datetime_context_string()
-    
+
     base_instructions = f"""You are a hedge fund equity research analyst specializing in {trade_type} analysis. Your mission is to perform a fundamental research report on the stock with ticker {ticker}.
 
 {datetime_context}
@@ -67,29 +68,31 @@ Final output:
 [TICKER]: {ticker}
 [type_of_trade]: {trade_type}
 """
-    
+
     return base_instructions
 
 
-def get_specialized_agent_instructions(subject_id: str, ticker: str, trade_type: str) -> str:
+def get_specialized_agent_instructions(
+    subject_id: str, ticker: str, trade_type: str
+) -> str:
     """
     Generate specialized system instructions for a research subject agent.
-    
+
     Args:
         subject_id: Research subject ID
         ticker: Stock ticker symbol
         trade_type: Type of trade
-    
+
     Returns:
         System instructions string for the specialized agent
     """
     from src.research_subjects import get_research_subject_by_id
-    
+
     subject = get_research_subject_by_id(subject_id)
-    
+
     # Get current date/time context
     datetime_context = get_datetime_context_string()
-    
+
     instructions = f"""You are a specialized research analyst focusing on {subject.name} for {ticker}.
 
 {datetime_context}
@@ -135,24 +138,24 @@ Your specific research task: {subject.description}
 - Cite the specific tool or source for each data point
 
 Begin your research now."""
-    
+
     return instructions
 
 
 def get_orchestration_instructions(ticker: str, trade_type: str) -> str:
     """
     Generate orchestration instructions for the main agent (conversation handler/orchestrator).
-    
+
     Args:
         ticker: Stock ticker symbol
         trade_type: Type of trade (Day Trade, Swing Trade, or Investment)
-    
+
     Returns:
         System instructions string for the orchestration agent
     """
     # Get current date/time context
     datetime_context = get_datetime_context_string()
-    
+
     instructions = f"""You are a stock research orchestrator specializing in {trade_type} analysis. Your role is to guide the user conversation and coordinate research for the stock with ticker {ticker}.
 
 {datetime_context}
@@ -192,22 +195,22 @@ def get_orchestration_instructions(ticker: str, trade_type: str) -> str:
 
 [TICKER]: {ticker}
 [TYPE_OF_TRADE]: {trade_type}"""
-    
+
     return instructions
 
 
 def get_followup_question_prompt(trade_type: str, context: str = "") -> str:
     """
     Generate a prompt to help the agent determine if follow-up questions are needed.
-    
+
     Args:
         trade_type: Type of trade
         context: Additional context from the conversation
-    
+
     Returns:
         Prompt for follow-up question generation
     """
-    
+
     trade_specific_guidance = {
         "Day Trade": """
         Consider asking about:
@@ -233,11 +236,11 @@ def get_followup_question_prompt(trade_type: str, context: str = "") -> str:
         - Valuation methodology preferences
         - Competitive analysis depth
         - Management quality assessment needs
-        """
+        """,
     }
-    
+
     guidance = trade_specific_guidance.get(trade_type, "")
-    
+
     prompt = f"""Based on the trade type ({trade_type}) and current context, determine if you need to ask follow-up questions before proceeding with data collection and report generation.
 
 {guidance}
@@ -246,6 +249,5 @@ If you need clarification on any of these areas, ask 1-3 concise, specific quest
 
 Context: {context}
 """
-    
-    return prompt
 
+    return prompt

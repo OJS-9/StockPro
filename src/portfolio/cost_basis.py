@@ -10,6 +10,7 @@ from dataclasses import dataclass
 @dataclass
 class CostBasisResult:
     """Result of cost basis calculation."""
+
     total_quantity: Decimal
     average_cost: Decimal
     total_cost_basis: Decimal
@@ -55,31 +56,31 @@ def calculate_simple_average(transactions: List[Dict]) -> CostBasisResult:
     """
     if not transactions:
         return CostBasisResult(
-            total_quantity=Decimal('0'),
-            average_cost=Decimal('0'),
-            total_cost_basis=Decimal('0'),
-            realized_gains=Decimal('0')
+            total_quantity=Decimal("0"),
+            average_cost=Decimal("0"),
+            total_cost_basis=Decimal("0"),
+            realized_gains=Decimal("0"),
         )
 
-    total_quantity = Decimal('0')
-    total_cost = Decimal('0')
-    realized_gains = Decimal('0')
+    total_quantity = Decimal("0")
+    total_cost = Decimal("0")
+    realized_gains = Decimal("0")
 
     # Sort by date to process in chronological order
-    sorted_txns = sorted(transactions, key=lambda x: x['transaction_date'])
+    sorted_txns = sorted(transactions, key=lambda x: x["transaction_date"])
 
     for txn in sorted_txns:
-        qty = Decimal(str(txn['quantity']))
-        price = Decimal(str(txn['price_per_unit']))
-        fees = Decimal(str(txn.get('fees', 0) or 0))
+        qty = Decimal(str(txn["quantity"]))
+        price = Decimal(str(txn["price_per_unit"]))
+        fees = Decimal(str(txn.get("fees", 0) or 0))
 
-        if txn['transaction_type'] == 'buy':
+        if txn["transaction_type"] == "buy":
             # Add to position: new cost = old cost + purchase cost (including fees)
             purchase_cost = (qty * price) + fees
             total_cost += purchase_cost
             total_quantity += qty
 
-        elif txn['transaction_type'] == 'sell':
+        elif txn["transaction_type"] == "sell":
             if total_quantity > 0:
                 # Calculate average cost at time of sale
                 avg_cost_at_sale = total_cost / total_quantity
@@ -95,11 +96,11 @@ def calculate_simple_average(transactions: List[Dict]) -> CostBasisResult:
                 total_cost = avg_cost_at_sale * total_quantity
 
     # Calculate final average cost
-    average_cost = total_cost / total_quantity if total_quantity > 0 else Decimal('0')
+    average_cost = total_cost / total_quantity if total_quantity > 0 else Decimal("0")
 
     return CostBasisResult(
         total_quantity=total_quantity,
         average_cost=average_cost,
         total_cost_basis=total_cost,
-        realized_gains=realized_gains
+        realized_gains=realized_gains,
     )

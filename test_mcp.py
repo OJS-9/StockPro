@@ -4,13 +4,20 @@ Run this to verify MCP tools are working correctly.
 """
 
 import os
+from pathlib import Path
+
+import pytest
 from dotenv import load_dotenv
 from src.mcp_manager import MCPManager
 
 load_dotenv()
 
+
 def test_mcp_connection():
-    """Test MCP connection and tool discovery."""
+    """Test MCP connection and tool discovery (skipped when mcp.json is absent)."""
+    if not (Path(__file__).resolve().parent / "mcp.json").exists():
+        pytest.skip("mcp.json not present — copy from mcp.json.example to run this check")
+
     print("Testing MCP Integration...")
     print("=" * 50)
     
@@ -46,7 +53,7 @@ def test_mcp_connection():
                 result = mcp_manager.get_company_overview("IBM")
                 if result:
                     print("   ✓ Tool execution successful")
-                    print(f"   ✓ Retrieved data for IBM")
+                    print("   ✓ Retrieved data for IBM")
                     if isinstance(result, dict) and "Name" in result:
                         print(f"     Company: {result.get('Name', 'N/A')}")
                 else:
@@ -71,9 +78,7 @@ def test_mcp_connection():
         print("1. Check that mcp.json exists and is properly configured")
         print("2. Verify ALPHA_VANTAGE_API_KEY is set in .env or mcp.json")
         print("3. Ensure you have internet connectivity")
-        return False
-    
-    return True
+        pytest.fail(str(e))
 
 if __name__ == "__main__":
     test_mcp_connection()

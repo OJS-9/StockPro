@@ -8,6 +8,7 @@ Parallel fan-out is implemented via the Send() API so each research subject
 runs as a separate, concurrent node invocation.
 """
 
+import logging
 import operator
 import os
 import re
@@ -24,34 +25,51 @@ from agents.specialized_node import specialized_node
 from agents.synthesis_node import synthesis_node
 from langsmith_service import StepEmitter
 
+logger = logging.getLogger(__name__)
+
 
 class ResearchState(TypedDict):
     ticker: str
     trade_type: str
     conversation_context: str
-    plan: Any                                              # ResearchPlan (set by planner_node)
-    subject_id: str                                        # set per Send() invocation
-    research_outputs: Annotated[Dict[str, Any], operator.or_]  # merged across parallel nodes
-    failed_subjects: List[str]                             # subject_ids that errored (set by quality_gate_node)
-    is_partial_report: bool                                # True if some subjects failed
-    report_text: str                                       # set by synthesis_node
-    report_id: str                                         # set by storage_node
+    plan: Any  # ResearchPlan (set by planner_node)
+    subject_id: str  # set per Send() invocation
+    research_outputs: Annotated[
+        Dict[str, Any], operator.or_
+    ]  # merged across parallel nodes
+    failed_subjects: List[str]  # subject_ids that errored (set by quality_gate_node)
+    is_partial_report: bool  # True if some subjects failed
+    report_text: str  # set by synthesis_node
+    report_id: str  # set by storage_node
     user_id: Optional[int]
     emitter: Optional[StepEmitter]
-    user_selected_subjects: Optional[List[str]]            # set from popup subject selection
-    spend_budget_usd: Optional[float]                      # estimated USD budget for this run
-    estimated_spend_usd: Optional[float]                  # estimated from prompt-size heuristics
-    effective_max_turns: Optional[int]                    # per-subject cap used by specialized_node
-    effective_max_output_tokens: Optional[int]            # per-subject cap used by specialized_node
-    budget_exhausted: bool                                 # True when min caps still exceed budget
-    actual_input_tokens: Annotated[int, operator.add]     # summed across all nodes
-    actual_output_tokens: Annotated[int, operator.add]    # summed across all nodes
-    actual_cost_usd: Optional[float]                      # computed in storage_node
+    user_selected_subjects: Optional[List[str]]  # set from popup subject selection
+    spend_budget_usd: Optional[float]  # estimated USD budget for this run
+    estimated_spend_usd: Optional[float]  # estimated from prompt-size heuristics
+    effective_max_turns: Optional[int]  # per-subject cap used by specialized_node
+    effective_max_output_tokens: Optional[int]  # per-subject cap used by specialized_node
+    effective_subject_count: Optional[int]  # subject count after budget trimming
+    budget_exhausted: bool  # True when min caps still exceed budget
+    actual_input_tokens: Annotated[int, operator.add]  # summed across all nodes
+    actual_output_tokens: Annotated[int, operator.add]  # summed across all nodes
+    actual_cost_usd: Optional[float]  # computed in storage_node
 
 
 _MAX_SUBJECTS = int(os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
 _MIN_OUTPUT_CHARS = int(os.getenv("QUALITY_GATE_MIN_OUTPUT_CHARS", "200"))
 _URL_RE = re.compile(r"https?://[^\s<>\"{}|\\^`\[\]]+")
+_MAX_ABORT_DETAIL_CHARS = 600
+
+
+def _subject_failure_reason(subject_id: str, result: Dict[str, Any]) -> str:
+    """Short human-readable reason for quality-gate failure (logging / user-facing detail)."""
+    if result.get("error"):
+        err = str(result["error"])
+        if len(err) > 180:
+            return f"{subject_id}: {err[:180]}…"
+        return f"{subject_id}: {err}"
+    out_len = len(result.get("research_output", ""))
+    return f"{subject_id}: output too short ({out_len} chars, min {_MIN_OUTPUT_CHARS})"
 
 
 def _fan_out(state: ResearchState) -> List[Send]:
@@ -59,10 +77,17 @@ def _fan_out(state: ResearchState) -> List[Send]:
     plan = state["plan"]
     subject_ids = plan.selected_subject_ids[:_MAX_SUBJECTS]
 
-    # Budget settings were computed in planner_node and stored in state.
+    # Apply budget-driven subject cap (trims lowest-priority subjects first,
+    # since the planner orders them by priority).
+    effective_subject_count = state.get("effective_subject_count")
+    if effective_subject_count is not None and effective_subject_count < len(subject_ids):
+        trimmed = subject_ids[:effective_subject_count]
+        dropped = subject_ids[effective_subject_count:]
+        print(f"[FanOut] Budget trimmed subjects from {len(subject_ids)} → {effective_subject_count}. Dropped: {dropped}")
+        subject_ids = trimmed
+
     return [
-        Send("specialized_node", {**state, "subject_id": sid})
-        for sid in subject_ids
+        Send("specialized_node", {**state, "subject_id": sid}) for sid in subject_ids
     ]
 
 
@@ -81,6 +106,7 @@ def storage_node(state: ResearchState) -> dict:
     estimated_spend_usd = state.get("estimated_spend_usd")
     effective_max_turns = state.get("effective_max_turns")
     effective_max_output_tokens = state.get("effective_max_output_tokens")
+    effective_subject_count = state.get("effective_subject_count")
     budget_exhausted = state.get("budget_exhausted", False)
 
     # MySQL JSON column rejects non-standard JSON floats like Infinity/NaN.
@@ -103,14 +129,14 @@ def storage_node(state: ResearchState) -> dict:
     actual_cost_usd = None
     try:
         from spend_budget import get_gemini_usd_rates
+
         rates = get_gemini_usd_rates()
         if rates and (actual_input_tokens or actual_output_tokens):
-            actual_cost_usd = (
-                (actual_input_tokens / 1000) * rates["input_rate"] +
-                (actual_output_tokens / 1000) * rates["output_rate"]
-            )
+            actual_cost_usd = (actual_input_tokens / 1000) * rates["input_rate"] + (
+                actual_output_tokens / 1000
+            ) * rates["output_rate"]
     except Exception as exc:
-        print(f"[StorageNode] Could not compute actual cost: {exc}")
+        logger.warning("Could not compute actual cost: %s", exc)
     actual_cost_usd = _sanitize_json_float(actual_cost_usd)
 
     if emitter:
@@ -129,6 +155,7 @@ def storage_node(state: ResearchState) -> dict:
         "estimated_spend_usd": estimated_spend_usd,
         "effective_max_turns": effective_max_turns,
         "effective_max_output_tokens": effective_max_output_tokens,
+        "effective_subject_count": effective_subject_count,
         "budget_exhausted": budget_exhausted,
         "actual_input_tokens": actual_input_tokens,
         "actual_output_tokens": actual_output_tokens,
@@ -144,9 +171,13 @@ def storage_node(state: ResearchState) -> dict:
             metadata=metadata,
             user_id=user_id,
         )
-        print(f"[StorageNode] Report stored: {report_id}")
+        logger.info("Report stored: %s", report_id)
+
+        research_outputs = state.get("research_outputs", {})
+        if research_outputs:
+            storage.store_research_chunks(report_id, research_outputs)
     except Exception as e:
-        print(f"[StorageNode] Storage failed (report still available): {e}")
+        logger.warning("Storage failed (report still available): %s", e)
 
     return {"report_id": report_id}
 
@@ -170,10 +201,16 @@ def quality_gate_node(state: ResearchState) -> dict:
             failed.append(sid)
         elif len(result.get("research_output", "")) < _MIN_OUTPUT_CHARS:
             char_count = len(result.get("research_output", ""))
-            print(f"[QualityGate] {sid}: output too short ({char_count} chars) — treating as failure")
+            logger.warning(
+                "%s: output too short (%s chars) — treating as failure",
+                sid,
+                char_count,
+            )
             failed.append(sid)
         else:
-            urls = list(dict.fromkeys(_URL_RE.findall(result.get("research_output", ""))))
+            urls = list(
+                dict.fromkeys(_URL_RE.findall(result.get("research_output", "")))
+            )
             clean_outputs[sid] = {**result, "sources": urls}
 
     total = len(research_outputs)
@@ -181,14 +218,30 @@ def quality_gate_node(state: ResearchState) -> dict:
 
     if emitter and failed_count:
         emitter.emit(f"Warning: {failed_count}/{total} research subjects failed")
+        detail_parts = [
+            _subject_failure_reason(sid, research_outputs[sid]) for sid in failed[:5]
+        ]
+        remainder = len(failed) - len(detail_parts)
+        detail_line = "; ".join(detail_parts)
+        if remainder > 0:
+            detail_line += f"; …and {remainder} more"
+        emitter.emit(detail_line[:500])
 
     if total > 0 and failed_count / total > 0.5:
+        detail_bits = [
+            _subject_failure_reason(sid, research_outputs[sid]) for sid in failed
+        ]
+        detail_blob = "; ".join(detail_bits)
+        if len(detail_blob) > _MAX_ABORT_DETAIL_CHARS:
+            detail_blob = detail_blob[: _MAX_ABORT_DETAIL_CHARS - 1] + "…"
         error_text = (
             f"Research generation failed for {ticker}: "
-            f"{failed_count} of {total} subjects returned errors "
+            f"{failed_count} of {total} subjects did not produce usable output "
             f"({', '.join(failed)}). Please try again."
         )
-        print(f"[QualityGate] Aborting synthesis — too many failures: {failed}")
+        if detail_blob:
+            error_text += f"\n\nDetails:\n{detail_blob}"
+        logger.error("Aborting synthesis — too many failures: %s", failed)
         return {
             "research_outputs": clean_outputs,
             "failed_subjects": failed,
@@ -197,7 +250,7 @@ def quality_gate_node(state: ResearchState) -> dict:
         }
 
     if failed_count:
-        print(f"[QualityGate] Proceeding with partial results. Failed: {failed}")
+        logger.warning("Proceeding with partial results. Failed: %s", failed)
 
     return {
         "research_outputs": clean_outputs,
@@ -207,8 +260,13 @@ def quality_gate_node(state: ResearchState) -> dict:
 
 
 def _quality_gate_route(state: ResearchState) -> str:
-    """Skip synthesis and go straight to storage if the gate already wrote an error report."""
-    if state.get("is_partial_report") and state.get("report_text") and not state["research_outputs"]:
+    """
+    Skip synthesis when the gate already set a user-facing error report (>50% subjects failed).
+
+    If we routed to synthesis here, synthesis would overwrite gate error text. `report_text`
+    is only non-empty at this point when the gate aborted; partial runs leave it empty.
+    """
+    if state.get("report_text"):
         return "storage_node"
     return "synthesis_node"
 
@@ -224,7 +282,9 @@ _builder.add_node("storage_node", storage_node)
 _builder.add_edge(START, "planner_node")
 _builder.add_conditional_edges("planner_node", _fan_out, ["specialized_node"])
 _builder.add_edge("specialized_node", "quality_gate_node")
-_builder.add_conditional_edges("quality_gate_node", _quality_gate_route, ["synthesis_node", "storage_node"])
+_builder.add_conditional_edges(
+    "quality_gate_node", _quality_gate_route, ["synthesis_node", "storage_node"]
+)
 _builder.add_edge("synthesis_node", "storage_node")
 _builder.add_edge("storage_node", END)
 
@@ -268,6 +328,7 @@ def run_research(
         "estimated_spend_usd": None,
         "effective_max_turns": None,
         "effective_max_output_tokens": None,
+        "effective_subject_count": None,
         "budget_exhausted": False,
         "actual_input_tokens": 0,
         "actual_output_tokens": 0,
@@ -276,7 +337,11 @@ def run_research(
 
     from langchain_core.runnables.config import merge_configs
 
-    run_name = f"{username} - {ticker.upper()} Research" if username else f"{ticker.upper()} Research"
+    run_name = (
+        f"{username} - {ticker.upper()} Research"
+        if username
+        else f"{ticker.upper()} Research"
+    )
     invoke_config = merge_configs(
         parent_config or {},
         {"run_name": run_name, "configurable": {"thread_id": str(uuid.uuid4())}},

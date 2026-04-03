@@ -176,7 +176,7 @@ class PDFGenerator:
         ticker: str,
         trade_type: str,
         report_text: str,
-        created_at: datetime = None
+        created_at: datetime = None,
     ) -> bytes:
         """
         Generate a PDF from a stock research report.
@@ -193,13 +193,17 @@ class PDFGenerator:
         try:
             from weasyprint import HTML, CSS
         except ImportError:
-            raise RuntimeError("WeasyPrint is not installed. Run: pip install weasyprint")
+            raise RuntimeError(
+                "WeasyPrint is not installed. Run: pip install weasyprint"
+            )
 
         if created_at is None:
             created_at = datetime.now()
 
         # Convert markdown to HTML (local instance for thread safety)
-        md = markdown.Markdown(extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists'])
+        md = markdown.Markdown(
+            extensions=["tables", "fenced_code", "nl2br", "sane_lists"]
+        )
         report_html = md.convert(report_text)
 
         # Format date
@@ -239,8 +243,7 @@ class PDFGenerator:
         # Generate PDF
         pdf_buffer = io.BytesIO()
         HTML(string=html_content).write_pdf(
-            pdf_buffer,
-            stylesheets=[CSS(string=self.PDF_CSS)]
+            pdf_buffer, stylesheets=[CSS(string=self.PDF_CSS)]
         )
         pdf_buffer.seek(0)
 

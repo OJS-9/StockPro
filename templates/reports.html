@@ -8,13 +8,13 @@
 <main class="flex-1 flex flex-col w-full max-w-7xl mx-auto px-4 md:px-8 py-8">
     <!-- Page Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">Research Reports</h1>
-        <p class="text-zinc-500 mt-2">Browse and export your generated stock analysis reports.</p>
+        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">Researched Tickers</h1>
+        <p class="text-zinc-500 mt-2">Browse tickers you've researched, then open each ticker page for full report history and notes.</p>
     </div>
 
     <!-- Filter Bar -->
-    <form method="GET" action="{{ url_for('report_history') }}" class="flex flex-wrap items-center gap-4 mb-8 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <div class="flex-1 min-w-[200px]">
+    <form method="GET" action="{{ url_for('report_history') }}" class="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 sm:gap-4 mb-8 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <div class="flex-1 min-w-0 w-full sm:min-w-[200px]">
             <label for="ticker-filter" class="sr-only">Filter by ticker</label>
             <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-zinc-400 text-xl">search</span>
@@ -24,17 +24,17 @@
                     name="ticker"
                     value="{{ filter_ticker }}"
                     placeholder="Search by ticker..."
-                    class="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none text-sm"
+                    class="w-full pl-10 pr-4 py-2.5 min-h-11 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none text-base sm:text-sm"
                 />
             </div>
         </div>
 
-        <div class="min-w-[160px]">
+        <div class="w-full sm:w-auto sm:min-w-[160px]">
             <label for="trade-type-filter" class="sr-only">Filter by trade type</label>
             <select
                 id="trade-type-filter"
                 name="trade_type"
-                class="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-950 dark:text-zinc-50 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none text-sm"
+                class="w-full px-3 py-2.5 min-h-11 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-950 dark:text-zinc-50 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none text-base sm:text-sm"
             >
                 <option value="">All Types</option>
                 <option value="Investment" {% if filter_trade_type == 'Investment' %}selected{% endif %}>Investment</option>
@@ -43,25 +43,25 @@
             </select>
         </div>
 
-        <div class="min-w-[140px]">
+        <div class="w-full sm:w-auto sm:min-w-[140px]">
             <label for="sort-filter" class="sr-only">Sort order</label>
             <select
                 id="sort-filter"
                 name="sort"
-                class="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-950 dark:text-zinc-50 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none text-sm"
+                class="w-full px-3 py-2.5 min-h-11 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-950 dark:text-zinc-50 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none text-base sm:text-sm"
             >
                 <option value="DESC" {% if sort_order == 'DESC' %}selected{% endif %}>Newest First</option>
                 <option value="ASC" {% if sort_order == 'ASC' %}selected{% endif %}>Oldest First</option>
             </select>
         </div>
 
-        <button type="submit" class="px-5 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors text-sm flex items-center gap-2">
+        <button type="submit" class="w-full sm:w-auto min-h-11 px-5 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors text-sm inline-flex items-center justify-center gap-2 shrink-0">
             <span class="material-symbols-outlined text-lg">filter_list</span>
             Filter
         </button>
 
         {% if filter_ticker or filter_trade_type %}
-        <a href="{{ url_for('report_history') }}" class="px-4 py-2 text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm flex items-center gap-1">
+        <a href="{{ url_for('report_history') }}" class="min-h-11 px-4 py-2 text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm inline-flex items-center justify-center gap-1 shrink-0">
             <span class="material-symbols-outlined text-lg">close</span>
             Clear
         </a>
@@ -72,7 +72,7 @@
     <div class="flex items-center justify-between mb-6">
         <p class="text-zinc-500 text-sm">
             {% if total_count > 0 %}
-                Showing {{ (current_page - 1) * per_page + 1 }}-{{ [current_page * per_page, total_count]|min }} of {{ total_count }} reports
+                Showing {{ (current_page - 1) * per_page + 1 }}-{{ [current_page * per_page, total_count]|min }} of {{ total_count }} tickers
             {% else %}
                 No reports found
             {% endif %}
@@ -91,7 +91,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {% for report in reports %}
         <article class="flex flex-col bg-zinc-50 dark:bg-zinc-900 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 group cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-all hover:shadow-md">
-            <a href="{{ url_for('view_report', report_id=report.report_id) }}" class="flex flex-col h-full">
+            <a href="{{ url_for('ticker_detail', symbol=report.ticker) }}" class="flex flex-col h-full">
                 <!-- Card Header -->
                 <div class="p-6 pb-4 border-b border-zinc-200 dark:border-zinc-800">
                     <div class="flex items-start justify-between mb-3">
@@ -123,11 +123,11 @@
                 <!-- Card Footer -->
                 <div class="px-6 pb-6 pt-2 flex items-center justify-between">
                     <span class="text-zinc-950 dark:text-zinc-50 text-sm font-semibold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        View Report <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                        Open Ticker Page <span class="material-symbols-outlined text-sm">arrow_forward</span>
                     </span>
                     <div class="flex items-center gap-2">
                         <span class="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs rounded font-mono">
-                            {{ report.report_id[:8] }}
+                            {{ report.report_count }} report{{ '' if report.report_count == 1 else 's' }}
                         </span>
                     </div>
                 </div>
@@ -174,12 +174,12 @@
         <div class="size-24 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-6">
             <span class="material-symbols-outlined text-5xl text-zinc-400">description</span>
         </div>
-        <h2 class="text-xl font-semibold text-zinc-950 dark:text-zinc-50 mb-2">No Reports Found</h2>
+        <h2 class="text-xl font-semibold text-zinc-950 dark:text-zinc-50 mb-2">No Tickers Found</h2>
         <p class="text-zinc-500 mb-6 max-w-md">
             {% if filter_ticker or filter_trade_type %}
-                No reports match your current filters. Try adjusting your search criteria.
+                No tickers match your current filters. Try adjusting your search criteria.
             {% else %}
-                You haven't generated any research reports yet. Start by analyzing a stock.
+                You haven't researched any tickers yet. Start by analyzing a stock.
             {% endif %}
         </p>
         <a href="{{ url_for('index') }}" class="px-6 py-2.5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors flex items-center gap-2">

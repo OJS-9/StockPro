@@ -15,12 +15,11 @@ class TestGetWatchedSymbolsForUser(unittest.TestCase):
     """Tests for DatabaseManager.get_watched_symbols_for_user"""
 
     def _make_db(self):
-        """Import and create a DatabaseManager with a mocked connection pool."""
-        with patch('database.mysql.connector.pooling.MySQLConnectionPool'):
-            from database import DatabaseManager
-            db = DatabaseManager.__new__(DatabaseManager)
-            db.connection_pool = MagicMock()
-            return db
+        """Import and create a DatabaseManager with a mocked psycopg2 pool."""
+        from database import DatabaseManager
+        db = DatabaseManager.__new__(DatabaseManager)
+        db._pool = MagicMock()
+        return db
 
     def test_returns_symbols_for_user(self):
         db = self._make_db()
@@ -33,7 +32,7 @@ class TestGetWatchedSymbolsForUser(unittest.TestCase):
             {'symbol': 'BTC', 'asset_type': 'crypto'},
         ]
         mock_conn.cursor.return_value = mock_cursor
-        db.connection_pool.get_connection.return_value = mock_conn
+        db._pool.getconn.return_value = mock_conn
 
         result = db.get_watched_symbols_for_user('user_123')
 
@@ -44,7 +43,7 @@ class TestGetWatchedSymbolsForUser(unittest.TestCase):
         # Verify query uses user_id param
         call_args = mock_cursor.execute.call_args
         self.assertIn('user_id', call_args[0][0].lower())
-        mock_conn.close.assert_called_once()
+        db._pool.putconn.assert_called_with(mock_conn)
 
     def test_returns_empty_list_when_no_watchlist(self):
         db = self._make_db()
@@ -54,7 +53,7 @@ class TestGetWatchedSymbolsForUser(unittest.TestCase):
         mock_cursor.__exit__ = MagicMock(return_value=False)
         mock_cursor.fetchall.return_value = []
         mock_conn.cursor.return_value = mock_cursor
-        db.connection_pool.get_connection.return_value = mock_conn
+        db._pool.getconn.return_value = mock_conn
 
         result = db.get_watched_symbols_for_user('user_no_watchlist')
         self.assertEqual(result, [])

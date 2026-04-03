@@ -9,12 +9,15 @@ from dataclasses import dataclass, field
 @dataclass
 class ResearchSubject:
     """Represents a research subject for specialized agent research."""
+
     id: str
     name: str
     description: str
     prompt_template: str
-    trade_types: List[str] = field(default_factory=list)   # eligible trade types
-    priority: Dict[str, int] = field(default_factory=dict)  # trade_type → 1=high, 2=medium, 3=low
+    trade_types: List[str] = field(default_factory=list)  # eligible trade types
+    priority: Dict[str, int] = field(
+        default_factory=dict
+    )  # trade_type → 1=high, 2=medium, 3=low
 
 
 # ─── Subject Definitions ─────────────────────────────────────────────────────
@@ -417,6 +420,7 @@ _SUBJECT_MAP: Dict[str, ResearchSubject] = {s.id: s for s in ALL_SUBJECTS}
 
 
 # ─── Public API ──────────────────────────────────────────────────────────────
+
 
 def get_research_subjects_for_trade_type(trade_type: str) -> List[ResearchSubject]:
     """

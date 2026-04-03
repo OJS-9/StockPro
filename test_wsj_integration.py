@@ -81,7 +81,7 @@ class TestRefreshPrimaryWsj:
 
         # WSJ agent was called with correct params
         mock_client.run_agent.assert_any_call(
-            news_service.WSJ_AGENT, {"pipeline": news_service.WSJ_PIPELINE}
+            news_service.WSJ_AGENT, {"feed_name": news_service.WSJ_PIPELINE}
         )
 
     def test_wsj_articles_appear_in_cache_after_refresh(self):

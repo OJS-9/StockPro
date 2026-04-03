@@ -5,21 +5,54 @@ Consolidates all specialized research outputs into a final report.
 No tools — pure synthesis LLM call.
 """
 
+import logging
 import os
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from langsmith_service import StepEmitter, synthesis_invoke_config
+from report_quality import assess_report_structure
 from research_plan import ResearchPlan
 from research_subjects import get_research_subject_by_id
 
+logger = logging.getLogger(__name__)
+
 SYNTHESIS_MODEL = os.getenv("SYNTHESIS_AGENT_MODEL", "gemini-2.5-pro")
-SYNTHESIS_MAX_OUTPUT_TOKENS = int(os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000"))
+SYNTHESIS_MAX_OUTPUT_TOKENS = int(
+    os.getenv("SYNTHESIS_AGENT_MAX_OUTPUT_TOKENS", "8000")
+)
 
 _END_MARKER = "END_OF_REPORT"
 # Rough chars-per-token for Gemini (~4). If output >= 90% of the token limit, assume truncation.
 _TRUNCATION_THRESHOLD = 0.9
+
+
+def _log_structure_quality(
+    report_text: str, emitter: Optional[StepEmitter] = None
+) -> None:
+    """Log when Markdown section headings look incomplete (Phase 1.7 quality signal)."""
+    if not report_text or report_text.startswith("[INCOMPLETE REPORT"):
+        return
+    if report_text.strip().startswith("Error synthesizing report:"):
+        return
+    ok, missing = assess_report_structure(report_text)
+    if not ok:
+        logger.warning(
+            "Report structure quality: Markdown headings missing expected topics: %s",
+            ", ".join(missing),
+            extra={
+                "quality_pass": False,
+                "quality_missing_sections": ",".join(missing),
+            },
+        )
+        if emitter:
+            emitter.emit(
+                "Review: report may be missing standard sections ("
+                + ", ".join(missing)
+                + ")."
+            )
 
 
 def _is_truncated(text: str, max_tokens: int) -> bool:
@@ -36,8 +69,11 @@ _TRADE_TYPE_FRAMING = {
 }
 
 
-def _get_synthesis_instructions(ticker: str, trade_type: str, plan: ResearchPlan) -> str:
+def _get_synthesis_instructions(
+    ticker: str, trade_type: str, plan: ResearchPlan
+) -> str:
     from date_utils import get_datetime_context_string
+
     datetime_context = get_datetime_context_string()
     framing = _TRADE_TYPE_FRAMING.get(trade_type, "a research report")
     trade_context_block = (
@@ -82,7 +118,9 @@ def _build_report_sections(trade_type: str, subject_ids_run: List[str]) -> str:
             subject_names[sid] = sid
             subject_descriptions[sid] = ""
 
-    sections = ["1. **Executive Summary** — Key findings, recommendation, and top metrics"]
+    sections = [
+        "1. **Executive Summary** — Key findings, recommendation, and top metrics"
+    ]
     section_num = 2
     for sid in subject_ids_run:
         if sid == "risk_factors":
@@ -103,7 +141,9 @@ def _build_report_sections(trade_type: str, subject_ids_run: List[str]) -> str:
         "cover growth, margin, competitive position, near-term catalyst, and primary risk"
     )
     section_num += 1
-    sections.append(f"{section_num}. **Sources and Citations** — All sources with proper attribution")
+    sections.append(
+        f"{section_num}. **Sources and Citations** — All sources with proper attribution"
+    )
     return "\n".join(sections)
 
 
@@ -115,6 +155,7 @@ def _build_synthesis_prompt(
     failed_subjects: List[str] = None,
 ) -> str:
     from date_utils import get_datetime_context_string
+
     datetime_context = get_datetime_context_string()
     framing = _TRADE_TYPE_FRAMING.get(trade_type, "a research report")
 
@@ -223,10 +264,16 @@ def synthesis_node(state: dict) -> dict:
     if emitter:
         emitter.emit("Synthesizing report...")
 
-    print(f"[SynthesisNode] Synthesizing {len(research_outputs)} research outputs for {ticker}...")
+    logger.info(
+        "Synthesizing %s research outputs for %s...",
+        len(research_outputs),
+        ticker,
+    )
 
     failed_subjects = state.get("failed_subjects", [])
-    synthesis_prompt = _build_synthesis_prompt(ticker, trade_type, research_outputs, plan, failed_subjects)
+    synthesis_prompt = _build_synthesis_prompt(
+        ticker, trade_type, research_outputs, plan, failed_subjects
+    )
     system_instructions = _get_synthesis_instructions(ticker, trade_type, plan)
 
     llm = ChatGoogleGenerativeAI(
@@ -234,6 +281,8 @@ def synthesis_node(state: dict) -> dict:
         temperature=0.7,
         max_output_tokens=SYNTHESIS_MAX_OUTPUT_TOKENS,
     )
+
+    _ls_config = synthesis_invoke_config(ticker, trade_type)
 
     total_input_tok = 0
     total_output_tok = 0
@@ -244,50 +293,69 @@ def synthesis_node(state: dict) -> dict:
 
     try:
         response = llm.invoke(
-            [SystemMessage(content=system_instructions), HumanMessage(content=synthesis_prompt)]
+            [
+                SystemMessage(content=system_instructions),
+                HumanMessage(content=synthesis_prompt),
+            ],
+            config=_ls_config,
         )
         i, o = _extract_usage(response)
         total_input_tok += i
         total_output_tok += o
 
         report_text = response.content or ""
-        print(f"[SynthesisNode] Report: {len(report_text)} chars, {i}/{o} tokens")
+        logger.info("Report: %s chars, %s/%s tokens", len(report_text), i, o)
 
         if _END_MARKER not in report_text:
             if _is_truncated(report_text, SYNTHESIS_MAX_OUTPUT_TOKENS):
-                print("[SynthesisNode] Truncation detected — retrying with continuation prompt")
-                retry_response = llm.invoke([
-                    SystemMessage(content=system_instructions),
-                    HumanMessage(content=synthesis_prompt),
-                    AIMessage(content=report_text),
-                    HumanMessage(content=(
-                        "The previous response was cut off. Continue the report from where it stopped. "
-                        "Complete all remaining sections and end with: END_OF_REPORT"
-                    )),
-                ])
+                logger.warning(
+                    "Truncation detected — retrying with continuation prompt"
+                )
+                retry_response = llm.invoke(
+                    [
+                        SystemMessage(content=system_instructions),
+                        HumanMessage(content=synthesis_prompt),
+                        AIMessage(content=report_text),
+                        HumanMessage(
+                            content=(
+                                "The previous response was cut off. Continue the report from where it stopped. "
+                                "Complete all remaining sections and end with: END_OF_REPORT"
+                            )
+                        ),
+                    ],
+                    config=_ls_config,
+                )
                 ri, ro = _extract_usage(retry_response)
                 total_input_tok += ri
                 total_output_tok += ro
 
                 combined = report_text + "\n" + (retry_response.content or "")
                 if _END_MARKER in combined:
-                    print(f"[SynthesisNode] Continuation successful: {len(combined)} chars")
+                    logger.info("Continuation successful: %s chars", len(combined))
+                    _log_structure_quality(combined, emitter)
                     return {
                         "report_text": combined,
                         "actual_input_tokens": total_input_tok,
                         "actual_output_tokens": total_output_tok,
                     }
                 else:
-                    print("[SynthesisNode] Continuation did not complete report — flagging as incomplete")
+                    logger.warning(
+                        "Continuation did not complete report — flagging as incomplete"
+                    )
                     return {
-                        "report_text": "[INCOMPLETE REPORT — synthesis was truncated]\n\n" + report_text,
+                        "report_text": "[INCOMPLETE REPORT — synthesis was truncated]\n\n"
+                        + report_text,
                         "is_partial_report": True,
                         "actual_input_tokens": total_input_tok,
                         "actual_output_tokens": total_output_tok,
                     }
             else:
-                print(f"[SynthesisNode] END_OF_REPORT absent but output is short ({len(report_text)} chars) — proceeding")
+                logger.info(
+                    "END_OF_REPORT absent but output is short (%s chars) — proceeding",
+                    len(report_text),
+                )
 
+        _log_structure_quality(report_text, emitter)
         return {
             "report_text": report_text,
             "actual_input_tokens": total_input_tok,
@@ -295,7 +363,7 @@ def synthesis_node(state: dict) -> dict:
         }
     except Exception as e:
         error_msg = f"Error synthesizing report: {e}"
-        print(error_msg)
+        logger.exception("Synthesis failed")
         return {
             "report_text": error_msg,
             "is_partial_report": True,

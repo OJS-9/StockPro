@@ -1,0 +1,12 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+# Imports after sys.path bootstrap in app.py are intentional (E402).
+[tool.ruff.lint.per-file-ignores]
+"src/app.py" = ["E402"]

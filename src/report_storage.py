@@ -2,37 +2,39 @@
 Report storage service integrating database, chunking, and embeddings.
 """
 
+import logging
 from typing import Dict, Any, Optional, List
-import uuid
 
 from database import get_database_manager
 from report_chunker import ReportChunker
 from embedding_service import EmbeddingService
 
+logger = logging.getLogger(__name__)
+
 
 class ReportStorage:
     """Service for storing reports with chunking and embeddings."""
-    
+
     def __init__(self):
         """Initialize report storage service."""
         self._db = None  # Lazy initialization - only connect when needed
         self.chunker = ReportChunker()
         self.embedding_service = EmbeddingService()
-    
+
     @property
     def db(self):
         """Lazy initialization of database manager."""
         if self._db is None:
             self._db = get_database_manager()
         return self._db
-    
+
     def store_report(
         self,
         ticker: str,
         trade_type: str,
         report_text: str,
         metadata: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> str:
         """
         Store a report with chunking and embeddings.
@@ -53,32 +55,66 @@ class ReportStorage:
             trade_type=trade_type,
             report_text=report_text,
             metadata=metadata,
-            user_id=user_id
+            user_id=user_id,
         )
-        
+
         # Chunk the report
-        print(f"Chunking report {report_id}...")
+        logger.info("Chunking report %s...", report_id)
         chunks = self.chunker.chunk_report(report_text, preserve_sections=True)
-        print(f"Created {len(chunks)} chunks")
-        
+        logger.info("Created %s chunks", len(chunks))
+
         # Create embeddings for chunks
-        print(f"Creating embeddings for {len(chunks)} chunks...")
-        chunk_texts = [chunk['chunk_text'] for chunk in chunks]
+        logger.info("Creating embeddings for %s chunks...", len(chunks))
+        chunk_texts = [chunk["chunk_text"] for chunk in chunks]
         embeddings = self.embedding_service.create_embeddings_batch(chunk_texts)
-        
+
         # Add embeddings to chunks
         for i, chunk in enumerate(chunks):
-            chunk['embedding'] = embeddings[i] if i < len(embeddings) else None
-        
+            chunk["embedding"] = embeddings[i] if i < len(embeddings) else None
+
         # Save chunks to database
-        print(f"Saving chunks to database...")
+        logger.info("Saving chunks to database...")
         self.db.save_chunks(report_id, chunks)
-        
-        print(f"✓ Report {report_id} stored with {len(chunks)} chunks")
-        
+
+        logger.info("Report %s stored with %s chunks", report_id, len(chunks))
+
+        if user_id:
+            try:
+                self.db.increment_report_usage(user_id)
+            except Exception as exc:
+                logger.warning("increment_report_usage failed (report already stored): %s", exc)
+
         return report_id
-    
-    def get_report(self, report_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+
+    def store_research_chunks(self, report_id: str, research_outputs: Dict[str, Dict[str, Any]]):
+        """Store specialized agent outputs as individual research chunks."""
+        chunks = []
+        for i, (subject_id, output) in enumerate(research_outputs.items()):
+            text = output.get("research_output", "")
+            if not text:
+                continue
+            chunks.append({
+                "chunk_text": text,
+                "section": f"research:{output.get('subject_name', subject_id)}",
+                "chunk_index": 1000 + i,
+                "chunk_type": "research",
+            })
+
+        if not chunks:
+            return
+
+        logger.info("Embedding %d research chunks...", len(chunks))
+        texts = [c["chunk_text"] for c in chunks]
+        embeddings = self.embedding_service.create_embeddings_batch(texts)
+        for j, chunk in enumerate(chunks):
+            chunk["embedding"] = embeddings[j] if j < len(embeddings) else None
+
+        self.db.save_chunks(report_id, chunks)
+        logger.info("Stored %d research chunks for report %s", len(chunks), report_id)
+
+    def get_report(
+        self, report_id: str, user_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Retrieve a report by ID, optionally verifying ownership.
 
@@ -90,37 +126,39 @@ class ReportStorage:
             Report dictionary or None if not found / not owned by user
         """
         return self.db.get_report(report_id, user_id=user_id)
-    
+
     def get_report_chunks(
-        self,
-        report_id: str,
-        include_embeddings: bool = True
+        self, report_id: str, include_embeddings: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Retrieve all chunks for a report.
-        
+
         Args:
             report_id: Report ID
             include_embeddings: Whether to include embeddings
-        
+
         Returns:
             List of chunk dictionaries
         """
-        return self.db.get_chunks_by_report(report_id, include_embeddings=include_embeddings)
-    
-    def get_reports_by_ticker(self, ticker: str, limit: int = 10) -> List[Dict[str, Any]]:
+        return self.db.get_chunks_by_report(
+            report_id, include_embeddings=include_embeddings
+        )
+
+    def get_reports_by_ticker(
+        self, ticker: str, limit: int = 10
+    ) -> List[Dict[str, Any]]:
         """
         Get recent reports for a ticker.
-        
+
         Args:
             ticker: Stock ticker symbol
             limit: Maximum number of reports
-        
+
         Returns:
             List of report dictionaries
         """
         return self.db.get_reports_by_ticker(ticker, limit=limit)
-    
+
     def delete_report(self, report_id: str):
         """
         Delete a report and all its chunks.
@@ -137,7 +175,7 @@ class ReportStorage:
         sort_order: str = "DESC",
         limit: int = 20,
         offset: int = 0,
-        user_id: str = None
+        user_id: str = None,
     ):
         """
         Get paginated reports with optional filtering.
@@ -153,5 +191,24 @@ class ReportStorage:
         Returns:
             Tuple of (reports list, total count)
         """
-        return self.db.get_all_reports(ticker, trade_type, sort_order, limit, offset, user_id=user_id)
+        return self.db.get_all_reports(
+            ticker, trade_type, sort_order, limit, offset, user_id=user_id
+        )
 
+    def get_report_ticker_summaries(
+        self,
+        *,
+        user_id: str,
+        ticker: str = None,
+        sort_order: str = "DESC",
+        limit: int = 20,
+        offset: int = 0,
+    ):
+        """Get one summary row per researched ticker for a user."""
+        return self.db.get_report_ticker_summaries(
+            user_id=user_id,
+            ticker=ticker,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+        )

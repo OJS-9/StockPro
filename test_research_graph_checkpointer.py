@@ -23,6 +23,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+# quality_gate_node drops outputs shorter than QUALITY_GATE_MIN_OUTPUT_CHARS (default 200)
+_GOOD_TEXT = "x" * 200
+
 
 def test_checkpointer_attached():
     from research_graph import research_graph
@@ -137,8 +140,8 @@ def test_gate_all_success():
     from research_graph import quality_gate_node
 
     outputs = {
-        "news_catalysts": {"subject_id": "news_catalysts", "research_output": "Good news", "sources": []},
-        "company_overview": {"subject_id": "company_overview", "research_output": "Overview", "sources": []},
+        "news_catalysts": {"subject_id": "news_catalysts", "research_output": _GOOD_TEXT, "sources": []},
+        "company_overview": {"subject_id": "company_overview", "research_output": _GOOD_TEXT + "b", "sources": []},
     }
     result = quality_gate_node(_make_state(research_outputs=outputs))
 
@@ -152,7 +155,7 @@ def test_gate_partial_failure():
     from research_graph import quality_gate_node
 
     outputs = {
-        "news_catalysts": {"subject_id": "news_catalysts", "research_output": "Good news", "sources": []},
+        "news_catalysts": {"subject_id": "news_catalysts", "research_output": _GOOD_TEXT, "sources": []},
         "company_overview": {"subject_id": "company_overview", "error": "API timeout", "research_output": "Error"},
     }
     result = quality_gate_node(_make_state(research_outputs=outputs))
@@ -170,13 +173,15 @@ def test_gate_majority_failure_aborts():
     outputs = {
         "subj_a": {"error": "failed", "research_output": "err"},
         "subj_b": {"error": "failed", "research_output": "err"},
-        "subj_c": {"research_output": "ok", "sources": []},
+        "subj_c": {"research_output": _GOOD_TEXT, "sources": []},
     }
     result = quality_gate_node(_make_state(ticker="NVDA", research_outputs=outputs))
 
     assert result["is_partial_report"] is True
     assert "NVDA" in result["report_text"]
     assert "failed" in result["report_text"].lower() or "error" in result["report_text"].lower()
+    assert "Details:" in result["report_text"]
+    assert "subj_a" in result["report_text"]
     # clean output still captured even on abort
     assert "subj_c" in result["research_outputs"]
 
@@ -189,6 +194,20 @@ def test_quality_gate_route_abort_goes_to_storage():
         is_partial_report=True,
         report_text="Research generation failed for AAPL: ...",
         research_outputs={},  # all failed
+    )
+    assert _quality_gate_route(state) == "storage_node"
+
+
+def test_quality_gate_route_abort_with_partial_clean_goes_to_storage():
+    """>50% failure with some clean subjects: gate sets report_text — must skip synthesis."""
+    from research_graph import _quality_gate_route
+
+    state = _make_state(
+        is_partial_report=True,
+        report_text="Research generation failed for NVDA: 2 of 3 subjects...",
+        research_outputs={
+            "subj_c": {"research_output": _GOOD_TEXT, "sources": []},
+        },
     )
     assert _quality_gate_route(state) == "storage_node"
 
@@ -321,7 +340,8 @@ def test_synthesis_node_truncation_retry_succeeds(monkeypatch):
     continuation = " ...rest. END_OF_REPORT"
 
     call_count = {"n": 0}
-    def fake_invoke(messages):
+
+    def fake_invoke(messages, config=None):
         call_count["n"] += 1
         if call_count["n"] == 1:
             return MagicMock(content=truncated)

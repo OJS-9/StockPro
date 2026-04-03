@@ -2,6 +2,7 @@
 Embedding service using Google Gemini text-embedding-004 (768d).
 """
 
+import logging
 import os
 from typing import List, Optional
 from dotenv import load_dotenv
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 from google import genai
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSION = 3072
@@ -37,14 +40,16 @@ class EmbeddingService:
         except Exception as e:
             raise RuntimeError(f"Failed to create embedding: {e}")
 
-    def create_embeddings_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
+    def create_embeddings_batch(
+        self, texts: List[str], batch_size: int = 100
+    ) -> List[List[float]]:
         """Create embeddings for multiple texts."""
         embeddings = []
         for text in texts:
             try:
                 embeddings.append(self.create_embedding(text))
             except Exception as e:
-                print(f"Error embedding text: {e}")
+                logger.warning("Error embedding text: %s", e)
                 embeddings.append([0.0] * EMBEDDING_DIMENSION)
         return embeddings
 

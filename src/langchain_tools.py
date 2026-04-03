@@ -4,6 +4,7 @@ create_all_tools() returns List[StructuredTool] for use with LangGraph agents.
 """
 
 import json
+import logging
 from typing import Dict, Any, List, Optional
 
 from langchain_core.tools import StructuredTool
@@ -11,6 +12,8 @@ from langchain_core.tools import StructuredTool
 from mcp_client import MCPClient
 from mcp_tools import execute_tool_by_name
 from nimble_client import NimbleClient
+
+logger = logging.getLogger(__name__)
 
 MAX_SERIES_ITEMS = 5
 MAX_NEWS_ITEMS = 5
@@ -30,15 +33,34 @@ def _make_mcp_handler(mcp_client: MCPClient, mcp_tool_name: str):
         try:
             result = execute_tool_by_name(mcp_client, mcp_tool_name, kwargs)
             if isinstance(result, dict):
-                for key in ("annualReports", "quarterlyReports", "monthlyReports", "reports", "items", "data"):
-                    if key in result and isinstance(result[key], list) and len(result[key]) > MAX_SERIES_ITEMS:
+                for key in (
+                    "annualReports",
+                    "quarterlyReports",
+                    "monthlyReports",
+                    "reports",
+                    "items",
+                    "data",
+                ):
+                    if (
+                        key in result
+                        and isinstance(result[key], list)
+                        and len(result[key]) > MAX_SERIES_ITEMS
+                    ):
                         result[key] = result[key][:MAX_SERIES_ITEMS]
-                if "feed" in result and isinstance(result["feed"], list) and len(result["feed"]) > MAX_NEWS_ITEMS:
+                if (
+                    "feed" in result
+                    and isinstance(result["feed"], list)
+                    and len(result["feed"]) > MAX_NEWS_ITEMS
+                ):
                     result["feed"] = result["feed"][:MAX_NEWS_ITEMS]
                 return json.dumps(result, indent=2, default=str)
             return str(result)
         except Exception as e:
-            return json.dumps({"error": f"Tool execution failed: {e}", "tool": mcp_tool_name}, indent=2)
+            return json.dumps(
+                {"error": f"Tool execution failed: {e}", "tool": mcp_tool_name},
+                indent=2,
+            )
+
     return handler
 
 
@@ -65,14 +87,18 @@ def create_mcp_tools(mcp_client: MCPClient) -> List[StructuredTool]:
         required = input_schema.get("required", [])
 
         # Create a dynamic pydantic model for the schema
-        from pydantic import BaseModel, Field, create_model
+        from pydantic import Field, create_model
+
         field_defs: Dict[str, Any] = {}
         for prop_name, prop_schema in properties.items():
             prop_desc = prop_schema.get("description", "")
             if prop_name in required:
                 field_defs[prop_name] = (str, Field(description=prop_desc))
             else:
-                field_defs[prop_name] = (Optional[str], Field(default=None, description=prop_desc))
+                field_defs[prop_name] = (
+                    Optional[str],
+                    Field(default=None, description=prop_desc),
+                )
 
         ArgsModel = create_model(f"{normalized_name}_args", **field_defs)
 
@@ -85,7 +111,7 @@ def create_mcp_tools(mcp_client: MCPClient) -> List[StructuredTool]:
             )
             tools.append(structured_tool)
         except Exception as e:
-            print(f"Warning: Could not create tool for {mcp_tool_name}: {e}")
+            logger.warning("Could not create tool for %s: %s", mcp_tool_name, e)
 
     return tools
 
@@ -100,10 +126,15 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
 
     # --- nimble_web_search ---
     class NimbleSearchArgs(BaseModel):
-        query: str = Field(description="Search query. Include company name, ticker, and topic.")
-        num_results: int = Field(default=5, description="Number of results (default 5, max 10).")
+        query: str = Field(
+            description="Search query. Include company name, ticker, and topic."
+        )
+        num_results: int = Field(
+            default=5, description="Number of results (default 5, max 10)."
+        )
         topic: Literal["general", "news", "shopping", "social"] = Field(
-            default="general", description="Search topic filter. Use 'news' for recent news."
+            default="general",
+            description="Search topic filter. Use 'news' for recent news.",
         )
         time_range: Optional[Literal["hour", "day", "week", "month", "year"]] = Field(
             default=None, description="Limit results by time period. Optional."
@@ -125,8 +156,11 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
     ) -> str:
         try:
             result = nimble_client.search(
-                query, num_results=num_results, topic=topic,
-                time_range=time_range, deep_search=deep_search,
+                query,
+                num_results=num_results,
+                topic=topic,
+                time_range=time_range,
+                deep_search=deep_search,
             )
             return json.dumps(result, indent=2, default=str)
         except Exception as e:
@@ -135,7 +169,9 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
     # --- nimble_extract ---
     class NimbleExtractArgs(BaseModel):
         url: str = Field(description="Full URL of the page to extract content from.")
-        render: bool = Field(default=False, description="Enable JS rendering for dynamic pages.")
+        render: bool = Field(
+            default=False, description="Enable JS rendering for dynamic pages."
+        )
 
     def nimble_extract(url: str, render: bool = False) -> str:
         try:

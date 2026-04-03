@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}{{ symbol }} Research - StockPro{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<style>
+  .ql-toolbar.ql-snow,
+  .ql-container.ql-snow { border: none !important; }
+  .ql-toolbar.ql-snow { border-bottom: 1px solid #292524 !important; }
+  .ql-editor { color: #d6d3d1; min-height: 160px; }
+  .ql-snow .ql-stroke { stroke: #a8a29e; }
+  .ql-snow .ql-fill { fill: #a8a29e; }
+  .ql-snow .ql-picker { color: #a8a29e; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include "_nav.html" %}
+
+<main class="flex-1 flex flex-col w-full max-w-7xl mx-auto px-4 md:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">{{ symbol }} Research</h1>
+        <p class="text-zinc-500 mt-2">All your reports and notes for this ticker.</p>
+    </div>
+
+    <!-- Reports -->
+    <section class="mb-10">
+        <h2 class="text-sm uppercase tracking-[0.12em] text-zinc-500 mb-3">Reports</h2>
+        {% if reports and reports|length > 0 %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {% for report in reports %}
+            <article class="bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
+                <a href="{{ url_for('view_report', report_id=report.report_id) }}" class="block p-5">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="text-xs font-mono px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{{ report.trade_type }}</span>
+                        <time class="text-xs text-zinc-500">{{ report.created_at.strftime('%b %d, %Y %I:%M %p') if report.created_at else 'Unknown date' }}</time>
+                    </div>
+                    <p class="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-4">{{ report.report_text | markdown_preview }}</p>
+                </a>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 py-8 px-6 text-center text-zinc-500">
+            No reports found for {{ symbol }} yet.
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Notes & Thesis -->
+    <section>
+        <h2 class="text-sm uppercase tracking-[0.12em] text-zinc-500 mb-3">Notes &amp; Thesis</h2>
+
+        <!-- Editor -->
+        <div id="note-editor-wrapper" class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden mb-6">
+            <form id="ticker-notes-form" method="POST" action="{{ url_for('save_ticker_notes', symbol=symbol) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="note-id" name="note_id" value="">
+                <input type="hidden" id="form-edit-action" name="_edit" value="">
+
+                <div class="px-4 pt-4">
+                    <input
+                        type="text"
+                        id="note-title"
+                        name="title"
+                        placeholder="Note title (optional)"
+                        class="w-full bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 text-sm font-medium pb-2 border-b border-zinc-200 dark:border-zinc-700"
+                    >
+                </div>
+
+                <div id="toolbar" class="border-b border-zinc-200 dark:border-zinc-800 mt-2">
+                    <span class="ql-formats">
+                        <button class="ql-bold"></button>
+                        <button class="ql-italic"></button>
+                        <button class="ql-underline"></button>
+                    </span>
+                    <span class="ql-formats">
+                        <select class="ql-size">
+                            <option value="small"></option>
+                            <option selected></option>
+                            <option value="large"></option>
+                        </select>
+                    </span>
+                    <span class="ql-formats">
+                        <button class="ql-list" value="ordered"></button>
+                        <button class="ql-list" value="bullet"></button>
+                    </span>
+                </div>
+
+                <div id="editor"></div>
+                <input type="hidden" id="content" name="content">
+
+                <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+                    <button type="button" id="cancel-edit-btn" onclick="cancelEdit()" class="hidden text-sm text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
+                    <div class="ml-auto">
+                        <button type="submit" id="save-btn" class="px-4 py-2 rounded-md bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                            Save Note
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Note Cards -->
+        {% if notes %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for note in notes %}
+            <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 flex flex-col gap-3">
+                <div class="flex items-start justify-between gap-2">
+                    <p class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-tight">{{ note.title }}</p>
+                    <time class="text-xs text-zinc-500 shrink-0">{{ note.created_at.strftime('%b %d, %Y') if note.created_at else '' }}</time>
+                </div>
+                {% if note.preview %}
+                <p class="text-sm text-zinc-500 leading-relaxed line-clamp-3">{{ note.preview }}{% if note.preview|length >= 120 %}…{% endif %}</p>
+                {% endif %}
+                <div class="flex items-center gap-2 mt-auto pt-1">
+                    <button
+                        type="button"
+                        onclick="startEdit({{ note.id }}, {{ note.title|tojson }}, {{ note.content|tojson }})"
+                        class="text-xs px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-primary hover:text-primary transition-colors"
+                    >
+                        Edit
+                    </button>
+                    <form method="POST" action="{{ url_for('delete_ticker_note', symbol=symbol, note_id=note.id) }}" onsubmit="return confirm('Delete this note?')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="text-xs px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 text-red-500 hover:border-red-500 transition-colors">
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-zinc-500">No notes yet. Write one above.</p>
+        {% endif %}
+    </section>
+</main>
+
+{% include "_footer.html" %}
+
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+const quill = new Quill("#editor", {
+  theme: "snow",
+  modules: { toolbar: "#toolbar" }
+});
+
+const form = document.getElementById("ticker-notes-form");
+const hiddenContent = document.getElementById("content");
+const noteIdField = document.getElementById("note-id");
+const editActionField = document.getElementById("form-edit-action");
+const titleField = document.getElementById("note-title");
+const saveBtn = document.getElementById("save-btn");
+const cancelBtn = document.getElementById("cancel-edit-btn");
+
+const baseAction = {{ url_for('save_ticker_notes', symbol=symbol)|tojson }};
+
+form.addEventListener("submit", () => {
+  hiddenContent.value = quill.root.innerHTML;
+});
+
+function startEdit(noteId, title, content) {
+  titleField.value = title === "Untitled" ? "" : title;
+  quill.root.innerHTML = content;
+  noteIdField.value = noteId;
+  editActionField.value = "1";
+  form.action = baseAction.replace("/notes", "/notes/" + noteId + "/edit");
+  saveBtn.textContent = "Update Note";
+  cancelBtn.classList.remove("hidden");
+  document.getElementById("note-editor-wrapper").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelEdit() {
+  titleField.value = "";
+  quill.setText("");
+  noteIdField.value = "";
+  editActionField.value = "";
+  form.action = baseAction;
+  saveBtn.textContent = "Save Note";
+  cancelBtn.classList.add("hidden");
+}
+</script>
+{% endblock %}

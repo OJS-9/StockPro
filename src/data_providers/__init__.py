@@ -6,8 +6,8 @@ from .crypto_provider import CryptoDataProvider
 from .provider_factory import DataProviderFactory
 
 __all__ = [
-    'BaseDataProvider',
-    'StockDataProvider',
-    'CryptoDataProvider',
-    'DataProviderFactory',
+    "BaseDataProvider",
+    "StockDataProvider",
+    "CryptoDataProvider",
+    "DataProviderFactory",
 ]

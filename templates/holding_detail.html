@@ -11,11 +11,11 @@
         <div class="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
             <h3 class="font-semibold text-zinc-950 dark:text-zinc-50 text-base mb-2">Delete transaction?</h3>
             <p class="text-sm text-zinc-500 mb-6">This action cannot be undone. The transaction will be permanently removed from your portfolio.</p>
-            <div class="flex gap-3 justify-end">
-                <button type="button" id="delete-modal-cancel" class="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
+            <div class="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                <button type="button" id="delete-modal-cancel" class="min-h-11 px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors inline-flex items-center justify-center">
                     Cancel
                 </button>
-                <button type="button" id="delete-modal-confirm" class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors font-medium">
+                <button type="button" id="delete-modal-confirm" class="min-h-11 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors font-medium inline-flex items-center justify-center">
                     Delete
                 </button>
             </div>
@@ -27,24 +27,24 @@
         <div class="max-w-5xl mx-auto">
 
             <!-- Breadcrumb -->
-            <nav class="flex items-center gap-1 text-sm text-zinc-500 mb-6">
-                <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors">{{ portfolio.name }}</a>
+            <nav class="flex items-center gap-1 text-sm text-zinc-500 mb-6 min-w-0">
+                <a href="{{ url_for('portfolio_detail', portfolio_id=portfolio.portfolio_id) }}" class="hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors truncate">{{ portfolio.name }}</a>
                 <span class="material-symbols-outlined text-base leading-none">chevron_right</span>
                 <span class="text-zinc-950 dark:text-zinc-50 font-medium">{{ holding.symbol }}</span>
             </nav>
 
             <!-- Page Header -->
-            <div class="flex items-center justify-between mb-8">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
                         <span class="material-symbols-outlined text-xl">{% if holding.asset_type == 'crypto' %}currency_bitcoin{% else %}trending_up{% endif %}</span>
                     </div>
-                    <div>
-                        <h1 class="font-semibold text-xl text-zinc-950 dark:text-zinc-50">{{ holding.symbol }}</h1>
+                    <div class="min-w-0">
+                        <h1 class="font-semibold text-xl text-zinc-950 dark:text-zinc-50 truncate">{{ holding.symbol }}</h1>
                         <p class="text-sm text-zinc-500 capitalize">{{ holding.asset_type }}</p>
                     </div>
                 </div>
-                <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}?symbol={{ holding.symbol }}" class="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                <a href="{{ url_for('add_transaction', portfolio_id=portfolio.portfolio_id) }}?symbol={{ holding.symbol }}" class="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors w-full sm:w-auto shrink-0">
                     <span class="material-symbols-outlined text-base">add</span>
                     Add Transaction
                 </a>
@@ -105,7 +105,8 @@
                 </div>
 
                 {% if transactions %}
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto overscroll-x-contain touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div class="min-w-[720px]">
                     <table class="w-full">
                         <thead class="bg-zinc-50 dark:bg-zinc-900">
                             <tr>
@@ -153,7 +154,7 @@
                                 <td class="px-6 py-4 text-right">
                                     <form method="POST" action="{{ url_for('delete_transaction', portfolio_id=portfolio.portfolio_id, transaction_id=txn.transaction_id) }}" class="delete-form inline">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="button" class="delete-trigger text-zinc-400 hover:text-red-500 transition-colors" title="Delete transaction">
+                                        <button type="button" class="delete-trigger min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-zinc-400 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors" title="Delete transaction">
                                             <span class="material-symbols-outlined text-lg">delete</span>
                                         </button>
                                     </form>
@@ -162,6 +163,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
                 </div>
                 {% else %}
                 <div class="px-6 py-16 text-center">

@@ -1,19 +1,9 @@
 from unittest.mock import MagicMock
 
 
-def test_fan_out_includes_effective_caps(monkeypatch):
+def test_fan_out_includes_effective_caps():
+    """_fan_out passes planner-populated budget fields through to each specialized_node Send."""
     import research_graph as rg
-    import spend_budget
-
-    def fake_compute_effective(**_kwargs):
-        return {
-            "effective_max_turns": 3,
-            "effective_max_output_tokens": 1234,
-            "estimated_spend_usd": 0.42,
-            "budget_exhausted": False,
-        }
-
-    monkeypatch.setattr(spend_budget, "compute_effective_specialized_settings_from_plan", fake_compute_effective)
 
     plan = MagicMock()
     plan.selected_subject_ids = ["news_catalysts", "company_overview"]
@@ -33,9 +23,9 @@ def test_fan_out_includes_effective_caps(monkeypatch):
         "emitter": None,
         "user_selected_subjects": None,
         "spend_budget_usd": 1.0,
-        "estimated_spend_usd": None,
-        "effective_max_turns": None,
-        "effective_max_output_tokens": None,
+        "estimated_spend_usd": 0.42,
+        "effective_max_turns": 3,
+        "effective_max_output_tokens": 1234,
         "budget_exhausted": False,
     }
 

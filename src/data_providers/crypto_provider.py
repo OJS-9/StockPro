@@ -2,11 +2,14 @@
 Crypto data provider using CoinGecko API.
 """
 
+import logging
 import requests
 from decimal import Decimal
 from typing import Dict, Optional
 
 from .base_provider import BaseDataProvider
+
+logger = logging.getLogger(__name__)
 
 
 class CryptoDataProvider(BaseDataProvider):
@@ -16,48 +19,52 @@ class CryptoDataProvider(BaseDataProvider):
 
     # Common symbol to CoinGecko ID mapping
     SYMBOL_MAP = {
-        'BTC': 'bitcoin',
-        'ETH': 'ethereum',
-        'SOL': 'solana',
-        'ADA': 'cardano',
-        'DOT': 'polkadot',
-        'MATIC': 'matic-network',
-        'AVAX': 'avalanche-2',
-        'LINK': 'chainlink',
-        'UNI': 'uniswap',
-        'ATOM': 'cosmos',
-        'XRP': 'ripple',
-        'DOGE': 'dogecoin',
-        'SHIB': 'shiba-inu',
-        'LTC': 'litecoin',
-        'BCH': 'bitcoin-cash',
-        'XLM': 'stellar',
-        'ALGO': 'algorand',
-        'VET': 'vechain',
-        'FIL': 'filecoin',
-        'AAVE': 'aave',
-        'MKR': 'maker',
-        'NEAR': 'near',
-        'APT': 'aptos',
-        'ARB': 'arbitrum',
-        'OP': 'optimism',
-        'SUI': 'sui',
-        'SEI': 'sei-network',
-        'INJ': 'injective-protocol',
-        'TIA': 'celestia',
-        'PEPE': 'pepe',
-        'WIF': 'dogwifcoin',
-        'BONK': 'bonk',
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "SOL": "solana",
+        "ADA": "cardano",
+        "DOT": "polkadot",
+        "MATIC": "matic-network",
+        "AVAX": "avalanche-2",
+        "LINK": "chainlink",
+        "UNI": "uniswap",
+        "ATOM": "cosmos",
+        "XRP": "ripple",
+        "DOGE": "dogecoin",
+        "SHIB": "shiba-inu",
+        "LTC": "litecoin",
+        "BCH": "bitcoin-cash",
+        "XLM": "stellar",
+        "ALGO": "algorand",
+        "VET": "vechain",
+        "FIL": "filecoin",
+        "AAVE": "aave",
+        "MKR": "maker",
+        "NEAR": "near",
+        "APT": "aptos",
+        "ARB": "arbitrum",
+        "OP": "optimism",
+        "SUI": "sui",
+        "SEI": "sei-network",
+        "INJ": "injective-protocol",
+        "TIA": "celestia",
+        "PEPE": "pepe",
+        "WIF": "dogwifcoin",
+        "BONK": "bonk",
     }
 
     def __init__(self):
         """Initialize crypto data provider."""
         super().__init__()
-        self._coin_list_cache = None  # in-process cache for the static CoinGecko coin list only
+        self._coin_list_cache = (
+            None  # in-process cache for the static CoinGecko coin list only
+        )
         self._session = requests.Session()
-        self._session.headers.update({
-            'Accept': 'application/json',
-        })
+        self._session.headers.update(
+            {
+                "Accept": "application/json",
+            }
+        )
 
     def _get_coin_id(self, symbol: str) -> Optional[str]:
         """
@@ -69,7 +76,7 @@ class CryptoDataProvider(BaseDataProvider):
         Returns:
             CoinGecko coin ID, or None if not found
         """
-        symbol_upper = symbol.upper().replace('CRYPTO:', '')
+        symbol_upper = symbol.upper().replace("CRYPTO:", "")
 
         # Check known mappings first
         if symbol_upper in self.SYMBOL_MAP:
@@ -78,10 +85,7 @@ class CryptoDataProvider(BaseDataProvider):
         # Fallback: search coin list (cached)
         if self._coin_list_cache is None:
             try:
-                resp = self._session.get(
-                    f"{self.BASE_URL}/coins/list",
-                    timeout=10
-                )
+                resp = self._session.get(f"{self.BASE_URL}/coins/list", timeout=10)
                 if resp.ok:
                     self._coin_list_cache = resp.json()
             except Exception:
@@ -89,8 +93,8 @@ class CryptoDataProvider(BaseDataProvider):
 
         if self._coin_list_cache:
             for coin in self._coin_list_cache:
-                if coin.get('symbol', '').upper() == symbol_upper:
-                    return coin.get('id')
+                if coin.get("symbol", "").upper() == symbol_upper:
+                    return coin.get("id")
 
         return None
 
@@ -111,20 +115,17 @@ class CryptoDataProvider(BaseDataProvider):
         try:
             resp = self._session.get(
                 f"{self.BASE_URL}/simple/price",
-                params={
-                    "ids": coin_id,
-                    "vs_currencies": "usd"
-                },
-                timeout=10
+                params={"ids": coin_id, "vs_currencies": "usd"},
+                timeout=10,
             )
 
             if resp.ok:
                 data = resp.json()
-                if coin_id in data and 'usd' in data[coin_id]:
-                    return Decimal(str(data[coin_id]['usd']))
+                if coin_id in data and "usd" in data[coin_id]:
+                    return Decimal(str(data[coin_id]["usd"]))
 
         except Exception as e:
-            print(f"Error fetching crypto price for {symbol}: {e}")
+            logger.warning("Error fetching crypto price for %s: %s", symbol, e)
 
         return None
 
@@ -149,7 +150,7 @@ class CryptoDataProvider(BaseDataProvider):
             coin_id = self._get_coin_id(symbol)
             if coin_id:
                 coin_ids.append(coin_id)
-                id_to_symbol[coin_id] = symbol.upper().replace('CRYPTO:', '')
+                id_to_symbol[coin_id] = symbol.upper().replace("CRYPTO:", "")
 
         if not coin_ids:
             return {}
@@ -157,11 +158,8 @@ class CryptoDataProvider(BaseDataProvider):
         try:
             resp = self._session.get(
                 f"{self.BASE_URL}/simple/price",
-                params={
-                    "ids": ",".join(coin_ids),
-                    "vs_currencies": "usd"
-                },
-                timeout=10
+                params={"ids": ",".join(coin_ids), "vs_currencies": "usd"},
+                timeout=10,
             )
 
             if resp.ok:
@@ -170,13 +168,13 @@ class CryptoDataProvider(BaseDataProvider):
 
                 for coin_id, price_data in data.items():
                     symbol = id_to_symbol.get(coin_id)
-                    if symbol and 'usd' in price_data:
-                        prices[symbol] = Decimal(str(price_data['usd']))
+                    if symbol and "usd" in price_data:
+                        prices[symbol] = Decimal(str(price_data["usd"]))
 
                 return prices
 
         except Exception as e:
-            print(f"Error fetching batch crypto prices: {e}")
+            logger.warning("Error fetching batch crypto prices: %s", e)
 
         return {}
 
@@ -191,7 +189,7 @@ class CryptoDataProvider(BaseDataProvider):
             coin_id = self._get_coin_id(symbol)
             if coin_id:
                 coin_ids.append(coin_id)
-                id_to_symbol[coin_id] = symbol.upper().replace('CRYPTO:', '')
+                id_to_symbol[coin_id] = symbol.upper().replace("CRYPTO:", "")
 
         if not coin_ids:
             return {}
@@ -202,23 +200,30 @@ class CryptoDataProvider(BaseDataProvider):
                 params={
                     "ids": ",".join(coin_ids),
                     "vs_currencies": "usd",
-                    "include_24hr_change": "true"
+                    "include_24hr_change": "true",
                 },
-                timeout=10
+                timeout=10,
             )
             if resp.ok:
                 data = resp.json()
                 result = {}
                 for coin_id, price_data in data.items():
                     symbol = id_to_symbol.get(coin_id)
-                    if symbol and 'usd' in price_data:
-                        price = Decimal(str(price_data['usd']))
-                        change = price_data.get('usd_24h_change')
-                        change_decimal = Decimal(str(round(change, 4))) if change is not None else None
-                        result[symbol] = {'price': price, 'change_percent': change_decimal}
+                    if symbol and "usd" in price_data:
+                        price = Decimal(str(price_data["usd"]))
+                        change = price_data.get("usd_24h_change")
+                        change_decimal = (
+                            Decimal(str(round(change, 4)))
+                            if change is not None
+                            else None
+                        )
+                        result[symbol] = {
+                            "price": price,
+                            "change_percent": change_decimal,
+                        }
                 return result
         except Exception as e:
-            print(f"Error fetching crypto prices with change: {e}")
+            logger.warning("Error fetching crypto prices with change: %s", e)
 
         return {}
 
@@ -257,33 +262,35 @@ class CryptoDataProvider(BaseDataProvider):
                     "community_data": "false",
                     "developer_data": "false",
                 },
-                timeout=15
+                timeout=15,
             )
 
             if resp.ok:
                 data = resp.json()
-                market_data = data.get('market_data', {})
+                market_data = data.get("market_data", {})
 
                 return {
-                    'symbol': data.get('symbol', '').upper(),
-                    'name': data.get('name', ''),
-                    'description': data.get('description', {}).get('en', '')[:500],  # Truncate
-                    'market_cap': market_data.get('market_cap', {}).get('usd'),
-                    'market_cap_rank': data.get('market_cap_rank'),
-                    'volume_24h': market_data.get('total_volume', {}).get('usd'),
-                    'price_change_24h': market_data.get('price_change_percentage_24h'),
-                    'price_change_7d': market_data.get('price_change_percentage_7d'),
-                    'price_change_30d': market_data.get('price_change_percentage_30d'),
-                    'circulating_supply': market_data.get('circulating_supply'),
-                    'total_supply': market_data.get('total_supply'),
-                    'max_supply': market_data.get('max_supply'),
-                    'ath': market_data.get('ath', {}).get('usd'),
-                    'ath_date': market_data.get('ath_date', {}).get('usd'),
-                    'atl': market_data.get('atl', {}).get('usd'),
-                    'atl_date': market_data.get('atl_date', {}).get('usd'),
+                    "symbol": data.get("symbol", "").upper(),
+                    "name": data.get("name", ""),
+                    "description": data.get("description", {}).get("en", "")[
+                        :500
+                    ],  # Truncate
+                    "market_cap": market_data.get("market_cap", {}).get("usd"),
+                    "market_cap_rank": data.get("market_cap_rank"),
+                    "volume_24h": market_data.get("total_volume", {}).get("usd"),
+                    "price_change_24h": market_data.get("price_change_percentage_24h"),
+                    "price_change_7d": market_data.get("price_change_percentage_7d"),
+                    "price_change_30d": market_data.get("price_change_percentage_30d"),
+                    "circulating_supply": market_data.get("circulating_supply"),
+                    "total_supply": market_data.get("total_supply"),
+                    "max_supply": market_data.get("max_supply"),
+                    "ath": market_data.get("ath", {}).get("usd"),
+                    "ath_date": market_data.get("ath_date", {}).get("usd"),
+                    "atl": market_data.get("atl", {}).get("usd"),
+                    "atl_date": market_data.get("atl_date", {}).get("usd"),
                 }
 
         except Exception as e:
-            print(f"Error fetching asset info for {symbol}: {e}")
+            logger.warning("Error fetching asset info for %s: %s", symbol, e)
 
         return None

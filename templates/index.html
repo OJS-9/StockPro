@@ -17,16 +17,17 @@
                         </p>
                     </div>
                     <div class="relative z-10 w-full max-w-2xl mt-4">
-                        <form id="research-form" class="flex items-center gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 p-2 rounded-lg shadow-card-lg transition-all focus-within:ring-2 ring-zinc-400/30 focus-within:border-zinc-500">
-                            <div class="flex items-center justify-center pl-3 text-zinc-400">
+                        <form id="research-form" class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 p-2 rounded-lg shadow-card-lg transition-all focus-within:ring-2 ring-zinc-400/30 focus-within:border-zinc-500">
+                            <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <div class="flex items-center justify-center pl-1 sm:pl-3 text-zinc-400 shrink-0">
                                 <span class="material-symbols-outlined text-xl">search</span>
                             </div>
-                            <div class="flex-1 flex flex-col justify-center h-10">
+                            <div class="flex-1 flex flex-col justify-center min-h-11">
                                 <input
                                     aria-label="Stock Ticker"
                                     name="ticker"
                                     id="ticker"
-                                    class="w-full bg-transparent border-none p-0 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-0 text-sm font-semibold"
+                                    class="w-full bg-transparent border-none p-0 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-0 text-base sm:text-sm font-semibold"
                                     placeholder="Search Ticker..."
                                     type="text"
                                     value="{{ current_ticker }}"
@@ -38,19 +39,22 @@
                                     <span>BTC-USD</span>
                                 </div>
                             </div>
+                            </div>
+                            <div class="flex gap-2 shrink-0">
                             <select
                                 name="trade_type"
                                 id="trade_type"
-                                class="h-10 px-3 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 rounded-md text-sm font-medium focus:ring-2 focus:ring-zinc-400/30 focus:outline-none"
+                                class="h-11 min-h-11 flex-1 sm:flex-none sm:h-10 px-3 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 rounded-md text-base sm:text-sm font-medium focus:ring-2 focus:ring-zinc-400/30 focus:outline-none"
                                 required
                             >
                                 <option value="Investment" {% if current_trade_type == 'Investment' or not current_trade_type %}selected{% endif %}>Investment</option>
                                 <option value="Day Trade" {% if current_trade_type == 'Day Trade' %}selected{% endif %}>Day Trade</option>
                                 <option value="Swing Trade" {% if current_trade_type == 'Swing Trade' %}selected{% endif %}>Swing Trade</option>
                             </select>
-                            <button class="h-10 px-5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-medium rounded-md transition-colors hover:bg-zinc-700 dark:hover:bg-zinc-300 text-sm flex items-center gap-2" type="submit">
+                            <button class="h-11 min-h-11 min-w-[5.5rem] px-4 sm:h-10 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-medium rounded-md transition-colors hover:bg-zinc-700 dark:hover:bg-zinc-300 text-sm flex items-center justify-center gap-2" type="submit">
                                 Analyze <span class="material-symbols-outlined text-sm">arrow_forward</span>
                             </button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -60,12 +64,12 @@
 
     {% if pinned_tickers %}
     <section class="w-full max-w-7xl px-4 md:px-8 py-8 flex flex-col gap-6">
-        <div class="flex items-center justify-between">
-            <div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
                 <h2 class="text-xl font-semibold">Market Overview</h2>
                 <p class="text-zinc-500 text-sm mt-1">Real-time performance of your pinned tickers.</p>
             </div>
-            <a href="{{ url_for('watchlist') }}" class="text-sm font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors flex items-center gap-1">
+            <a href="{{ url_for('watchlist') }}" class="min-h-11 inline-flex items-center gap-1 shrink-0 text-sm font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors -mr-1 pr-1 rounded-md">
                 View Watchlist <span class="material-symbols-outlined text-sm">chevron_right</span>
             </a>
         </div>
@@ -136,7 +140,7 @@
                 <p class="text-zinc-500 text-sm mt-1">Curated stories moving the markets.</p>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <button id="briefing-more-btn" class="px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">More Stories</button>
+                <button type="button" id="briefing-more-btn" class="min-h-11 px-4 py-2 rounded-md text-xs font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors inline-flex items-center justify-center">More Stories</button>
             </div>
         </div>
         <div id="briefing-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -274,7 +278,10 @@
                 <span class="material-symbols-outlined text-base">close</span>
             </button>
         </div>
-        <p id="popup-step-indicator" class="text-zinc-500 text-xs font-mono mb-4">Step 1 of 2</p>
+        <p id="popup-step-indicator" class="text-zinc-500 text-xs font-mono mb-2">Step 1 of 2</p>
+        {% if current_user.is_authenticated %}
+        <p id="report-usage-hint" class="text-zinc-500 text-xs mb-4 hidden" aria-live="polite"></p>
+        {% endif %}
 
         <div id="popup-loading" class="flex items-center gap-3 py-6 text-zinc-400">
             <span class="material-symbols-outlined animate-spin text-xl">autorenew</span>
@@ -341,6 +348,30 @@
     let pollInterval = null;
     let toastTimeout = null;
 
+    const usageHintEl = document.getElementById('report-usage-hint');
+    async function refreshReportUsageHint() {
+        if (!usageHintEl) return;
+        try {
+            const resp = await fetch('/api/usage');
+            if (!resp.ok) {
+                usageHintEl.classList.add('hidden');
+                return;
+            }
+            const u = await resp.json();
+            if (u.is_pro === true) {
+                usageHintEl.textContent = 'Pro — unlimited research reports.';
+                usageHintEl.classList.remove('hidden');
+            } else if (u.reports_limit != null && u.reports_limit > 0) {
+                usageHintEl.textContent = u.reports_used + ' of ' + u.reports_limit + ' free reports used this month.';
+                usageHintEl.classList.remove('hidden');
+            } else {
+                usageHintEl.classList.add('hidden');
+            }
+        } catch (e) {
+            usageHintEl.classList.add('hidden');
+        }
+    }
+
     function openPopup() {
         backdrop.classList.remove('hidden');
         loadingEl.classList.remove('hidden');
@@ -350,6 +381,7 @@
         questionsList.innerHTML = '';
         popupTitle.textContent = 'Select research topics';
         stepIndicator.textContent = 'Step 1 of 2';
+        refreshReportUsageHint();
     }
 
     function closePopup() {
@@ -460,7 +492,7 @@
         showToast('in_progress', 'Generating report...');
 
         try {
-            await fetch('/start_generation', {
+            const genResp = await fetch('/start_generation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
@@ -469,6 +501,16 @@
                     selected_subject_ids: selectedIds && selectedIds.length ? selectedIds : null
                 })
             });
+            if (genResp.status === 403) {
+                var errJson = {};
+                try { errJson = await genResp.json(); } catch (e2) {}
+                toastIcon.textContent = 'error';
+                toastIcon.className = 'material-symbols-outlined text-lg text-amber-600 dark:text-amber-500';
+                toastText.textContent = errJson.message || 'Report limit reached.';
+                toast.classList.remove('hidden');
+                toast.onclick = null;
+                return;
+            }
         } catch (e) {
             console.error('start_generation error', e);
         }
@@ -543,11 +585,21 @@
         closePopup();
         showToast('in_progress', 'Generating report...');
         try {
-            await fetch('/start_generation', {
+            const genResp = await fetch('/start_generation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({ questions: [], answers: [], selected_subject_ids: null })
             });
+            if (genResp.status === 403) {
+                var errJson2 = {};
+                try { errJson2 = await genResp.json(); } catch (e2) {}
+                toastIcon.textContent = 'error';
+                toastIcon.className = 'material-symbols-outlined text-lg text-amber-600 dark:text-amber-500';
+                toastText.textContent = errJson2.message || 'Report limit reached.';
+                toast.classList.remove('hidden');
+                toast.onclick = null;
+                return;
+            }
         } catch (e) {
             console.error('start_generation error', e);
         }

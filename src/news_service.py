@@ -18,7 +18,7 @@ SEARCH_QUERY = "markets stocks economy finance"
 
 _cache = {
     "primary": {"articles": [], "fetched_at": None},
-    "more":    {"articles": [], "fetched_at": None},
+    "more": {"articles": [], "fetched_at": None},
 }
 
 
@@ -41,12 +41,15 @@ def get_more() -> List[Dict]:
 def _refresh_primary() -> None:
     try:
         from nimble_client import NimbleClient
+
         client = NimbleClient()
     except Exception:
         return
 
     bloomberg_results = client.run_agent(BLOOMBERG_AGENT, {"query": SEARCH_QUERY})
-    morningstar_results = client.run_agent(MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY})
+    morningstar_results = client.run_agent(
+        MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY}
+    )
     wsj_results = client.run_agent(WSJ_AGENT, {"feed_name": WSJ_PIPELINE})
 
     # Sort each source by image presence before interleaving, so image articles
@@ -106,13 +109,20 @@ def _map_article(item: Dict, publisher: str) -> Dict:
 def _refresh_more() -> None:
     try:
         from nimble_client import NimbleClient
+
         client = NimbleClient()
     except Exception:
         return
 
     secondary_sources = [
-        {"name": "WSJ",     "query": "site:wsj.com markets stocks earnings economy finance"},
-        {"name": "Reuters", "query": "site:reuters.com markets stocks earnings economy finance"},
+        {
+            "name": "WSJ",
+            "query": "site:wsj.com markets stocks earnings economy finance",
+        },
+        {
+            "name": "Reuters",
+            "query": "site:reuters.com markets stocks earnings economy finance",
+        },
     ]
 
     articles = []
@@ -124,14 +134,16 @@ def _refresh_more() -> None:
                 title = item.get("title", "").strip()
                 url = item.get("url", "").strip()
                 if title and url:
-                    articles.append({
-                        "title": title,
-                        "description": item.get("description", "").strip(),
-                        "image": "",
-                        "category": "Markets",
-                        "publisher": source["name"],
-                        "url": url,
-                    })
+                    articles.append(
+                        {
+                            "title": title,
+                            "description": item.get("description", "").strip(),
+                            "image": "",
+                            "category": "Markets",
+                            "publisher": source["name"],
+                            "url": url,
+                        }
+                    )
         except Exception:
             continue
 

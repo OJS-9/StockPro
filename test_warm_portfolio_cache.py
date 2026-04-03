@@ -31,12 +31,12 @@ class TestWarmPortfolioCache(unittest.TestCase):
                       "_warm_portfolio_cache function not found in src/app.py")
 
     def test_warm_portfolio_cache_fetches_holdings_for_all_portfolios(self):
-        """_warm_portfolio_cache calls get_holdings(with_prices=True) for each portfolio."""
+        """_warm_portfolio_cache calls db.get_holdings(portfolio_id) for each portfolio."""
         mock_svc = MagicMock()
         mock_svc.list_portfolios.return_value = [
             {'portfolio_id': '1'}, {'portfolio_id': '2'}
         ]
-        mock_svc.get_holdings.return_value = []
+        mock_svc.db.get_holdings.return_value = []
 
         with patch('portfolio.portfolio_service.get_portfolio_service', return_value=mock_svc):
             # Import the function from app source without triggering Flask app
@@ -68,9 +68,9 @@ class TestWarmPortfolioCache(unittest.TestCase):
             ns['_warm_portfolio_cache']('user-abc')
 
         mock_svc.list_portfolios.assert_called_once_with('user-abc')
-        self.assertEqual(mock_svc.get_holdings.call_count, 2)
-        mock_svc.get_holdings.assert_any_call('1', with_prices=True)
-        mock_svc.get_holdings.assert_any_call('2', with_prices=True)
+        self.assertEqual(mock_svc.db.get_holdings.call_count, 2)
+        mock_svc.db.get_holdings.assert_any_call('1')
+        mock_svc.db.get_holdings.assert_any_call('2')
 
     def test_warm_portfolio_cache_swallows_all_exceptions(self):
         """_warm_portfolio_cache must not raise even when service throws."""
@@ -110,17 +110,17 @@ class TestWarmPortfolioCache(unittest.TestCase):
                       "Threading spawn of _warm_portfolio_cache not found in app.py")
         self.assertIn('daemon=True', source,
                       "daemon=True not found in threading.Thread call in app.py")
-        # Both must appear near the session assignment block
-        idx_thread = source.find('threading.Thread(target=_warm_portfolio_cache')
-        idx_session = source.find("session['user_id'] = clerk_user_id")
+        # Both must appear near the session assignment block (Black may split Thread() across lines)
+        idx_thread = source.find("target=_warm_portfolio_cache")
+        idx_session = source.find('session["user_id"] = clerk_user_id')
         self.assertNotEqual(idx_thread, -1,
-                            "threading.Thread(target=_warm_portfolio_cache) not found")
+                            "target=_warm_portfolio_cache not found in app.py")
         self.assertNotEqual(idx_session, -1,
-                            "session['user_id'] = clerk_user_id not found")
-        # Thread spawn should come AFTER session assignment (within ~300 chars)
+                            'session["user_id"] = clerk_user_id not found')
+        # Thread spawn should come AFTER session assignment (within ~400 chars; allows Black wrapping)
         self.assertGreater(idx_thread, idx_session,
-                           "Thread spawn should appear after session['user_id'] = clerk_user_id")
-        self.assertLess(idx_thread - idx_session, 300,
+                           'Thread spawn should appear after session["user_id"] = clerk_user_id')
+        self.assertLess(idx_thread - idx_session, 400,
                         "Thread spawn is too far from session assignment — may be in wrong place")
 
 

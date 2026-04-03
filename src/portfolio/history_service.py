@@ -3,6 +3,7 @@ Portfolio value history service - computes monthly portfolio values.
 """
 
 import calendar
+import logging
 import json
 import os
 import requests
@@ -12,13 +13,17 @@ from typing import List, Dict, Optional
 
 from data_providers.crypto_provider import CryptoDataProvider
 
+logger = logging.getLogger(__name__)
+
 # Module-level price cache: symbol -> {'prices': {date_str: float}, 'fetched_at': datetime}
 _price_cache: Dict[str, dict] = {}
-_CACHE_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'price_history_cache.json')
+_CACHE_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "..", "data", "price_history_cache.json"
+)
 
 
 def _cache_valid(entry: dict) -> bool:
-    fetched = entry['fetched_at']
+    fetched = entry["fetched_at"]
     today = datetime.utcnow()
     return fetched.year == today.year and fetched.month == today.month
 
@@ -26,12 +31,12 @@ def _cache_valid(entry: dict) -> bool:
 def _load_disk_cache() -> None:
     global _price_cache
     try:
-        with open(_CACHE_FILE, 'r') as f:
+        with open(_CACHE_FILE, "r") as f:
             raw = json.load(f)
         for key, entry in raw.items():
             _price_cache[key] = {
-                'prices': entry['prices'],
-                'fetched_at': datetime.fromisoformat(entry['fetched_at']),
+                "prices": entry["prices"],
+                "fetched_at": datetime.fromisoformat(entry["fetched_at"]),
             }
     except (FileNotFoundError, Exception):
         pass
@@ -41,13 +46,16 @@ def _save_disk_cache() -> None:
     try:
         os.makedirs(os.path.dirname(_CACHE_FILE), exist_ok=True)
         serializable = {
-            key: {'prices': entry['prices'], 'fetched_at': entry['fetched_at'].isoformat()}
+            key: {
+                "prices": entry["prices"],
+                "fetched_at": entry["fetched_at"].isoformat(),
+            }
             for key, entry in _price_cache.items()
         }
-        with open(_CACHE_FILE, 'w') as f:
+        with open(_CACHE_FILE, "w") as f:
             json.dump(serializable, f)
     except Exception as e:
-        print(f"[history_service] failed to save disk cache: {e}")
+        logger.warning("failed to save disk cache: %s", e)
 
 
 _load_disk_cache()
@@ -60,7 +68,20 @@ def _month_end_dates(months: int) -> List[date]:
     year, month = today.year, today.month
     for _ in range(months):
         last_day = calendar.monthrange(year, month)[1]
-        ends.append(date(year, month, min(last_day, today.day if (year == today.year and month == today.month) else last_day)))
+        ends.append(
+            date(
+                year,
+                month,
+                min(
+                    last_day,
+                    (
+                        today.day
+                        if (year == today.year and month == today.month)
+                        else last_day
+                    ),
+                ),
+            )
+        )
         month -= 1
         if month == 0:
             month = 12
@@ -78,6 +99,7 @@ class PortfolioHistoryService:
     def db(self):
         if self._db is None:
             from database import get_database_manager
+
             self._db = get_database_manager()
         return self._db
 
@@ -92,15 +114,15 @@ class PortfolioHistoryService:
 
         if not transactions:
             month_ends = _month_end_dates(months)
-            return [{'date': d.strftime('%b %Y'), 'value': 0.0} for d in month_ends]
+            return [{"date": d.strftime("%b %Y"), "value": 0.0} for d in month_ends]
 
         # Group transactions by symbol
         by_symbol: Dict[str, list] = {}
         asset_type_map: Dict[str, str] = {}
         for txn in transactions:
-            sym = txn['symbol']
+            sym = txn["symbol"]
             by_symbol.setdefault(sym, []).append(txn)
-            asset_type_map[sym] = txn['asset_type']
+            asset_type_map[sym] = txn["asset_type"]
 
         month_ends = _month_end_dates(months)
 
@@ -109,7 +131,7 @@ class PortfolioHistoryService:
         crypto_prices: Dict[str, Dict[str, float]] = {}
 
         for sym, asset_type in asset_type_map.items():
-            if asset_type == 'stock':
+            if asset_type == "stock":
                 stock_prices[sym] = self._get_stock_prices(sym)
             else:
                 crypto_prices[sym] = self._get_crypto_prices(sym)
@@ -123,7 +145,7 @@ class PortfolioHistoryService:
                     continue
 
                 asset_type = asset_type_map[sym]
-                if asset_type == 'stock':
+                if asset_type == "stock":
                     prices = stock_prices.get(sym, {})
                 else:
                     prices = crypto_prices.get(sym, {})
@@ -132,25 +154,27 @@ class PortfolioHistoryService:
                 if price is not None:
                     total += qty * price
 
-            result.append({'date': month_end.strftime('%b %Y'), 'value': round(total, 2)})
+            result.append(
+                {"date": month_end.strftime("%b %Y"), "value": round(total, 2)}
+            )
 
         return result
 
     def _qty_at_date(self, transactions: list, as_of: date) -> float:
         """Replay transactions up to as_of date, return clamped quantity."""
-        qty = Decimal('0')
+        qty = Decimal("0")
         for txn in transactions:
-            txn_date = txn['transaction_date']
+            txn_date = txn["transaction_date"]
             if isinstance(txn_date, datetime):
                 txn_date = txn_date.date()
             if txn_date > as_of:
                 break
-            if txn['transaction_type'] == 'buy':
-                qty += txn['quantity']
+            if txn["transaction_type"] == "buy":
+                qty += txn["quantity"]
             else:
-                qty -= txn['quantity']
+                qty -= txn["quantity"]
         if qty < 0:
-            qty = Decimal('0')
+            qty = Decimal("0")
         return float(qty)
 
     def _get_stock_prices(self, symbol: str) -> Dict[str, float]:
@@ -158,20 +182,27 @@ class PortfolioHistoryService:
         global _price_cache
         cache_key = f"stock:{symbol}"
         if cache_key in _price_cache and _cache_valid(_price_cache[cache_key]):
-            return _price_cache[cache_key]['prices']
+            return _price_cache[cache_key]["prices"]
 
         try:
             import yfinance as yf
+
             ticker = yf.Ticker(symbol)
-            hist = ticker.history(period='2y', interval='1mo', auto_adjust=True)
+            hist = ticker.history(period="2y", interval="1mo", auto_adjust=True)
             if hist.empty:
                 return {}
-            prices = {d.strftime('%Y-%m-%d'): float(close) for d, close in hist['Close'].items()}
-            _price_cache[cache_key] = {'prices': prices, 'fetched_at': datetime.utcnow()}
+            prices = {
+                d.strftime("%Y-%m-%d"): float(close)
+                for d, close in hist["Close"].items()
+            }
+            _price_cache[cache_key] = {
+                "prices": prices,
+                "fetched_at": datetime.utcnow(),
+            }
             _save_disk_cache()
             return prices
         except Exception as e:
-            print(f"[history_service] yfinance error for {symbol}: {e}")
+            logger.warning("yfinance error for %s: %s", symbol, e)
             return {}
 
     def _get_crypto_prices(self, symbol: str) -> Dict[str, float]:
@@ -179,7 +210,7 @@ class PortfolioHistoryService:
         global _price_cache
         cache_key = f"crypto:{symbol}"
         if cache_key in _price_cache and _cache_valid(_price_cache[cache_key]):
-            return _price_cache[cache_key]['prices']
+            return _price_cache[cache_key]["prices"]
 
         crypto_provider = CryptoDataProvider()
         coin_id = crypto_provider._get_coin_id(symbol)
@@ -189,29 +220,34 @@ class PortfolioHistoryService:
         try:
             resp = requests.get(
                 f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart",
-                params={'vs_currency': 'usd', 'days': 365},
-                timeout=15
+                params={"vs_currency": "usd", "days": 365},
+                timeout=15,
             )
             if not resp.ok:
                 return {}
             data = resp.json()
-            prices_raw = data.get('prices', [])
+            prices_raw = data.get("prices", [])
             prices: Dict[str, float] = {}
             for ts_ms, price in prices_raw:
                 d = date.fromtimestamp(ts_ms / 1000)
-                prices[d.strftime('%Y-%m-%d')] = price
-            _price_cache[cache_key] = {'prices': prices, 'fetched_at': datetime.utcnow()}
+                prices[d.strftime("%Y-%m-%d")] = price
+            _price_cache[cache_key] = {
+                "prices": prices,
+                "fetched_at": datetime.utcnow(),
+            }
             _save_disk_cache()
             return prices
         except Exception:
             return {}
 
-    def _lookup_price(self, prices: Dict[str, float], target: date, asset_type: str) -> Optional[float]:
+    def _lookup_price(
+        self, prices: Dict[str, float], target: date, asset_type: str
+    ) -> Optional[float]:
         """Find closest available price to target date."""
         if not prices:
             return None
 
-        target_str = target.strftime('%Y-%m-%d')
+        target_str = target.strftime("%Y-%m-%d")
         if target_str in prices:
             return prices[target_str]
 
@@ -219,7 +255,7 @@ class PortfolioHistoryService:
         # Try searching backwards up to 31 days
         for days_back in range(1, 32):
             candidate = date.fromordinal(target.toordinal() - days_back)
-            candidate_str = candidate.strftime('%Y-%m-%d')
+            candidate_str = candidate.strftime("%Y-%m-%d")
             if candidate_str in prices:
                 return prices[candidate_str]
 
