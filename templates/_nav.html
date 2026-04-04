@@ -9,6 +9,21 @@
             </div>
             <span class="text-lg font-semibold leading-tight tracking-[-0.015em]">StockPro</span>
         </a>
+        <!-- Research progress indicator — hidden until a report is generating -->
+        <div id="rp-indicator" class="hidden md:flex items-center gap-4 ml-4 border-l border-zinc-200 dark:border-zinc-800 pl-4">
+            <div class="flex flex-col gap-1.5">
+                <div class="flex items-center justify-between w-[180px]">
+                    <span class="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Report Status</span>
+                    <span id="rp-pct" class="text-[9px] font-black uppercase tracking-widest text-zinc-950 dark:text-zinc-50">0% Complete</span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-[180px] h-1.5 bg-zinc-200 dark:bg-zinc-800 overflow-hidden rounded-full flex-shrink-0">
+                        <div id="rp-bar" class="h-full bg-zinc-950 dark:bg-zinc-50 transition-all duration-700 ease-out rounded-full" style="width:0%"></div>
+                    </div>
+                    <span id="rp-step" class="text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[180px]">Starting...</span>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="hidden md:flex flex-1 justify-end gap-8">
         <nav class="flex items-center gap-8">
@@ -82,14 +97,6 @@
         </button>
     </div>
 </header>
-
-<!-- Research progress bar — shown globally while a report is generating -->
-<div id="rp-bar-wrap" class="hidden fixed top-0 left-0 right-0 z-[60] h-[3px] bg-zinc-200 dark:bg-zinc-800 pointer-events-none">
-    <div id="rp-bar" class="h-full bg-zinc-950 dark:bg-zinc-50 transition-all duration-700 ease-out" style="width:0%"></div>
-</div>
-<div id="rp-label" class="hidden fixed top-[3px] left-1/2 -translate-x-1/2 z-[60] text-[11px] leading-none text-zinc-500 dark:text-zinc-400 bg-white/95 dark:bg-zinc-950/95 px-2.5 py-1 rounded-b-md shadow-sm pointer-events-none">
-    Starting...
-</div>
 
 <div id="mobile-menu-overlay" class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm hidden" aria-hidden="true"></div>
 <div id="mobile-menu-panel" role="dialog" aria-label="Mobile menu" aria-hidden="true" class="fixed top-0 right-0 z-50 h-full w-64 max-w-[85vw] bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col transition-transform duration-200 ease-out translate-x-full hidden">
@@ -168,21 +175,21 @@
 
 <script>
 (function () {
-    var wrap = document.getElementById('rp-bar-wrap');
+    var indicator = document.getElementById('rp-indicator');
     var bar = document.getElementById('rp-bar');
-    var label = document.getElementById('rp-label');
+    var pct = document.getElementById('rp-pct');
+    var stepEl = document.getElementById('rp-step');
     var pollTimer = null;
 
     function showBar(progress, step) {
-        wrap.classList.remove('hidden');
-        label.classList.remove('hidden');
+        indicator.classList.remove('hidden');
         bar.style.width = progress + '%';
-        label.textContent = step || 'Working...';
+        pct.textContent = progress + '% Complete';
+        if (step) stepEl.textContent = step;
     }
 
     function hideBar() {
-        wrap.classList.add('hidden');
-        label.classList.add('hidden');
+        indicator.classList.add('hidden');
         bar.style.width = '0%';
     }
 
@@ -197,12 +204,11 @@
             .then(function (data) {
                 if (!data) { stopPolling(); hideBar(); return; }
                 if (data.status === 'in_progress') {
-                    showBar(data.progress || 5, data.step || 'Working...');
+                    showBar(data.progress || 5, data.step);
                 } else if (data.status === 'ready') {
-                    showBar(100, 'Report ready');
+                    showBar(100, 'Done');
                     stopPolling();
                     setTimeout(hideBar, 2000);
-                    // Show a brief "Report Ready" notification if not already on the report page
                     if (data.report_id && !window.location.pathname.startsWith('/report/')) {
                         var note = document.createElement('a');
                         note.href = '/report/' + data.report_id;
@@ -221,21 +227,18 @@
 
     function startPolling(sessionId) {
         sessionStorage.setItem('rp_session_id', sessionId);
-        showBar(5, 'Starting...');
+        showBar(5, 'Starting');
         pollTimer = setInterval(function () { poll(sessionId); }, 3000);
         poll(sessionId);
     }
 
-    // On page load: resume polling if a session was active
     var storedId = sessionStorage.getItem('rp_session_id');
-    // Also check server-side active session injected by Flask context processor
     var serverActiveId = {{ active_research_session_id | tojson }};
     var activeId = serverActiveId || storedId;
     if (activeId) {
         startPolling(activeId);
     }
 
-    // Expose so index.html / other pages can trigger it
     window.rpStartPolling = startPolling;
     window.rpStopPolling = stopPolling;
 })();
