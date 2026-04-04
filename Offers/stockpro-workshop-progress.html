@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop Progress — StockPro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 2.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+        h2 { font-size: 1.75rem; font-weight: 600; color: #fff; border-left: 4px solid #4a9eff; padding-left: 1rem; margin-bottom: 1.5rem; }
+        h4 { font-size: 0.95rem; color: #4a9eff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+        section { margin-bottom: 3rem; }
+        .subtitle { color: #888; font-size: 1.1rem; margin-bottom: 0.5rem; }
+        header { margin-bottom: 3rem; }
+        .page-nav { display: flex; gap: 0.5rem; justify-content: center; padding: 1rem 0; margin-bottom: 2rem; border-bottom: 1px solid #2a2a2a; }
+        .nav-link { color: #888; text-decoration: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; }
+        .nav-link:hover { color: #4a9eff; background: rgba(74,158,255,0.1); }
+        .nav-link.active { color: #4a9eff; background: rgba(74,158,255,0.15); font-weight: 700; }
+
+        /* Timeline */
+        .timeline-track { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 3rem 2rem; overflow-x: auto; }
+        .timeline-phases { display: flex; justify-content: space-between; align-items: flex-start; min-width: 800px; position: relative; }
+        .timeline-phase { display: flex; flex-direction: column; align-items: center; position: relative; flex: 1; cursor: pointer; }
+        .phase-dot { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; border: 3px solid #2a2a2a; background: #1a1a1a; color: #888; position: relative; z-index: 2; transition: all 0.3s; }
+        .phase-dot.completed { background: #22c55e; border-color: #22c55e; color: #fff; }
+        .phase-dot.current { background: #4a9eff; border-color: #4a9eff; color: #fff; box-shadow: 0 0 0 4px rgba(74,158,255,0.2); }
+        .phase-dot.locked { background: #0a0a0a; border-color: #2a2a2a; color: #555; }
+        .phase-connector { position: absolute; top: 24px; left: 50%; width: 100%; height: 3px; background: #2a2a2a; z-index: 1; }
+        .phase-connector.completed { background: #22c55e; }
+        .timeline-phase:last-child .phase-connector { display: none; }
+        .phase-label { text-align: center; margin-top: 1rem; }
+        .phase-name { font-weight: 600; color: #e0e0e0; font-size: 0.85rem; display: block; }
+        .phase-badge { display: inline-block; background: rgba(74,158,255,0.2); color: #4a9eff; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 10px; font-weight: 600; text-transform: uppercase; margin-top: 0.25rem; }
+
+        /* Phase Accordion */
+        .phases-accordion { display: flex; flex-direction: column; gap: 0.75rem; }
+        .phase-section { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; transition: border-color 0.2s; }
+        .phase-section.completed { border-left: 4px solid #22c55e; }
+        .phase-section.current { border-left: 4px solid #4a9eff; border-color: #4a9eff; }
+        .phase-section.locked { opacity: 0.6; }
+        details.phase-section > summary { padding: 1.25rem 1.5rem; cursor: pointer; display: flex; align-items: center; gap: 1rem; user-select: none; list-style: none; }
+        details.phase-section > summary::-webkit-details-marker { display: none; }
+        .phase-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; border: 2px solid #2a2a2a; background: #0a0a0a; color: #888; flex-shrink: 0; }
+        .phase-icon.completed { background: #22c55e; border-color: #22c55e; color: #fff; }
+        .phase-icon.current { background: #4a9eff; border-color: #4a9eff; color: #fff; }
+        .phase-title { flex: 1; font-weight: 600; font-size: 1.05rem; color: #fff; }
+        .phase-status-badge { padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+        .phase-status-badge.completed { background: rgba(34,197,94,0.2); color: #22c55e; }
+        .phase-status-badge.current { background: rgba(74,158,255,0.2); color: #4a9eff; }
+        .phase-status-badge.locked { background: rgba(136,136,136,0.2); color: #888; }
+        .phase-content { padding: 1.5rem; border-top: 1px solid #2a2a2a; display: flex; flex-direction: column; gap: 1.5rem; }
+        .phase-locked { color: #888; font-style: italic; text-align: center; padding: 1rem; }
+        .decision-block ul { list-style-position: inside; color: #c0c0c0; padding-left: 0.5rem; }
+        .decision-block li { padding: 0.25rem 0; font-size: 0.9rem; }
+        .consensus-block p { color: #c0c0c0; font-style: italic; font-size: 0.9rem; }
+
+        /* Quick Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
+        .stat-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+        .stat-value { font-family: monospace; font-size: 2.25rem; font-weight: 800; color: #4a9eff; }
+        .stat-label { color: #888; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            h1 { font-size: 1.75rem; }
+            .timeline-track { padding: 2rem 1rem; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="page-nav">
+            <a href="./stockpro-offer-summary.html" class="nav-link">Offer Summary</a>
+            <a href="./stockpro-workshop-progress.html" class="nav-link active">Workshop Progress</a>
+            <a href="./stockpro-research-dashboard.html" class="nav-link">Research Dashboard</a>
+        </nav>
+        <h1>Workshop Progress — StockPro</h1>
+        <p class="subtitle">Workshop Complete — All 5 Phases Done · Grand Slam Offer Locked</p>
+    </header>
+
+    <main>
+        <!-- Phase Timeline -->
+        <section class="timeline">
+            <h2>Phase Timeline</h2>
+            <div class="timeline-track">
+                <div class="timeline-phases">
+
+                    <div class="timeline-phase" data-phase="0">
+                        <div class="phase-dot completed">✓</div>
+                        <div class="phase-connector completed"></div>
+                        <div class="phase-label">
+                            <span class="phase-name">Discovery</span>
+                        </div>
+                    </div>
+
+                    <div class="timeline-phase" data-phase="1">
+                        <div class="phase-dot completed">✓</div>
+                        <div class="phase-connector completed"></div>
+                        <div class="phase-label">
+                            <span class="phase-name">Starving Crowd</span>
+                        </div>
+                    </div>
+
+                    <div class="timeline-phase" data-phase="2">
+                        <div class="phase-dot completed">✓</div>
+                        <div class="phase-connector completed"></div>
+                        <div class="phase-label">
+                            <span class="phase-name">Pricing</span>
+                        </div>
+                    </div>
+
+                    <div class="timeline-phase" data-phase="3">
+                        <div class="phase-dot completed">✓</div>
+                        <div class="phase-connector"></div>
+                        <div class="phase-connector completed"></div>
+                        <div class="phase-label">
+                            <span class="phase-name">Value Equation</span>
+                        </div>
+                    </div>
+
+                    <div class="timeline-phase" data-phase="4">
+                        <div class="phase-dot completed">✓</div>
+                        <div class="phase-connector completed"></div>
+                        <div class="phase-label">
+                            <span class="phase-name">Offer Creation</span>
+                        </div>
+                    </div>
+
+                    <div class="timeline-phase" data-phase="5">
+                        <div class="phase-dot completed">✓</div>
+                        <div class="phase-connector completed"></div>
+                        <div class="phase-label">
+                            <span class="phase-name">Enhancement</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Phase Details Accordion -->
+        <section class="phase-details">
+            <h2>Phase Details</h2>
+            <div class="phases-accordion">
+
+                <details class="phase-section completed" data-phase="0" open>
+                    <summary>
+                        <span class="phase-icon completed">✓</span>
+                        <span class="phase-title">Phase 0: Discovery</span>
+                        <span class="phase-status-badge completed">Complete</span>
+                    </summary>
+                    <div class="phase-content">
+                        <div class="decision-block">
+                            <h4>Key Decisions</h4>
+                            <ul>
+                                <li>Business: StockPro — all-in-one retail investor platform with AI agentic research, portfolio tracking, watchlist/alerts, and news</li>
+                                <li>Core market: Wealth</li>
+                                <li>Niche: Self-directed retail investors (28–42) using scattered tools (spreadsheets, multiple apps, notes)</li>
+                                <li>3 personas built: Marcus (Overwhelmed Analyst), Diana (Serious Hobbyist), Jordan (Active Trader Going Deeper)</li>
+                                <li>Key differentiator: AI multi-agent research pipeline vs. static data aggregation in all competitors</li>
+                            </ul>
+                        </div>
+                        <div class="consensus-block">
+                            <h4>Research Foundation</h4>
+                            <p>Market size confirmed ($6.2B, 10.84% CAGR). Pain corroborated by multiple sources. Pricing benchmarks established ($7–$30/month range). Personas validated against market data. Ready for Starving Crowd scoring.</p>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="phase-section completed" data-phase="1">
+                    <summary>
+                        <span class="phase-icon completed">✓</span>
+                        <span class="phase-title">Phase 1: Starving Crowd</span>
+                        <span class="phase-status-badge completed">Complete</span>
+                    </summary>
+                    <div class="phase-content">
+                        <div class="decision-block">
+                            <h4>Market Score</h4>
+                            <ul>
+                                <li>Pain: 7/10 — Real, but must be framed as performance loss, not workflow friction</li>
+                                <li>Purchasing Power: 8/10 — $302B retail inflows 2025; market pays $15–$30/mo for tools</li>
+                                <li>Targeting: 6/10 — Communities exist but CAC is competitive; incumbents dominate channels</li>
+                                <li>Growth: 8/10 — 10.84% CAGR; AI research commoditizing in 12–18 months</li>
+                                <li><strong>Total: 29/40 — Green</strong></li>
+                            </ul>
+                        </div>
+                        <div class="decision-block">
+                            <h4>Key Decisions</h4>
+                            <ul>
+                                <li>Niche sharpened: Serious self-directed investors managing 8–20 concentrated positions, trading around catalysts and earnings</li>
+                                <li>Pain reframed: "Consolidate your tools" → "Stop making trades you haven't properly researched"</li>
+                                <li>Primary personas: Marcus + Diana (portfolio $40K–$200K, research-driven, $25–$50/mo ceiling)</li>
+                                <li>Moat insight: Data accumulation (portfolio history, research history, theses) — not the AI pipeline</li>
+                            </ul>
+                        </div>
+                        <div class="consensus-block">
+                            <h4>Agent Consensus</h4>
+                            <p>All 3 personas confirmed pain at 8/10. Market is real. Positioning must shift from workflow consolidation to investment performance outcomes. Niche sharpening accepted. Moat must be built through switching cost, not AI quality alone.</p>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="phase-section completed" data-phase="2">
+                    <summary>
+                        <span class="phase-icon completed">✓</span>
+                        <span class="phase-title">Phase 2: Pricing</span>
+                        <span class="phase-status-badge completed">Complete</span>
+                    </summary>
+                    <div class="phase-content">
+                        <div class="decision-block">
+                            <h4>Pricing Decision</h4>
+                            <ul>
+                                <li>Pro: $29/month · $278/year</li>
+                                <li>Premium: $49/month · $399/year</li>
+                                <li>No freemium — 14-day free trial, no credit card</li>
+                                <li>Usage caps: 10 reports/mo (Pro), 30 reports/mo (Premium)</li>
+                                <li>Position: High-Value Leader</li>
+                            </ul>
+                        </div>
+                        <div class="consensus-block">
+                            <h4>Agent Consensus</h4>
+                            <p>All agents aligned. $20 = commodity trap (LTV:CAC 2.2x). $29 clears 3x minimum. $49 anchors premium tier and serves identity-driven buyers. ROI framing: one avoided bad trade on a $10K position covers 2+ years of subscription.</p>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="phase-section completed" data-phase="3">
+                    <summary>
+                        <span class="phase-icon completed">✓</span>
+                        <span class="phase-title">Phase 3: Value Equation</span>
+                        <span class="phase-status-badge completed">Complete</span>
+                    </summary>
+                    <div class="phase-content">
+                        <div class="decision-block">
+                            <h4>Value Equation Scores</h4>
+                            <ul>
+                                <li>Dream Outcome: 8/10 — "Know everything before you buy in under 5 minutes"</li>
+                                <li>Perceived Likelihood: 7/10 — Static sample report + backtested case studies</li>
+                                <li>Time Delay: 8/10 — First report under 3 min + 60-sec CSV import</li>
+                                <li>Effort: 7/10 — One report consolidates 5 tabs and 45 minutes</li>
+                            </ul>
+                        </div>
+                        <div class="consensus-block">
+                            <h4>Agent Consensus</h4>
+                            <p>Proof layer is the launch blocker. Fixed via static sample report (not live tool) + backtested case studies. "Replaces" → "consolidates" to avoid overpromise on charting. DO-1 thesis memory: build passive version only. CSV silent-skip fix is launch-blocking.</p>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="phase-section completed" data-phase="4">
+                    <summary>
+                        <span class="phase-icon completed">✓</span>
+                        <span class="phase-title">Phase 4: Offer Creation</span>
+                        <span class="phase-status-badge completed">Complete</span>
+                    </summary>
+                    <div class="phase-content">
+                        <div class="decision-block">
+                            <h4>Offer Stack</h4>
+                            <ul>
+                                <li>Core: Position-aware AI research reports (calibrated to trade type + cost basis/position size)</li>
+                                <li>Core: Portfolio tracker (stocks + crypto) — the data layer enabling personalization</li>
+                                <li>Core: Watchlist + contextual price alerts (reference the research)</li>
+                                <li>Core: Filtered news (holdings + watchlist tickers only) + CSV brokerage import</li>
+                                <li>Bonus 1 — Pre-Earnings Alert: 48hr before earnings on held positions → email + in-app popup to generate pre-earnings brief</li>
+                                <li>Bonus 2 — Investment Thesis Vault: Attach thesis at buy; surfaces on significant events (V1: passive display only)</li>
+                                <li>Bonus 3 — Research History Library: All reports saved, searchable, attached to positions</li>
+                            </ul>
+                        </div>
+                        <div class="consensus-block">
+                            <h4>Agent Consensus</h4>
+                            <p>Key insight: StockPro knows cost basis, position size, and portfolio weight — no competitor can claim this. Every element ladders to "position-specific intelligence." Pre-Earnings Alert is the #1 retention engine. Thesis Vault closes research-to-decision loop. Research History compounds switching cost with every report generated.</p>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="phase-section completed" data-phase="5">
+                    <summary>
+                        <span class="phase-icon completed">✓</span>
+                        <span class="phase-title">Phase 5: Enhancement</span>
+                        <span class="phase-status-badge completed">Complete</span>
+                    </summary>
+                    <div class="phase-content">
+                        <div class="decision-block">
+                            <h4>Enhancement Decisions</h4>
+                            <ul>
+                                <li>Scarcity: 2-week open beta, full Pro free — real deadline, authentic reason why</li>
+                                <li>Urgency: None — organic/word-of-mouth launch, beta window is the natural event</li>
+                                <li>Bonus stack: $88/mo stated value vs. $29/mo price (3:1 ratio)</li>
+                                <li>Guarantee: "The 3-Report Promise" — 3 reports in 14 days or full refund, same day</li>
+                                <li>Offer name: "The Active Investor's Intelligence Platform" (MAGIC formula)</li>
+                            </ul>
+                        </div>
+                        <div class="consensus-block">
+                            <h4>Agent Consensus</h4>
+                            <p>"Pre-Trade Intelligence System" rejected — name contradicted hold-cycle features. "Active Investor's Intelligence Platform" accepted. Guarantee split verdict: Marketer wanted quality framing, Marcus (primary persona) validated 3-Report Promise as written. Kept with "full refund, same day" tightening. Final scores: Marketer 6.5/10, Strategist 6/10, Marcus 8/10 to convert. Overall 7/10.</p>
+                        </div>
+                    </div>
+                </details>
+
+            </div>
+        </section>
+
+        <!-- Quick Stats -->
+        <section class="quick-stats">
+            <h2>Quick Stats</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value">6/6</span>
+                    <span class="stat-label">Phases Complete</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">26</span>
+                    <span class="stat-label">Key Decisions</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">7/10</span>
+                    <span class="stat-label">Overall Score</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">100%</span>
+                    <span class="stat-label">Complete</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const current = document.querySelector('.phase-section.current');
+            if (current) current.open = true;
+
+            document.querySelectorAll('.phase-section.locked').forEach(phase => {
+                const summary = phase.querySelector('summary');
+                if (!summary) return;
+                summary.addEventListener('click', e => {
+                    if (phase.classList.contains('locked')) e.preventDefault();
+                });
+            });
+
+            document.querySelectorAll('.phase-dot').forEach((dot, i) => {
+                setTimeout(() => {
+                    dot.style.transform = 'scale(1.1)';
+                    setTimeout(() => { dot.style.transform = 'scale(1)'; }, 200);
+                }, i * 100);
+            });
+
+            document.querySelectorAll('.timeline-phase').forEach(phase => {
+                phase.addEventListener('click', () => {
+                    const num = phase.dataset.phase;
+                    if (!num) return;
+                    const section = document.querySelector(`.phase-section[data-phase="${num}"]`);
+                    if (section && !section.classList.contains('locked')) {
+                        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        section.open = true;
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

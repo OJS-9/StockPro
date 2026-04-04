@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grand Slam Offer — StockPro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+        h1 { font-size: 2.5rem; font-weight: 800; color: #fff; margin-bottom: 0.25rem; }
+        h2 { font-size: 1.5rem; font-weight: 700; color: #fff; border-left: 4px solid #4a9eff; padding-left: 1rem; margin-bottom: 1.5rem; }
+        h3 { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+        section { margin-bottom: 3rem; }
+        .subtitle { color: #888; font-size: 1rem; margin-bottom: 0.25rem; }
+        .status-badge { display: inline-block; background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2rem; }
+        header { margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid #1e1e1e; }
+
+        .page-nav { display: flex; gap: 0.5rem; justify-content: center; padding: 1rem 0; margin-bottom: 2rem; border-bottom: 1px solid #2a2a2a; }
+        .nav-link { color: #888; text-decoration: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; }
+        .nav-link:hover { color: #4a9eff; background: rgba(74,158,255,0.1); }
+        .nav-link.active { color: #4a9eff; background: rgba(74,158,255,0.15); font-weight: 700; }
+
+        /* Offer Name Hero */
+        .offer-hero { background: linear-gradient(135deg, #0d1a2e 0%, #0a1628 50%, #0a0a0a 100%); border: 1px solid #1e3a5f; border-radius: 16px; padding: 3rem; text-align: center; margin-bottom: 3rem; position: relative; overflow: hidden; }
+        .offer-hero::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at center, rgba(74,158,255,0.05) 0%, transparent 60%); pointer-events: none; }
+        .offer-label { color: #4a9eff; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1rem; }
+        .offer-name { font-size: 2.75rem; font-weight: 800; color: #fff; line-height: 1.15; margin-bottom: 1rem; }
+        .offer-tagline { color: #a0a0a0; font-size: 1.15rem; max-width: 600px; margin: 0 auto 2rem; }
+        .offer-price-row { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+        .price-pill { background: rgba(74,158,255,0.1); border: 1px solid rgba(74,158,255,0.3); border-radius: 12px; padding: 1rem 2rem; text-align: center; }
+        .price-pill .amount { font-size: 2rem; font-weight: 800; color: #4a9eff; }
+        .price-pill .tier { color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.25rem; }
+        .price-pill .annual { color: #555; font-size: 0.8rem; margin-top: 0.1rem; }
+
+        /* Two-column layout */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+        /* Cards */
+        .card { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 1.5rem; }
+        .card.accent-green { border-left: 4px solid #22c55e; }
+        .card.accent-blue { border-left: 4px solid #4a9eff; }
+        .card.accent-amber { border-left: 4px solid #f59e0b; }
+        .card.accent-purple { border-left: 4px solid #a855f7; }
+        .card-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
+        .card-label.green { color: #22c55e; }
+        .card-label.blue { color: #4a9eff; }
+        .card-label.amber { color: #f59e0b; }
+        .card-label.purple { color: #a855f7; }
+
+        /* Stack table */
+        .stack-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+        .stack-item { background: #141414; border: 1px solid #222; border-radius: 10px; padding: 1.25rem 1.5rem; display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center; }
+        .stack-item.core { border-color: #1e3a5f; }
+        .stack-item.bonus { border-color: #1e3a1f; }
+        .stack-badge { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.2rem 0.6rem; border-radius: 20px; white-space: nowrap; }
+        .stack-badge.core { background: rgba(74,158,255,0.15); color: #4a9eff; }
+        .stack-badge.bonus { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .stack-item-body h4 { font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 0.2rem; }
+        .stack-item-body p { font-size: 0.85rem; color: #888; line-height: 1.4; }
+        .stack-value { font-size: 0.85rem; font-weight: 700; color: #555; white-space: nowrap; }
+        .stack-value.highlighted { color: #22c55e; }
+        .stack-total { background: #1a1a1a; border: 1px solid #333; border-radius: 10px; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+        .stack-total-label { color: #888; font-size: 0.9rem; }
+        .stack-total-value { font-size: 1.1rem; font-weight: 800; }
+        .stack-total-value .old { color: #555; text-decoration: line-through; margin-right: 0.75rem; }
+        .stack-total-value .new { color: #4a9eff; }
+
+        /* Value equation */
+        .value-eq-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        @media (max-width: 768px) { .value-eq-grid { grid-template-columns: repeat(2, 1fr); } }
+        .ve-card { background: #141414; border: 1px solid #222; border-radius: 10px; padding: 1.25rem; text-align: center; }
+        .ve-score { font-size: 2rem; font-weight: 800; color: #4a9eff; }
+        .ve-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.25rem; }
+        .ve-note { font-size: 0.8rem; color: #666; margin-top: 0.5rem; line-height: 1.3; }
+
+        /* Guarantee */
+        .guarantee-block { background: linear-gradient(135deg, #0d1f0d 0%, #0a1a0a 100%); border: 1px solid rgba(34,197,94,0.25); border-radius: 12px; padding: 2rem; text-align: center; }
+        .guarantee-name { font-size: 1.5rem; font-weight: 800; color: #22c55e; margin-bottom: 1rem; }
+        .guarantee-text { font-size: 1.05rem; color: #c0c0c0; max-width: 600px; margin: 0 auto 1.5rem; line-height: 1.7; font-style: italic; }
+        .guarantee-meta { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+        .guarantee-meta-item { text-align: center; }
+        .guarantee-meta-item .val { font-size: 0.9rem; font-weight: 700; color: #22c55e; }
+        .guarantee-meta-item .lbl { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Elevator pitch */
+        .pitch-block { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 2rem; font-size: 1.1rem; color: #c8c8c8; line-height: 1.8; position: relative; }
+        .pitch-block::before { content: '"'; position: absolute; top: 1rem; left: 1.5rem; font-size: 4rem; color: #1e1e1e; font-family: Georgia, serif; line-height: 1; }
+        .pitch-block p { padding-left: 1rem; }
+
+        /* Niche + market */
+        .niche-block { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 1.5rem; }
+        .persona-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem; }
+        .persona-chip { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 0.75rem 1rem; flex: 1; min-width: 180px; }
+        .persona-chip .name { font-weight: 700; color: #fff; font-size: 0.9rem; }
+        .persona-chip .desc { font-size: 0.8rem; color: #888; margin-top: 0.2rem; }
+        .persona-chip .pain { font-size: 0.75rem; color: #4a9eff; margin-top: 0.4rem; font-weight: 600; }
+
+        /* Next steps */
+        .next-steps-list { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+        .next-steps-list li { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 1rem; background: #141414; border: 1px solid #1e1e1e; border-radius: 8px; font-size: 0.9rem; color: #c0c0c0; }
+        .next-steps-list li .priority { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 10px; white-space: nowrap; flex-shrink: 0; margin-top: 0.1rem; }
+        .priority.blocking { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .priority.high { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .priority.normal { background: rgba(74,158,255,0.15); color: #4a9eff; }
+
+        /* Scores */
+        .scores-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+        .score-card { background: #141414; border: 1px solid #222; border-radius: 10px; padding: 1.25rem; text-align: center; }
+        .score-val { font-size: 2rem; font-weight: 800; }
+        .score-val.high { color: #22c55e; }
+        .score-val.mid { color: #f59e0b; }
+        .score-label { font-size: 0.8rem; color: #888; margin-top: 0.25rem; }
+
+        /* Beta block */
+        .beta-block { background: linear-gradient(135deg, #1a1200 0%, #0f0a00 100%); border: 1px solid rgba(245,158,11,0.25); border-radius: 12px; padding: 1.5rem 2rem; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; }
+        .beta-icon { font-size: 2.5rem; flex-shrink: 0; }
+        .beta-text h3 { color: #f59e0b; margin-bottom: 0.25rem; }
+        .beta-text p { color: #a0a0a0; font-size: 0.9rem; }
+
+        /* Dividers */
+        hr { border: none; border-top: 1px solid #1e1e1e; margin: 0; }
+    </style>
+</head>
+<body>
+
+    <nav class="page-nav">
+        <a href="./stockpro-offer-summary.html" class="nav-link active">Offer Summary</a>
+        <a href="./stockpro-workshop-progress.html" class="nav-link">Workshop Progress</a>
+        <a href="./stockpro-research-dashboard.html" class="nav-link">Research Dashboard</a>
+    </nav>
+
+    <header>
+        <p class="subtitle">Grand Slam Offer Workshop — Final Output</p>
+        <h1>StockPro</h1>
+        <p class="subtitle" style="margin-top:0.25rem; font-size:0.95rem;">Generated: 2026-03-30 &nbsp;·&nbsp; All 5 phases complete</p>
+        <br>
+        <span class="status-badge">Workshop Complete</span>
+    </header>
+
+    <!-- Offer Name Hero -->
+    <div class="offer-hero">
+        <p class="offer-label">The Offer</p>
+        <h1 class="offer-name">The Active Investor's<br>Intelligence Platform</h1>
+        <p class="offer-tagline">The first research platform that knows your positions — calibrated to your cost basis, your position size, and your trade type.</p>
+        <div class="offer-price-row">
+            <div class="price-pill">
+                <div class="amount">$29<span style="font-size:1rem;font-weight:400;color:#888">/mo</span></div>
+                <div class="tier">Pro</div>
+                <div class="annual">$278/yr — save 20%</div>
+            </div>
+            <div class="price-pill">
+                <div class="amount">$49<span style="font-size:1rem;font-weight:400;color:#888">/mo</span></div>
+                <div class="tier">Premium</div>
+                <div class="annual">$399/yr — save 20%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Elevator Pitch -->
+    <section>
+        <h2>Elevator Pitch</h2>
+        <div class="pitch-block">
+            <p>StockPro is the first research platform that knows your positions. While every other tool gives you generic analysis on a ticker, StockPro delivers reports calibrated to your cost basis, your position size, and your trade type — so you know exactly what a move means for your portfolio, not just the stock. Research any company in under 5 minutes, get alerted 48 hours before every earnings event on positions you hold, and build a research history that grows smarter with every trade. $29/month. 2-week free beta. No credit card required.</p>
+        </div>
+    </section>
+
+    <!-- Offer Stack -->
+    <section>
+        <h2>Offer Stack</h2>
+        <div class="stack-grid">
+            <div class="stack-item core">
+                <span class="stack-badge core">Core</span>
+                <div class="stack-item-body">
+                    <h4>Position-Aware AI Research Reports</h4>
+                    <p>Calibrated to Day / Swing / Investment trade type. Contextualized to your cost basis and position size. No competitor can do this.</p>
+                </div>
+                <span class="stack-value">Included</span>
+            </div>
+            <div class="stack-item core">
+                <span class="stack-badge core">Core</span>
+                <div class="stack-item-body">
+                    <h4>Portfolio Tracker — Stocks + Crypto</h4>
+                    <p>The data layer that makes personalization possible. P&L, cost basis, holdings — one place.</p>
+                </div>
+                <span class="stack-value">Included</span>
+            </div>
+            <div class="stack-item core">
+                <span class="stack-badge core">Core</span>
+                <div class="stack-item-body">
+                    <h4>Watchlist + Contextual Price Alerts</h4>
+                    <p>Alerts that reference your research, not just price thresholds.</p>
+                </div>
+                <span class="stack-value">Included</span>
+            </div>
+            <div class="stack-item core">
+                <span class="stack-badge core">Core</span>
+                <div class="stack-item-body">
+                    <h4>Filtered News + CSV Brokerage Import</h4>
+                    <p>News filtered to holdings + watchlist only. Import from any brokerage in 60 seconds.</p>
+                </div>
+                <span class="stack-value">Included</span>
+            </div>
+            <div class="stack-item bonus">
+                <span class="stack-badge bonus">Bonus 1</span>
+                <div class="stack-item-body">
+                    <h4>Pre-Earnings Alert</h4>
+                    <p>48 hours before any held position reports, email + in-app popup: "AAPL reports Thursday — generate your pre-earnings brief?" One click. The retention engine.</p>
+                </div>
+                <span class="stack-value highlighted">$19/mo value</span>
+            </div>
+            <div class="stack-item bonus">
+                <span class="stack-badge bonus">Bonus 2</span>
+                <div class="stack-item-body">
+                    <h4>Investment Thesis Vault</h4>
+                    <p>Attach your thesis when you buy. StockPro surfaces it when significant events hit — holding you accountable to your own reasoning. V1: passive display.</p>
+                </div>
+                <span class="stack-value highlighted">$15/mo value</span>
+            </div>
+            <div class="stack-item bonus">
+                <span class="stack-badge bonus">Bonus 3</span>
+                <div class="stack-item-body">
+                    <h4>Research History Library</h4>
+                    <p>Every report you generate is saved, searchable, and attached to positions. Switching cost that compounds with every trade.</p>
+                </div>
+                <span class="stack-value highlighted">$25/mo value</span>
+            </div>
+        </div>
+        <div class="stack-total">
+            <span class="stack-total-label">Total stated value</span>
+            <span class="stack-total-value">
+                <span class="old">$88/mo</span>
+                <span class="new">$29/mo</span>
+            </span>
+        </div>
+    </section>
+
+    <!-- Beta + Guarantee -->
+    <section>
+        <h2>Acquisition + Guarantee</h2>
+        <div style="display:flex;flex-direction:column;gap:1.5rem;">
+            <div class="beta-block">
+                <div class="beta-icon">⚡</div>
+                <div class="beta-text">
+                    <h3>2-Week Open Beta — Pro Free</h3>
+                    <p>Full Pro access, no credit card. Real deadline. Authentic reason why: early users carry product risk and shape the roadmap. After beta closes, $29/mo Pro · $49/mo Premium.</p>
+                </div>
+            </div>
+            <div class="guarantee-block">
+                <div class="guarantee-name">The 3-Report Promise</div>
+                <p class="guarantee-text">"Generate 3 reports in your first 14 days. If StockPro isn't worth $29/month — tell us. Full refund, same day. No forms, no questions, no friction."</p>
+                <div class="guarantee-meta">
+                    <div class="guarantee-meta-item">
+                        <div class="val">Conditional</div>
+                        <div class="lbl">Guarantee Type</div>
+                    </div>
+                    <div class="guarantee-meta-item">
+                        <div class="val">Always-On</div>
+                        <div class="lbl">Category</div>
+                    </div>
+                    <div class="guarantee-meta-item">
+                        <div class="val">Tool abandonment</div>
+                        <div class="lbl">Fear Reversed</div>
+                    </div>
+                    <div class="guarantee-meta-item">
+                        <div class="val">Same day</div>
+                        <div class="lbl">Refund Speed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Value Equation -->
+    <section>
+        <h2>Value Equation</h2>
+        <div class="value-eq-grid">
+            <div class="ve-card">
+                <div class="ve-score">8/10</div>
+                <div class="ve-label">Dream Outcome</div>
+                <div class="ve-note">"Know everything before you buy in under 5 min — never make an under-researched trade again"</div>
+            </div>
+            <div class="ve-card">
+                <div class="ve-score">7/10</div>
+                <div class="ve-label">Perceived Likelihood</div>
+                <div class="ve-note">Static sample report + backtested case studies on landing page</div>
+            </div>
+            <div class="ve-card">
+                <div class="ve-score">8/10</div>
+                <div class="ve-label">Time Delay</div>
+                <div class="ve-note">First report under 3 min · 60-second CSV import · no setup required</div>
+            </div>
+            <div class="ve-card">
+                <div class="ve-score">7/10</div>
+                <div class="ve-label">Effort &amp; Sacrifice</div>
+                <div class="ve-note">"One report consolidates what used to take 5 tabs and 45 minutes"</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Market + Personas -->
+    <section>
+        <h2>Market + Niche</h2>
+        <div class="niche-block">
+            <div style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:1rem;">
+                <div>
+                    <span style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Core Market</span>
+                    <div style="font-weight:700;color:#fff;margin-top:0.2rem;">Wealth</div>
+                </div>
+                <div>
+                    <span style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Market Score</span>
+                    <div style="font-weight:700;color:#22c55e;margin-top:0.2rem;">29/40 — Green</div>
+                </div>
+                <div>
+                    <span style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Positioning</span>
+                    <div style="font-weight:700;color:#fff;margin-top:0.2rem;">High-Value Leader</div>
+                </div>
+                <div>
+                    <span style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">No Freemium</span>
+                    <div style="font-weight:700;color:#fff;margin-top:0.2rem;">14-day free trial</div>
+                </div>
+            </div>
+            <p style="font-size:0.9rem;color:#888;margin-bottom:1rem;">Serious self-directed investors managing 8–20 concentrated positions, doing their own research before buying, trading around catalysts and earnings events. Not passive investors. Not pure day traders.</p>
+            <div class="persona-row">
+                <div class="persona-chip">
+                    <div class="name">Marcus, 34 — Primary</div>
+                    <div class="desc">Engineer, $45K portfolio. 2–3 hrs research per stock. Google Sheets chaos.</div>
+                    <div class="pain">Pain: 8/10 · Converts at $29 after seeing one deep report</div>
+                </div>
+                <div class="persona-chip">
+                    <div class="name">Diana, 41 — Primary</div>
+                    <div class="desc">Marketing mgr, $120K portfolio. 30-ticker watchlist, 5 researched.</div>
+                    <div class="pain">Pain: 8/10 · Identity buyer, premium tier target, word-of-mouth driver</div>
+                </div>
+                <div class="persona-chip">
+                    <div class="name">Jordan, 28 — Secondary</div>
+                    <div class="desc">Sales rep, $18K portfolio. Trades on Reddit + vibes.</div>
+                    <div class="pain">Pain: 8/10 · Entry plan target, $12–15/mo ceiling</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Agent Scores -->
+    <section>
+        <h2>Agent Scores — Final Review</h2>
+        <div class="scores-row">
+            <div class="score-card">
+                <div class="score-val mid">6.5/10</div>
+                <div class="score-label">Skeptical Marketer</div>
+            </div>
+            <div class="score-card">
+                <div class="score-val mid">6/10</div>
+                <div class="score-label">Business Strategist</div>
+            </div>
+            <div class="score-card">
+                <div class="score-val high">8/10</div>
+                <div class="score-label">Marcus (Convert Rate)</div>
+            </div>
+            <div class="score-card">
+                <div class="score-val mid">7/10</div>
+                <div class="score-label">Overall</div>
+            </div>
+        </div>
+        <p style="margin-top:1rem;font-size:0.85rem;color:#666;">Offer is differentiated and the stack is real. Execution risk is proof layer + activation flow. Name and guarantee issues addressed in Phase 5 revision.</p>
+    </section>
+
+    <!-- Next Steps -->
+    <section>
+        <h2>Next Steps</h2>
+        <ul class="next-steps-list">
+            <li><span class="priority blocking">Blocking</span> Fix CSV silent-skip bug — surface skipped_count in UI (Fidelity / Schwab / Webull silent row drops)</li>
+            <li><span class="priority blocking">Blocking</span> Build proof layer: static pre-generated sample report on landing page + 3 backtested case studies</li>
+            <li><span class="priority high">High</span> Build Thesis Vault V1 (passive): store thesis at buy, surface on significant price events — no LLM re-evaluation</li>
+            <li><span class="priority high">High</span> Enforce report quota on alert-triggered reports (Pre-Earnings Alert must count against monthly cap)</li>
+            <li><span class="priority high">High</span> Beta → paid conversion email sequence: day 10 trigger — "your beta ends in 4 days, here's what you'll lose"</li>
+            <li><span class="priority high">High</span> Add retry + credit restoration path for failed report generation (pre-scale, before 500 users)</li>
+            <li><span class="priority normal">Normal</span> Fix session TTL eviction in agent_sessions dict (memory leak)</li>
+            <li><span class="priority normal">Normal</span> Build landing page with offer headline: "The Active Investor's Intelligence Platform"</li>
+            <li><span class="priority normal">Normal</span> Create lead magnet → $100M Leads workshop</li>
+            <li><span class="priority normal">Normal</span> Write sales script / paid conversion page</li>
+        </ul>
+    </section>
+
+    <!-- Key Insights -->
+    <section>
+        <h2>Key Insights From the Workshop</h2>
+        <div class="two-col">
+            <div class="card accent-blue">
+                <p class="card-label blue">Category-of-One Claim</p>
+                <p style="font-size:0.9rem;color:#c0c0c0;">StockPro knows your cost basis, position size, and portfolio weight. No competitor — Seeking Alpha, Bloomberg, ChatGPT — can claim this. Position-aware intelligence is the moat.</p>
+            </div>
+            <div class="card accent-green">
+                <p class="card-label green">The Real Moat</p>
+                <p style="font-size:0.9rem;color:#c0c0c0;">The AI pipeline is not the moat. Accumulated portfolio history, research history, and investment theses are. Switching cost compounds with every report generated.</p>
+            </div>
+            <div class="card accent-amber">
+                <p class="card-label amber">Pain Reframe</p>
+                <p style="font-size:0.9rem;color:#c0c0c0;">"Consolidate your tools" is a vitamin. "Stop making trades you haven't properly researched" is a painkiller. All messaging must frame around investment performance outcomes, not workflow efficiency.</p>
+            </div>
+            <div class="card accent-purple">
+                <p class="card-label purple">10x ROI Frame</p>
+                <p style="font-size:0.9rem;color:#c0c0c0;">At $49/mo, one avoided bad trade on a $10K position pays for 2+ years of subscription. Price comparison is the wrong frame. ROI is the right one.</p>
+            </div>
+        </div>
+    </section>
+
+</body>
+</html>

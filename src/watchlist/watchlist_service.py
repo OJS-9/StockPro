@@ -139,20 +139,12 @@ class WatchlistService:
 
     def _refresh_symbol_price(self, symbol, asset_type, display_name=None):
         try:
-            provider, _ = self.provider_factory.get_provider_for_symbol(symbol)
-            if asset_type == "crypto":
-                batch = provider.get_prices_with_change([symbol])
-                data = batch.get(symbol, {})
-                price = data.get("price")
-                change_percent = data.get("change_percent")
-            else:
-                data = provider.get_price_with_change(symbol)
-                price = data.get("price")
-                change_percent = data.get("change_percent")
-            if price is not None:
-                self.db.upsert_price_cache(
-                    symbol, asset_type, price, change_percent, display_name
-                )
+            from price_cache_service import get_price_cache_service
+            get_price_cache_service().refresh(
+                [(symbol, asset_type)],
+                force=True,
+                display_names={symbol: display_name} if display_name else None,
+            )
         except Exception as e:
             logger.warning("Price fetch failed for %s: %s", symbol, e)
 
