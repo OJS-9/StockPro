@@ -201,8 +201,17 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
         )
 
     def perplexity_research(query: str, focus: str = "general") -> str:
-        result = nimble_client.perplexity_research(query, focus)
-        return json.dumps({"research": result, "status": "success"})
+        try:
+            result = nimble_client.perplexity_research(query, focus)
+            if isinstance(result, str) and result.startswith("[Nimble Perplexity"):
+                return json.dumps({
+                    "status": "failed",
+                    "error": result,
+                    "suggestion": "Try nimble_web_search or a yfinance tool instead.",
+                })
+            return json.dumps({"research": result, "status": "success"})
+        except Exception as e:
+            return json.dumps({"status": "failed", "error": f"perplexity_research failed: {e}"})
 
     return [
         StructuredTool.from_function(
