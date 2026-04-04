@@ -260,13 +260,16 @@ def specialized_node(state: dict) -> dict:
                 "actual_output_tokens": output_tok,
             }
 
-        return run_with_exponential_backoff(
+        result = run_with_exponential_backoff(
             _run_specialized_once,
             max_retries=max_retries,
             base_delay_seconds=base_delay,
             is_retriable=is_rate_limit_error,
             log_label=subject_id,
         )
+        if progress_fn := state.get("progress_fn"):
+            progress_fn(None, f"Researched: {subject.name}")
+        return result
     except Exception as last_exc:
         error_msg = f"Error in research for {subject.name}: {last_exc}"
         logger.error("%s", error_msg)
