@@ -32,3 +32,4 @@ class ResearchPlan:
     subject_focus: Dict[str, str] = field(default_factory=dict)
     trade_context: str = ""
     planner_reasoning: str = ""
+    position_summary: str = ""  # Raw position block parsed from conversation_context

@@ -81,10 +81,21 @@ def _get_synthesis_instructions(
         if plan.trade_context
         else ""
     )
+    position_rules = ""
+    if plan.position_summary:
+        position_rules = f"""
+**Position-Aware Reporting Rules (user holds this stock):**
+The user has an existing position in {ticker}. Follow these rules strictly:
+- DO NOT tell the user to buy, sell, add to, reduce, or hold their position.
+- DO frame findings in relation to their cost basis and stated goal.
+- Use language like: "relevant to your position", "given your cost basis",
+  "this factor is worth monitoring if your goal is [goal]".
+- Let the data speak — present facts and observations, not instructions.
+"""
     return f"""You are a senior equity research analyst synthesizing specialized research findings into {framing} for {ticker}.
 
 {datetime_context}
-{trade_context_block}
+{trade_context_block}{position_rules}
 **Your Task:**
 Integrate research findings from multiple specialized agents into a structured, detailed report.
 Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize or condense it.
@@ -106,7 +117,7 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
 - Ensure the report is comprehensive and fully utilizes all research findings"""
 
 
-def _build_report_sections(trade_type: str, subject_ids_run: List[str]) -> str:
+def _build_report_sections(trade_type: str, subject_ids_run: List[str], has_position: bool = False) -> str:
     subject_names: Dict[str, str] = {}
     subject_descriptions: Dict[str, str] = {}
     for sid in subject_ids_run:
@@ -122,6 +133,12 @@ def _build_report_sections(trade_type: str, subject_ids_run: List[str]) -> str:
         "1. **Executive Summary** — Key findings, recommendation, and top metrics"
     ]
     section_num = 2
+    if has_position:
+        sections.append(
+            f"{section_num}. **Position Context** — Your holdings, cost basis, and the key findings "
+            "most relevant to your stated goal. Factual observations only — no action recommendations."
+        )
+        section_num += 1
     for sid in subject_ids_run:
         if sid == "risk_factors":
             continue
@@ -164,7 +181,7 @@ def _build_synthesis_prompt(
         if sid not in ordered_ids:
             ordered_ids.append(sid)
 
-    sections_text = _build_report_sections(trade_type, ordered_ids)
+    sections_text = _build_report_sections(trade_type, ordered_ids, has_position=bool(plan.position_summary))
 
     prompt_parts = [
         f"**TASK: Synthesize research into {framing} for {ticker} ({trade_type})**",
@@ -227,6 +244,34 @@ def _build_synthesis_prompt(
                 prompt_parts.append(f"{i}. {source}")
 
         prompt_parts += ["", "---", ""]
+
+    if plan.position_summary:
+        goal_line = ""
+        # Extract "User's goal for this research: ..." for the prompt hint
+        for line in plan.position_summary.splitlines():
+            if line.startswith("User's goal for this research:"):
+                goal_line = line.replace("User's goal for this research:", "").strip()
+                break
+        goal_hint = f' (user goal: "{goal_line}")' if goal_line else ""
+        prompt_parts += [
+            "",
+            f"**Position Context section — write it as follows{goal_hint}:**",
+            f"- Open with: the user's position details exactly as stated: \"{plan.position_summary}\"",
+            "- Then list 3–5 specific findings from the research that are most relevant to their goal.",
+            "  Pick findings that directly bear on their cost basis, risk exposure, or stated intent.",
+            "  Examples by goal type:",
+            "    DCA goal → earnings trend, margin trajectory, upcoming catalysts, valuation vs entry price",
+            "    Re-evaluate goal → current price vs cost basis, downside risks, growth outlook changes",
+            "    Hedge/exit goal → near-term volatility, technical levels, macro headwinds",
+            "- Frame each point as an observation ('X suggests...', 'worth monitoring because...'),",
+            "  NOT as an instruction ('you should...', 'consider buying...').",
+            "",
+            "**Key Takeaways — position-aware framing:**",
+            "- For each bullet, note whether the finding is favorable, neutral, or a risk",
+            "  in the context of the user's position and goal.",
+            "- Reference cost basis or goal where directly relevant.",
+            "- DO NOT use 'buy', 'sell', 'hold', 'add to', or 'reduce' — present observations only.",
+        ]
 
     prompt_parts += [
         "",

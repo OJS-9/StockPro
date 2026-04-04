@@ -8,6 +8,7 @@ and conversation context. Single structured-JSON LLM call, no tools.
 import json
 import logging
 import os
+import re
 from typing import List
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -200,6 +201,15 @@ def planner_node(state: dict) -> dict:
     except Exception as exc:
         logger.warning("LLM call failed (%s); using fallback.", exc)
         plan = _fallback_plan(ticker, trade_type, eligible)
+
+    # Deterministically extract the raw position block (no LLM needed)
+    pos_match = re.search(
+        r"(User's existing position:.+?)(?:\n\n|\Z)",
+        conversation_context,
+        re.DOTALL,
+    )
+    if pos_match:
+        plan.position_summary = pos_match.group(1).strip()
 
     subject_names = ", ".join(plan.selected_subject_ids)
     logger.info(
