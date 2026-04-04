@@ -10,7 +10,7 @@
             <span class="text-lg font-semibold leading-tight tracking-[-0.015em]">StockPro</span>
         </a>
         <!-- Research progress indicator — hidden until a report is generating -->
-        <div id="rp-indicator" style="display:none" class="flex items-center gap-4 ml-4 border-l border-zinc-200 dark:border-zinc-800 pl-4">
+        <div id="rp-indicator" style="display:none" class="flex items-center gap-3 ml-4 border-l border-zinc-200 dark:border-zinc-800 pl-4">
             <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between w-[180px]">
                     <span class="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Report Status</span>
@@ -23,6 +23,11 @@
                     <span id="rp-step" class="text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[180px]">Starting...</span>
                 </div>
             </div>
+            <!-- Actions shown only when report is ready -->
+            <a id="rp-view-btn" href="#" style="display:none" class="flex-shrink-0 inline-flex items-center justify-center px-2.5 py-1 bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 text-[11px] font-semibold rounded-md hover:opacity-80 transition-opacity whitespace-nowrap">View Report</a>
+            <button id="rp-dismiss-btn" style="display:none" onclick="window.rpDismiss()" class="flex-shrink-0 inline-flex items-center justify-center text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors" aria-label="Dismiss">
+                <span class="material-symbols-outlined" style="font-size:16px">close</span>
+            </button>
         </div>
     </div>
     <div class="hidden md:flex flex-1 justify-end gap-8">
@@ -179,6 +184,8 @@
     var bar = document.getElementById('rp-bar');
     var pct = document.getElementById('rp-pct');
     var stepEl = document.getElementById('rp-step');
+    var viewBtn = document.getElementById('rp-view-btn');
+    var dismissBtn = document.getElementById('rp-dismiss-btn');
     var pollTimer = null;
     var rpVisible = false;
 
@@ -192,10 +199,24 @@
         if (step) stepEl.textContent = step;
     }
 
+    function showReady(reportId) {
+        showBar(100, 'Report ready');
+        stepEl.style.display = 'none';
+        if (reportId) {
+            viewBtn.href = '/report/' + reportId;
+            viewBtn.style.display = 'inline-flex';
+        }
+        dismissBtn.style.display = 'inline-flex';
+    }
+
     function hideBar() {
         indicator.style.display = 'none';
         rpVisible = false;
         bar.style.width = '0%';
+        stepEl.style.display = '';
+        viewBtn.style.display = 'none';
+        dismissBtn.style.display = 'none';
+        viewBtn.href = '#';
     }
 
     function stopPolling() {
@@ -211,17 +232,8 @@
                 if (data.status === 'in_progress') {
                     showBar(data.progress || 5, data.step);
                 } else if (data.status === 'ready') {
-                    showBar(100, 'Done');
                     stopPolling();
-                    setTimeout(hideBar, 2000);
-                    if (data.report_id && !window.location.pathname.startsWith('/report/')) {
-                        var note = document.createElement('a');
-                        note.href = '/report/' + data.report_id;
-                        note.className = 'fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-lg shadow-lg hover:opacity-90 transition-opacity';
-                        note.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">check_circle</span> Report Ready';
-                        document.body.appendChild(note);
-                        setTimeout(function () { note.remove(); }, 10000);
-                    }
+                    showReady(data.report_id);
                 } else {
                     stopPolling();
                     hideBar();
@@ -237,14 +249,15 @@
         poll(sessionId);
     }
 
+    window.rpDismiss = function () { stopPolling(); hideBar(); };
+    window.rpStartPolling = startPolling;
+    window.rpStopPolling = stopPolling;
+
     var storedId = sessionStorage.getItem('rp_session_id');
     var serverActiveId = {{ active_research_session_id | tojson }};
     var activeId = serverActiveId || storedId;
     if (activeId) {
         startPolling(activeId);
     }
-
-    window.rpStartPolling = startPolling;
-    window.rpStopPolling = stopPolling;
 })();
 </script>
