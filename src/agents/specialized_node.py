@@ -64,11 +64,6 @@ Prioritize this focus while still covering the full subject area.
         "growth_drivers", "competitive_position", "sector_macro",
         "risk_factors", "management_quality",
     }
-    fundamental_subjects = {
-        "earnings_financials", "revenue_breakdown", "valuation",
-        "margin_structure", "company_overview",
-    }
-
     subject_id_key = subject.id
 
     if subject_id_key in qualitative_subjects:
