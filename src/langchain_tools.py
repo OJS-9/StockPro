@@ -27,6 +27,7 @@ def _sanitize_nan(obj):
         return [_sanitize_nan(v) for v in obj]
     return obj
 
+
 MAX_SERIES_ITEMS = 5
 MAX_NEWS_ITEMS = 5
 
@@ -204,14 +205,18 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
         try:
             result = nimble_client.perplexity_research(query, focus)
             if isinstance(result, str) and result.startswith("[Nimble Perplexity"):
-                return json.dumps({
-                    "status": "failed",
-                    "error": result,
-                    "suggestion": "Try nimble_web_search or a yfinance tool instead.",
-                })
+                return json.dumps(
+                    {
+                        "status": "failed",
+                        "error": result,
+                        "suggestion": "Try nimble_web_search or a yfinance tool instead.",
+                    }
+                )
             return json.dumps({"research": result, "status": "success"})
         except Exception as e:
-            return json.dumps({"status": "failed", "error": f"perplexity_research failed: {e}"})
+            return json.dumps(
+                {"status": "failed", "error": f"perplexity_research failed: {e}"}
+            )
 
     return [
         StructuredTool.from_function(
@@ -285,36 +290,72 @@ def create_yfinance_tools() -> List[StructuredTool]:
             profile = {
                 k: info.get(k)
                 for k in (
-                    "symbol", "longName", "longBusinessSummary", "sector", "industry",
-                    "country", "fullTimeEmployees", "website",
-                    "marketCap", "enterpriseValue", "trailingPE", "forwardPE",
-                    "priceToBook", "priceToSalesTrailing12Months",
-                    "enterpriseToRevenue", "enterpriseToEbitda",
-                    "totalRevenue", "revenueGrowth", "grossMargins",
-                    "operatingMargins", "profitMargins", "ebitda",
-                    "netIncomeToCommon", "earningsGrowth", "earningsQuarterlyGrowth",
-                    "totalCash", "totalDebt", "debtToEquity", "currentRatio",
-                    "trailingEps", "forwardEps", "bookValue",
-                    "dividendRate", "dividendYield", "payoutRatio",
-                    "beta", "52WeekChange",
-                    "targetHighPrice", "targetLowPrice", "targetMeanPrice",
-                    "recommendationKey", "numberOfAnalystOpinions",
+                    "symbol",
+                    "longName",
+                    "longBusinessSummary",
+                    "sector",
+                    "industry",
+                    "country",
+                    "fullTimeEmployees",
+                    "website",
+                    "marketCap",
+                    "enterpriseValue",
+                    "trailingPE",
+                    "forwardPE",
+                    "priceToBook",
+                    "priceToSalesTrailing12Months",
+                    "enterpriseToRevenue",
+                    "enterpriseToEbitda",
+                    "totalRevenue",
+                    "revenueGrowth",
+                    "grossMargins",
+                    "operatingMargins",
+                    "profitMargins",
+                    "ebitda",
+                    "netIncomeToCommon",
+                    "earningsGrowth",
+                    "earningsQuarterlyGrowth",
+                    "totalCash",
+                    "totalDebt",
+                    "debtToEquity",
+                    "currentRatio",
+                    "trailingEps",
+                    "forwardEps",
+                    "bookValue",
+                    "dividendRate",
+                    "dividendYield",
+                    "payoutRatio",
+                    "beta",
+                    "52WeekChange",
+                    "targetHighPrice",
+                    "targetLowPrice",
+                    "targetMeanPrice",
+                    "recommendationKey",
+                    "numberOfAnalystOpinions",
                 )
             }
 
             result = {
                 "profile": profile,
                 "annual_income_statement": _df_to_records(ticker.income_stmt),
-                "quarterly_income_statement": _df_to_records(ticker.quarterly_income_stmt),
+                "quarterly_income_statement": _df_to_records(
+                    ticker.quarterly_income_stmt
+                ),
                 "annual_balance_sheet": _df_to_records(ticker.balance_sheet),
-                "quarterly_balance_sheet": _df_to_records(ticker.quarterly_balance_sheet),
+                "quarterly_balance_sheet": _df_to_records(
+                    ticker.quarterly_balance_sheet
+                ),
                 "annual_cash_flow": _df_to_records(ticker.cash_flow),
                 "quarterly_cash_flow": _df_to_records(ticker.quarterly_cash_flow),
-                "earnings_history": _df_to_records(ticker.earnings_history, max_rows=8, transpose=False),
+                "earnings_history": _df_to_records(
+                    ticker.earnings_history, max_rows=8, transpose=False
+                ),
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
-            return json.dumps({"error": f"yfinance_fundamentals failed for {symbol}: {e}"})
+            return json.dumps(
+                {"error": f"yfinance_fundamentals failed for {symbol}: {e}"}
+            )
 
     # --- yfinance_analyst ---
     def yfinance_analyst(symbol: str) -> str:
@@ -327,10 +368,20 @@ def create_yfinance_tools() -> List[StructuredTool]:
 
             ticker = yf.Ticker(symbol)
             result = {
-                "price_targets": _df_to_records(ticker.analyst_price_targets, max_rows=10, transpose=False),
-                "recommendations": _df_to_records(ticker.recommendations, max_rows=10, transpose=False),
-                "upgrades_downgrades": _df_to_records(ticker.upgrades_downgrades, max_rows=10, transpose=False),
-                "next_earnings_date": str(ticker.calendar.get("Earnings Date", [None])[0] if ticker.calendar else None),
+                "price_targets": _df_to_records(
+                    ticker.analyst_price_targets, max_rows=10, transpose=False
+                ),
+                "recommendations": _df_to_records(
+                    ticker.recommendations, max_rows=10, transpose=False
+                ),
+                "upgrades_downgrades": _df_to_records(
+                    ticker.upgrades_downgrades, max_rows=10, transpose=False
+                ),
+                "next_earnings_date": str(
+                    ticker.calendar.get("Earnings Date", [None])[0]
+                    if ticker.calendar
+                    else None
+                ),
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
@@ -348,9 +399,15 @@ def create_yfinance_tools() -> List[StructuredTool]:
 
             ticker = yf.Ticker(symbol)
             result = {
-                "institutional_holders": _df_to_records(ticker.institutional_holders, max_rows=10, transpose=False),
-                "mutualfund_holders": _df_to_records(ticker.mutualfund_holders, max_rows=10, transpose=False),
-                "insider_transactions": _df_to_records(ticker.insider_transactions, max_rows=10, transpose=False),
+                "institutional_holders": _df_to_records(
+                    ticker.institutional_holders, max_rows=10, transpose=False
+                ),
+                "mutualfund_holders": _df_to_records(
+                    ticker.mutualfund_holders, max_rows=10, transpose=False
+                ),
+                "insider_transactions": _df_to_records(
+                    ticker.insider_transactions, max_rows=10, transpose=False
+                ),
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
@@ -369,16 +426,34 @@ def create_yfinance_tools() -> List[StructuredTool]:
             ticker = yf.Ticker(symbol)
             expirations = ticker.options
             if not expirations:
-                return json.dumps({"error": "No options data available", "symbol": symbol})
+                return json.dumps(
+                    {"error": "No options data available", "symbol": symbol}
+                )
 
             nearest = expirations[0]
             chain = ticker.option_chain(nearest)
             calls = _df_to_records(
-                chain.calls[["strike", "lastPrice", "openInterest", "impliedVolatility", "volume"]],
+                chain.calls[
+                    [
+                        "strike",
+                        "lastPrice",
+                        "openInterest",
+                        "impliedVolatility",
+                        "volume",
+                    ]
+                ],
                 max_rows=8,
             )
             puts = _df_to_records(
-                chain.puts[["strike", "lastPrice", "openInterest", "impliedVolatility", "volume"]],
+                chain.puts[
+                    [
+                        "strike",
+                        "lastPrice",
+                        "openInterest",
+                        "impliedVolatility",
+                        "volume",
+                    ]
+                ],
                 max_rows=8,
             )
             result = {

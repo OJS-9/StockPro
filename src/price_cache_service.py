@@ -65,10 +65,16 @@ class PriceCacheService:
                 price = data.get("price")
                 if price is not None:
                     self.db.upsert_price_cache(
-                        sym, "stock", float(price), data.get("change_percent"),
+                        sym,
+                        "stock",
+                        float(price),
+                        data.get("change_percent"),
                         display_names.get(sym),
                     )
-                    result[sym] = {"price": price, "change_percent": data.get("change_percent")}
+                    result[sym] = {
+                        "price": price,
+                        "change_percent": data.get("change_percent"),
+                    }
 
         if cryptos:
             fetched = self.crypto_provider.get_prices_with_change(cryptos) or {}
@@ -76,10 +82,16 @@ class PriceCacheService:
                 price = data.get("price")
                 if price is not None:
                     self.db.upsert_price_cache(
-                        sym, "crypto", float(price), data.get("change_percent"),
+                        sym,
+                        "crypto",
+                        float(price),
+                        data.get("change_percent"),
                         display_names.get(sym),
                     )
-                    result[sym] = {"price": price, "change_percent": data.get("change_percent")}
+                    result[sym] = {
+                        "price": price,
+                        "change_percent": data.get("change_percent"),
+                    }
 
         return result
 

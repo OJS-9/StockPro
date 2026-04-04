@@ -140,6 +140,7 @@ class WatchlistService:
     def _refresh_symbol_price(self, symbol, asset_type, display_name=None):
         try:
             from price_cache_service import get_price_cache_service
+
             get_price_cache_service().refresh(
                 [(symbol, asset_type)],
                 force=True,

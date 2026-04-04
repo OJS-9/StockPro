@@ -194,26 +194,37 @@ class PortfolioService:
         }
 
         from price_cache_service import get_price_cache_service
+
         pcs = get_price_cache_service()
 
         # Fetch prices for symbols completely absent from cache
-        missing_pairs = (
-            [(s, "stock") for s in stock_symbols if s not in cached] +
-            [(s, "crypto") for s in crypto_symbols if s not in cached]
-        )
+        missing_pairs = [(s, "stock") for s in stock_symbols if s not in cached] + [
+            (s, "crypto") for s in crypto_symbols if s not in cached
+        ]
         if missing_pairs:
             fetched = pcs.refresh(missing_pairs, force=True)
             for sym, data in fetched.items():
                 price_map[sym] = data["price"]
 
         # Background-refresh stale cached prices (fire and forget — next call will be fresh)
-        stale_pairs = (
-            [(s, "stock") for s in stock_symbols if s in cached and not _is_fresh(cached[s])] +
-            [(s, "crypto") for s in crypto_symbols if s in cached and not _is_fresh(cached[s])]
-        )
+        stale_pairs = [
+            (s, "stock")
+            for s in stock_symbols
+            if s in cached and not _is_fresh(cached[s])
+        ] + [
+            (s, "crypto")
+            for s in crypto_symbols
+            if s in cached and not _is_fresh(cached[s])
+        ]
         if stale_pairs:
             import threading
-            threading.Thread(target=pcs.refresh, args=(stale_pairs,), kwargs={"force": True}, daemon=True).start()
+
+            threading.Thread(
+                target=pcs.refresh,
+                args=(stale_pairs,),
+                kwargs={"force": True},
+                daemon=True,
+            ).start()
 
         # Apply prices to holdings
         for h in stocks:

@@ -74,6 +74,7 @@ class PriceRefreshJob:
         logger.info("Price refresh: %d symbols", len(symbols))
 
         from price_cache_service import get_price_cache_service
+
         get_price_cache_service().refresh(symbols, display_names=default_names)
 
 

@@ -33,7 +33,9 @@ PRICE_FETCH_DEBUG = os.getenv("PRICE_FETCH_DEBUG", "0").lower() in {
 }
 
 if PRICE_FETCH_DEBUG:
-    logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(name)s %(levelname)s %(message)s"
+    )
     logger.setLevel(logging.DEBUG)
     logging.getLogger("yfinance").setLevel(logging.WARNING)
 
@@ -221,7 +223,10 @@ class StockDataProvider(BaseDataProvider):
 
         # 1. yfinance — instant, no rate limits. Only skip if missing price OR change_percent.
         yf_data = self._get_price_from_yfinance(symbol)
-        if yf_data.get("price") is not None and yf_data.get("change_percent") is not None:
+        if (
+            yf_data.get("price") is not None
+            and yf_data.get("change_percent") is not None
+        ):
             if PRICE_FETCH_DEBUG:
                 logger.info("[price] %s <- yfinance", symbol.upper())
             return yf_data
@@ -233,7 +238,7 @@ class StockDataProvider(BaseDataProvider):
 
         nimble_fns = [
             self._get_price_with_change_from_nimble,  # MarketWatch
-            self._get_price_from_seekingalpha,        # SeekingAlpha
+            self._get_price_from_seekingalpha,  # SeekingAlpha
         ]
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures = {pool.submit(fn, symbol): fn.__name__ for fn in nimble_fns}
@@ -242,11 +247,15 @@ class StockDataProvider(BaseDataProvider):
                     result = fut.result()
                     if result.get("price") is not None:
                         if PRICE_FETCH_DEBUG:
-                            logger.info("[price] %s <- nimble/%s", symbol.upper(), futures[fut])
+                            logger.info(
+                                "[price] %s <- nimble/%s", symbol.upper(), futures[fut]
+                            )
                         return result
             except TimeoutError:
                 if PRICE_FETCH_DEBUG:
-                    logger.info("[price] %s nimble timeout -> alpha_vantage", symbol.upper())
+                    logger.info(
+                        "[price] %s nimble timeout -> alpha_vantage", symbol.upper()
+                    )
 
         # 3. Alpha Vantage — last resort
         if PRICE_FETCH_DEBUG:
@@ -267,8 +276,7 @@ class StockDataProvider(BaseDataProvider):
         prices = {}
         with ThreadPoolExecutor(max_workers=len(symbols)) as pool:
             futures = {
-                pool.submit(self._fetch_price_waterfall, sym): sym
-                for sym in symbols
+                pool.submit(self._fetch_price_waterfall, sym): sym for sym in symbols
             }
             for fut in as_completed(futures):
                 sym = futures[fut]

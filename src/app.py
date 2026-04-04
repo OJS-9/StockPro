@@ -372,6 +372,7 @@ def _warm_portfolio_cache(user_id):
                 unique_pairs.append(pair)
 
         from price_cache_service import get_price_cache_service
+
         get_price_cache_service().refresh(unique_pairs)
 
     except Exception:

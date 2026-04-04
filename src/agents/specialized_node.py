@@ -61,8 +61,11 @@ def _get_instructions(
 Prioritize this focus while still covering the full subject area.
 """
     qualitative_subjects = {
-        "growth_drivers", "competitive_position", "sector_macro",
-        "risk_factors", "management_quality",
+        "growth_drivers",
+        "competitive_position",
+        "sector_macro",
+        "risk_factors",
+        "management_quality",
     }
     subject_id_key = subject.id
 
@@ -214,7 +217,11 @@ def specialized_node(state: dict) -> dict:
                     content = msg.content
                     if isinstance(content, list):
                         output_text = "\n".join(
-                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            (
+                                part.get("text", "")
+                                if isinstance(part, dict)
+                                else str(part)
+                            )
                             for part in content
                         )
                     else:
@@ -272,7 +279,9 @@ def specialized_node(state: dict) -> dict:
                     "sources": [],
                     "ticker": ticker,
                     "trade_type": trade_type,
-                    "focus_hint": getattr(plan, "subject_focus", {}).get(subject_id, ""),
+                    "focus_hint": getattr(plan, "subject_focus", {}).get(
+                        subject_id, ""
+                    ),
                     "error": str(last_exc),
                 }
             }
