@@ -470,6 +470,12 @@ class DatabaseManager:
             conn.commit()
             logger.info("Database schema initialized")
 
+        except psycopg2.errors.InternalError_ as e:
+            # Two processes ran init_schema concurrently (common in Flask debug mode).
+            # The schema is already being initialized by the other process — safe to ignore.
+            if conn:
+                conn.rollback()
+            logger.warning("init_schema concurrent update ignored: %s", e)
         except psycopg2.Error as e:
             if conn:
                 conn.rollback()

@@ -354,51 +354,25 @@ def _warm_portfolio_cache(user_id):
     try:
         svc = get_portfolio_service()
 
-        # 1. Collect portfolio symbols
-        stock_symbols, crypto_symbols = set(), set()
+        symbol_pairs = []
         for p in svc.list_portfolios(user_id):
             for h in svc.db.get_holdings(p["portfolio_id"]):
                 if Decimal(str(h.get("total_quantity", 0))) > 0:
-                    if h["asset_type"] == "crypto":
-                        crypto_symbols.add(h["symbol"])
-                    else:
-                        stock_symbols.add(h["symbol"])
+                    symbol_pairs.append((h["symbol"], h["asset_type"]))
 
-        # 2. Also collect watchlist symbols for this user (deduplicated into same sets)
         for row in svc.db.get_watched_symbols_for_user(user_id):
-            if row["asset_type"] == "crypto":
-                crypto_symbols.add(row["symbol"])
-            else:
-                stock_symbols.add(row["symbol"])
+            symbol_pairs.append((row["symbol"], row["asset_type"]))
 
-        # 3. Check DB for already-fresh entries (15-min TTL) — skip those
-        all_symbols = list(stock_symbols | crypto_symbols)
-        cached = svc.db.get_cached_prices(all_symbols)
-        now = datetime.now()
+        # Deduplicate while preserving order
+        seen = set()
+        unique_pairs = []
+        for pair in symbol_pairs:
+            if pair not in seen:
+                seen.add(pair)
+                unique_pairs.append(pair)
 
-        def _is_fresh(sym):
-            row = cached.get(sym)
-            if not row or not row.get("last_updated"):
-                return False
-            return (now - row["last_updated"]) < timedelta(minutes=15)
-
-        stale_stocks = [s for s in stock_symbols if not _is_fresh(s)]
-        stale_cryptos = [s for s in crypto_symbols if not _is_fresh(s)]
-
-        # 4. Fetch only stale symbols
-        if stale_stocks:
-            stock_provider = DataProviderFactory.get_provider("stock")
-            prices = stock_provider.get_prices_batch_warmup(stale_stocks)
-            for sym, data in prices.items():
-                svc.db.upsert_price_cache(
-                    sym, "stock", float(data["price"]), data.get("change_percent"), None
-                )
-
-        if stale_cryptos:
-            crypto_provider = DataProviderFactory.get_provider("crypto")
-            prices = crypto_provider.get_prices_batch(stale_cryptos)
-            for sym, price in prices.items():
-                svc.db.upsert_price_cache(sym, "crypto", float(price), None, None)
+        from price_cache_service import get_price_cache_service
+        get_price_cache_service().refresh(unique_pairs)
 
     except Exception:
         pass  # Never surface errors into login flow
