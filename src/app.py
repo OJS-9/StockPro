@@ -36,7 +36,7 @@ import bleach
 import markdown as md_lib
 from markupsafe import Markup
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime
 from psycopg2.extras import RealDictCursor
 
 from orchestrator_graph import OrchestratorSession, create_session
