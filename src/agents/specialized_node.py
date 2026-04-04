@@ -130,87 +130,87 @@ def specialized_node(state: dict) -> dict:
             }
         }
 
-    focus_hint = plan.subject_focus.get(subject_id, "")
-    instructions = _get_instructions(subject, ticker, trade_type, focus_hint)
-    research_prompt = subject.prompt_template.format(ticker=ticker)
-    if focus_hint:
-        research_prompt += f"\n\nSpecific focus for this analysis: {focus_hint}"
-
-    mcp_client, nimble_client = _get_clients()
-
-    from langchain_tools import create_all_tools
-
-    tools = create_all_tools(mcp_client, nimble_client)
-
-    llm = ChatGoogleGenerativeAI(
-        model=SPECIALIZED_MODEL,
-        temperature=0.7,
-        max_output_tokens=effective_max_output_tokens,
-    )
-
-    max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
-    base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
-
-    def _run_specialized_once() -> dict:
-        agent = create_react_agent(
-            llm,
-            tools,
-            prompt=instructions,
-        )
-        result = agent.invoke(
-            {"messages": [HumanMessage(content=research_prompt)]},
-            config={"recursion_limit": int(effective_max_turns) * 2},
-        )
-        # Extract the last AI message as the research output.
-        # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
-        output_text = ""
-        input_tok = 0
-        output_tok = 0
-        for msg in result["messages"]:
-            usage = getattr(msg, "usage_metadata", None) or {}
-            input_tok += usage.get("input_tokens", 0)
-            output_tok += usage.get("output_tokens", 0)
-
-        for msg in reversed(result["messages"]):
-            if (
-                isinstance(msg, AIMessage)
-                and msg.content
-                and not getattr(msg, "tool_calls", None)
-            ):
-                content = msg.content
-                if isinstance(content, list):
-                    output_text = "\n".join(
-                        part.get("text", "") if isinstance(part, dict) else str(part)
-                        for part in content
-                    )
-                else:
-                    output_text = str(content)
-                break
-
-        logger.info(
-            "%s: %s chars, %s/%s tokens",
-            subject.name,
-            len(output_text),
-            input_tok,
-            output_tok,
-        )
-        return {
-            "research_outputs": {
-                subject_id: {
-                    "subject_id": subject_id,
-                    "subject_name": subject.name,
-                    "research_output": output_text,
-                    "sources": [],
-                    "ticker": ticker,
-                    "trade_type": trade_type,
-                    "focus_hint": focus_hint,
-                }
-            },
-            "actual_input_tokens": input_tok,
-            "actual_output_tokens": output_tok,
-        }
-
     try:
+        focus_hint = plan.subject_focus.get(subject_id, "")
+        instructions = _get_instructions(subject, ticker, trade_type, focus_hint)
+        research_prompt = subject.prompt_template.format(ticker=ticker)
+        if focus_hint:
+            research_prompt += f"\n\nSpecific focus for this analysis: {focus_hint}"
+
+        mcp_client, nimble_client = _get_clients()
+
+        from langchain_tools import create_all_tools
+
+        tools = create_all_tools(mcp_client, nimble_client)
+
+        llm = ChatGoogleGenerativeAI(
+            model=SPECIALIZED_MODEL,
+            temperature=0.7,
+            max_output_tokens=effective_max_output_tokens,
+        )
+
+        max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
+        base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
+
+        def _run_specialized_once() -> dict:
+            agent = create_react_agent(
+                llm,
+                tools,
+                prompt=instructions,
+            )
+            result = agent.invoke(
+                {"messages": [HumanMessage(content=research_prompt)]},
+                config={"recursion_limit": int(effective_max_turns) * 2},
+            )
+            # Extract the last AI message as the research output.
+            # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
+            output_text = ""
+            input_tok = 0
+            output_tok = 0
+            for msg in result["messages"]:
+                usage = getattr(msg, "usage_metadata", None) or {}
+                input_tok += usage.get("input_tokens", 0)
+                output_tok += usage.get("output_tokens", 0)
+
+            for msg in reversed(result["messages"]):
+                if (
+                    isinstance(msg, AIMessage)
+                    and msg.content
+                    and not getattr(msg, "tool_calls", None)
+                ):
+                    content = msg.content
+                    if isinstance(content, list):
+                        output_text = "\n".join(
+                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            for part in content
+                        )
+                    else:
+                        output_text = str(content)
+                    break
+
+            logger.info(
+                "%s: %s chars, %s/%s tokens",
+                subject.name,
+                len(output_text),
+                input_tok,
+                output_tok,
+            )
+            return {
+                "research_outputs": {
+                    subject_id: {
+                        "subject_id": subject_id,
+                        "subject_name": subject.name,
+                        "research_output": output_text,
+                        "sources": [],
+                        "ticker": ticker,
+                        "trade_type": trade_type,
+                        "focus_hint": focus_hint,
+                    }
+                },
+                "actual_input_tokens": input_tok,
+                "actual_output_tokens": output_tok,
+            }
+
         return run_with_exponential_backoff(
             _run_specialized_once,
             max_retries=max_retries,
@@ -230,7 +230,7 @@ def specialized_node(state: dict) -> dict:
                     "sources": [],
                     "ticker": ticker,
                     "trade_type": trade_type,
-                    "focus_hint": focus_hint,
+                    "focus_hint": getattr(plan, "subject_focus", {}).get(subject_id, ""),
                     "error": str(last_exc),
                 }
             }

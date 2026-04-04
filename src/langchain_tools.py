@@ -5,6 +5,7 @@ create_all_tools() returns List[StructuredTool] for use with LangGraph agents.
 
 import json
 import logging
+import math
 from typing import Dict, Any, List, Optional
 
 from langchain_core.tools import StructuredTool
@@ -14,6 +15,17 @@ from mcp_tools import execute_tool_by_name
 from nimble_client import NimbleClient
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_nan(obj):
+    """Recursively replace NaN/Inf floats with None so json.dumps produces valid JSON."""
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_nan(v) for v in obj]
+    return obj
 
 MAX_SERIES_ITEMS = 5
 MAX_NEWS_ITEMS = 5
@@ -291,7 +303,7 @@ def create_yfinance_tools() -> List[StructuredTool]:
                 "quarterly_cash_flow": _df_to_records(ticker.quarterly_cash_flow),
                 "earnings_history": _df_to_records(ticker.earnings_history, max_rows=8, transpose=False),
             }
-            return json.dumps(result, indent=2, default=str)
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
             return json.dumps({"error": f"yfinance_fundamentals failed for {symbol}: {e}"})
 
@@ -311,7 +323,7 @@ def create_yfinance_tools() -> List[StructuredTool]:
                 "upgrades_downgrades": _df_to_records(ticker.upgrades_downgrades, max_rows=10, transpose=False),
                 "next_earnings_date": str(ticker.calendar.get("Earnings Date", [None])[0] if ticker.calendar else None),
             }
-            return json.dumps(result, indent=2, default=str)
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
             return json.dumps({"error": f"yfinance_analyst failed for {symbol}: {e}"})
 
@@ -331,7 +343,7 @@ def create_yfinance_tools() -> List[StructuredTool]:
                 "mutualfund_holders": _df_to_records(ticker.mutualfund_holders, max_rows=10, transpose=False),
                 "insider_transactions": _df_to_records(ticker.insider_transactions, max_rows=10, transpose=False),
             }
-            return json.dumps(result, indent=2, default=str)
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
             return json.dumps({"error": f"yfinance_ownership failed for {symbol}: {e}"})
 
@@ -366,7 +378,7 @@ def create_yfinance_tools() -> List[StructuredTool]:
                 "calls": calls,
                 "puts": puts,
             }
-            return json.dumps(result, indent=2, default=str)
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
             return json.dumps({"error": f"yfinance_options failed for {symbol}: {e}"})
 
