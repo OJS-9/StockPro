@@ -10,7 +10,7 @@
             <span class="text-lg font-semibold leading-tight tracking-[-0.015em]">StockPro</span>
         </a>
         <!-- Research progress indicator — hidden until a report is generating -->
-        <div id="rp-indicator" class="hidden md:flex items-center gap-4 ml-4 border-l border-zinc-200 dark:border-zinc-800 pl-4">
+        <div id="rp-indicator" style="display:none" class="flex items-center gap-4 ml-4 border-l border-zinc-200 dark:border-zinc-800 pl-4">
             <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between w-[180px]">
                     <span class="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Report Status</span>
@@ -180,16 +180,21 @@
     var pct = document.getElementById('rp-pct');
     var stepEl = document.getElementById('rp-step');
     var pollTimer = null;
+    var rpVisible = false;
 
     function showBar(progress, step) {
-        indicator.classList.remove('hidden');
+        if (!rpVisible) {
+            indicator.style.display = 'flex';
+            rpVisible = true;
+        }
         bar.style.width = progress + '%';
         pct.textContent = progress + '% Complete';
         if (step) stepEl.textContent = step;
     }
 
     function hideBar() {
-        indicator.classList.add('hidden');
+        indicator.style.display = 'none';
+        rpVisible = false;
         bar.style.width = '0%';
     }
 
