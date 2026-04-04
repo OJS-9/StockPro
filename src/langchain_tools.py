@@ -5,6 +5,7 @@ create_all_tools() returns List[StructuredTool] for use with LangGraph agents.
 
 import json
 import logging
+import math
 from typing import Dict, Any, List, Optional
 
 from langchain_core.tools import StructuredTool
@@ -15,15 +16,22 @@ from nimble_client import NimbleClient
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_nan(obj):
+    """Recursively replace NaN/Inf floats with None so json.dumps produces valid JSON."""
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_nan(v) for v in obj]
+    return obj
+
+
 MAX_SERIES_ITEMS = 5
 MAX_NEWS_ITEMS = 5
 
 ESSENTIAL_MCP_TOOLS = {
-    "OVERVIEW",
-    "INCOME_STATEMENT",
-    "BALANCE_SHEET",
-    "CASH_FLOW",
-    "EARNINGS",
     "NEWS_SENTIMENT",
 }
 
@@ -194,8 +202,21 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
         )
 
     def perplexity_research(query: str, focus: str = "general") -> str:
-        result = nimble_client.perplexity_research(query, focus)
-        return json.dumps({"research": result, "status": "success"})
+        try:
+            result = nimble_client.perplexity_research(query, focus)
+            if isinstance(result, str) and result.startswith("[Nimble Perplexity"):
+                return json.dumps(
+                    {
+                        "status": "failed",
+                        "error": result,
+                        "suggestion": "Try nimble_web_search or a yfinance tool instead.",
+                    }
+                )
+            return json.dumps({"research": result, "status": "success"})
+        except Exception as e:
+            return json.dumps(
+                {"status": "failed", "error": f"perplexity_research failed: {e}"}
+            )
 
     return [
         StructuredTool.from_function(
@@ -228,6 +249,268 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
     ]
 
 
+def _df_to_records(df, max_rows: int = 4, transpose: bool = True) -> list:
+    """
+    Convert a yfinance DataFrame to a JSON-serializable list of records.
+    Financial statement DFs have metrics as rows and dates as columns — transpose=True
+    flips them so each record is one time period. Use transpose=False when dates are
+    already the index (e.g. earnings_history, recommendations).
+    """
+    try:
+        if df is None or df.empty:
+            return []
+        out = df.T.reset_index() if transpose else df.reset_index()
+        records = out.head(max_rows).to_dict(orient="records")
+        # JSON keys must be strings; Timestamps from column names are not.
+        return [{str(k): v for k, v in row.items()} for row in records]
+    except Exception:
+        return []
+
+
+def create_yfinance_tools() -> List[StructuredTool]:
+    """Create LangChain StructuredTools backed by yfinance."""
+    from pydantic import BaseModel, Field
+
+    class SymbolArgs(BaseModel):
+        symbol: str = Field(description="Stock ticker symbol, e.g. AAPL, MSFT.")
+
+    # --- yfinance_fundamentals ---
+    def yfinance_fundamentals(symbol: str) -> str:
+        """
+        Fetch company fundamentals from Yahoo Finance: profile, income statement,
+        balance sheet, cash flow, and earnings (EPS actuals vs estimates).
+        Replaces Alpha Vantage OVERVIEW + INCOME_STATEMENT + BALANCE_SHEET + CASH_FLOW + EARNINGS.
+        """
+        try:
+            import yfinance as yf
+
+            ticker = yf.Ticker(symbol)
+            info = ticker.info or {}
+
+            profile = {
+                k: info.get(k)
+                for k in (
+                    "symbol",
+                    "longName",
+                    "longBusinessSummary",
+                    "sector",
+                    "industry",
+                    "country",
+                    "fullTimeEmployees",
+                    "website",
+                    "marketCap",
+                    "enterpriseValue",
+                    "trailingPE",
+                    "forwardPE",
+                    "priceToBook",
+                    "priceToSalesTrailing12Months",
+                    "enterpriseToRevenue",
+                    "enterpriseToEbitda",
+                    "totalRevenue",
+                    "revenueGrowth",
+                    "grossMargins",
+                    "operatingMargins",
+                    "profitMargins",
+                    "ebitda",
+                    "netIncomeToCommon",
+                    "earningsGrowth",
+                    "earningsQuarterlyGrowth",
+                    "totalCash",
+                    "totalDebt",
+                    "debtToEquity",
+                    "currentRatio",
+                    "trailingEps",
+                    "forwardEps",
+                    "bookValue",
+                    "dividendRate",
+                    "dividendYield",
+                    "payoutRatio",
+                    "beta",
+                    "52WeekChange",
+                    "targetHighPrice",
+                    "targetLowPrice",
+                    "targetMeanPrice",
+                    "recommendationKey",
+                    "numberOfAnalystOpinions",
+                )
+            }
+
+            result = {
+                "profile": profile,
+                "annual_income_statement": _df_to_records(ticker.income_stmt),
+                "quarterly_income_statement": _df_to_records(
+                    ticker.quarterly_income_stmt
+                ),
+                "annual_balance_sheet": _df_to_records(ticker.balance_sheet),
+                "quarterly_balance_sheet": _df_to_records(
+                    ticker.quarterly_balance_sheet
+                ),
+                "annual_cash_flow": _df_to_records(ticker.cash_flow),
+                "quarterly_cash_flow": _df_to_records(ticker.quarterly_cash_flow),
+                "earnings_history": _df_to_records(
+                    ticker.earnings_history, max_rows=8, transpose=False
+                ),
+            }
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
+        except Exception as e:
+            return json.dumps(
+                {"error": f"yfinance_fundamentals failed for {symbol}: {e}"}
+            )
+
+    # --- yfinance_analyst ---
+    def yfinance_analyst(symbol: str) -> str:
+        """
+        Fetch analyst data from Yahoo Finance: price targets, buy/sell/hold recommendations,
+        and recent upgrades/downgrades. Useful for valuation and company overview research.
+        """
+        try:
+            import yfinance as yf
+
+            ticker = yf.Ticker(symbol)
+            result = {
+                "price_targets": _df_to_records(
+                    ticker.analyst_price_targets, max_rows=10, transpose=False
+                ),
+                "recommendations": _df_to_records(
+                    ticker.recommendations, max_rows=10, transpose=False
+                ),
+                "upgrades_downgrades": _df_to_records(
+                    ticker.upgrades_downgrades, max_rows=10, transpose=False
+                ),
+                "next_earnings_date": str(
+                    ticker.calendar.get("Earnings Date", [None])[0]
+                    if ticker.calendar
+                    else None
+                ),
+            }
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"yfinance_analyst failed for {symbol}: {e}"})
+
+    # --- yfinance_ownership ---
+    def yfinance_ownership(symbol: str) -> str:
+        """
+        Fetch ownership data from Yahoo Finance: top institutional holders,
+        mutual fund holders, and recent insider transactions (buys/sells).
+        Useful for competitive position, risk factors, and management quality research.
+        """
+        try:
+            import yfinance as yf
+
+            ticker = yf.Ticker(symbol)
+            result = {
+                "institutional_holders": _df_to_records(
+                    ticker.institutional_holders, max_rows=10, transpose=False
+                ),
+                "mutualfund_holders": _df_to_records(
+                    ticker.mutualfund_holders, max_rows=10, transpose=False
+                ),
+                "insider_transactions": _df_to_records(
+                    ticker.insider_transactions, max_rows=10, transpose=False
+                ),
+            }
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"yfinance_ownership failed for {symbol}: {e}"})
+
+    # --- yfinance_options ---
+    def yfinance_options(symbol: str) -> str:
+        """
+        Fetch options market data from Yahoo Finance: available expiration dates
+        and a summary of the nearest expiry's calls and puts (open interest,
+        implied volatility, volume). Useful for technical analysis and risk research.
+        """
+        try:
+            import yfinance as yf
+
+            ticker = yf.Ticker(symbol)
+            expirations = ticker.options
+            if not expirations:
+                return json.dumps(
+                    {"error": "No options data available", "symbol": symbol}
+                )
+
+            nearest = expirations[0]
+            chain = ticker.option_chain(nearest)
+            calls = _df_to_records(
+                chain.calls[
+                    [
+                        "strike",
+                        "lastPrice",
+                        "openInterest",
+                        "impliedVolatility",
+                        "volume",
+                    ]
+                ],
+                max_rows=8,
+            )
+            puts = _df_to_records(
+                chain.puts[
+                    [
+                        "strike",
+                        "lastPrice",
+                        "openInterest",
+                        "impliedVolatility",
+                        "volume",
+                    ]
+                ],
+                max_rows=8,
+            )
+            result = {
+                "expiration_dates": list(expirations[:6]),
+                "nearest_expiry": nearest,
+                "calls": calls,
+                "puts": puts,
+            }
+            return json.dumps(_sanitize_nan(result), indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"yfinance_options failed for {symbol}: {e}"})
+
+    return [
+        StructuredTool.from_function(
+            func=yfinance_fundamentals,
+            name="yfinance_fundamentals",
+            description=(
+                "Fetch company fundamentals from Yahoo Finance: business profile, valuation ratios, "
+                "annual and quarterly income statement, balance sheet, cash flow, and EPS earnings. "
+                "Use this instead of Alpha Vantage OVERVIEW / INCOME_STATEMENT / BALANCE_SHEET / "
+                "CASH_FLOW / EARNINGS — same data, no rate limits."
+            ),
+            args_schema=SymbolArgs,
+        ),
+        StructuredTool.from_function(
+            func=yfinance_analyst,
+            name="yfinance_analyst",
+            description=(
+                "Fetch analyst consensus data from Yahoo Finance: price targets (high/low/mean), "
+                "buy/sell/hold recommendation history, and recent rating upgrades/downgrades. "
+                "Use for valuation, company overview, and investment research subjects."
+            ),
+            args_schema=SymbolArgs,
+        ),
+        StructuredTool.from_function(
+            func=yfinance_ownership,
+            name="yfinance_ownership",
+            description=(
+                "Fetch ownership data from Yahoo Finance: top institutional and mutual fund holders "
+                "(name, % held, shares), and recent insider transactions (buys/sells with dollar amounts). "
+                "Use for competitive position, risk factors, and management quality research."
+            ),
+            args_schema=SymbolArgs,
+        ),
+        StructuredTool.from_function(
+            func=yfinance_options,
+            name="yfinance_options",
+            description=(
+                "Fetch options market data from Yahoo Finance: expiration dates, and calls/puts summary "
+                "(strike, open interest, implied volatility, volume) for the nearest expiry. "
+                "Use for technical/price action and risk factor research — especially day trade and swing trade."
+            ),
+            args_schema=SymbolArgs,
+        ),
+    ]
+
+
 def create_all_tools(
     mcp_client: Optional[MCPClient],
     nimble_client: Optional[NimbleClient] = None,
@@ -239,6 +522,8 @@ def create_all_tools(
         List of StructuredTool objects ready for use with create_react_agent.
     """
     tools: List[StructuredTool] = []
+
+    tools.extend(create_yfinance_tools())
 
     if mcp_client:
         tools.extend(create_mcp_tools(mcp_client))

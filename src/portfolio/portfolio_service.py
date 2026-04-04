@@ -193,40 +193,36 @@ class PortfolioService:
             sym: Decimal(str(row["price"])) for sym, row in cached.items()
         }
 
-        # Fetch prices only for symbols completely absent from cache (parallel, no sleep)
-        missing_stocks = [s for s in stock_symbols if s not in cached]
-        missing_cryptos = [s for s in crypto_symbols if s not in cached]
+        from price_cache_service import get_price_cache_service
 
-        if missing_stocks:
-            stock_provider = self.provider_factory.get_provider("stock")
-            fetched = stock_provider.get_prices_batch_warmup(missing_stocks) or {}
-            for symbol, data in fetched.items():
-                price = data["price"]
-                self.db.upsert_price_cache(
-                    symbol, "stock", float(price), data.get("change_percent"), None
-                )
-                price_map[symbol] = price
+        pcs = get_price_cache_service()
 
-        if missing_cryptos:
-            crypto_provider = self.provider_factory.get_provider("crypto")
-            fetched = crypto_provider.get_prices_batch(missing_cryptos) or {}
-            for symbol, price in fetched.items():
-                self.db.upsert_price_cache(symbol, "crypto", float(price), None, None)
-                price_map[symbol] = price
+        # Fetch prices for symbols completely absent from cache
+        missing_pairs = [(s, "stock") for s in stock_symbols if s not in cached] + [
+            (s, "crypto") for s in crypto_symbols if s not in cached
+        ]
+        if missing_pairs:
+            fetched = pcs.refresh(missing_pairs, force=True)
+            for sym, data in fetched.items():
+                price_map[sym] = data["price"]
 
         # Background-refresh stale cached prices (fire and forget — next call will be fresh)
-        stale_stocks = [
-            s for s in stock_symbols if s in cached and not _is_fresh(cached[s])
+        stale_pairs = [
+            (s, "stock")
+            for s in stock_symbols
+            if s in cached and not _is_fresh(cached[s])
+        ] + [
+            (s, "crypto")
+            for s in crypto_symbols
+            if s in cached and not _is_fresh(cached[s])
         ]
-        stale_cryptos = [
-            s for s in crypto_symbols if s in cached and not _is_fresh(cached[s])
-        ]
-        if stale_stocks or stale_cryptos:
+        if stale_pairs:
             import threading
 
             threading.Thread(
-                target=self._refresh_stale_prices,
-                args=(stale_stocks, stale_cryptos),
+                target=pcs.refresh,
+                args=(stale_pairs,),
+                kwargs={"force": True},
                 daemon=True,
             ).start()
 
@@ -264,32 +260,6 @@ class PortfolioService:
                     h["unrealized_gain_pct"] = Decimal("0")
 
         return holdings
-
-    def _refresh_stale_prices(
-        self, stale_stocks: List[str], stale_cryptos: List[str]
-    ) -> None:
-        """Background refresh of stale cached prices."""
-        try:
-            if stale_stocks:
-                stock_provider = self.provider_factory.get_provider("stock")
-                fetched = stock_provider.get_prices_batch_warmup(stale_stocks) or {}
-                for symbol, data in fetched.items():
-                    self.db.upsert_price_cache(
-                        symbol,
-                        "stock",
-                        float(data["price"]),
-                        data.get("change_percent"),
-                        None,
-                    )
-            if stale_cryptos:
-                crypto_provider = self.provider_factory.get_provider("crypto")
-                fetched = crypto_provider.get_prices_batch(stale_cryptos) or {}
-                for symbol, price in fetched.items():
-                    self.db.upsert_price_cache(
-                        symbol, "crypto", float(price), None, None
-                    )
-        except Exception:
-            pass
 
     def get_holding(self, portfolio_id: str, symbol: str) -> Optional[Dict]:
         """

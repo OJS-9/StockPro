@@ -221,6 +221,9 @@ def planner_node(state: dict) -> dict:
     )
     if emitter:
         emitter.emit(f"Researching: {subject_names}...")
+    if progress_fn := state.get("progress_fn"):
+        n = len(plan.selected_subject_ids)
+        progress_fn(15, f"Planning: {n} subjects selected")
 
     # Compute budget settings here so _fan_out can read them from state
     # (avoids InvalidUpdateError from parallel specialized_nodes all returning the same field)

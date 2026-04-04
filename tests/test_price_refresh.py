@@ -55,6 +55,14 @@ def _get_db_conn():
 # ─────────────────────────────────────────────
 
 def test_scheduler_unit():
+    import psycopg2
+    try:
+        conn_check = _get_db_conn()
+        conn_check.close()
+    except psycopg2.OperationalError:
+        import pytest
+        pytest.skip("No database available — skipping live scheduler test")
+
     print('\n=== Part 1: Scheduler unit test ===\n')
     import psycopg2.extras
     from watchlist.price_refresh import PriceRefreshJob
@@ -198,6 +206,8 @@ def save_auth():
 
 
 def test_browser():
+    import pytest
+    pytest.importorskip("playwright", reason="playwright not installed — skipping browser test")
     from playwright.sync_api import sync_playwright
 
     print('\n=== Part 3: Browser test ===\n')

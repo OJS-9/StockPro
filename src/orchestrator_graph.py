@@ -44,9 +44,13 @@ class OrchestratorSession:
         self.conversation_history: List[Dict[str, str]] = []
         self._chat_agent = ReportChatAgent()
         self._emitter: Optional[StepEmitter] = None
+        self._progress_fn = None
 
     def set_emitter(self, emitter: Optional[StepEmitter]):
         self._emitter = emitter
+
+    def set_progress_fn(self, fn):
+        self._progress_fn = fn
 
     def start_research(self, ticker: str, trade_type: str) -> str:
         """Start a new research session."""
@@ -116,6 +120,7 @@ class OrchestratorSession:
                     spend_budget_usd=get_spend_budget_usd(session.user_id),
                     parent_config=config,
                     username=session.username,
+                    progress_fn=session._progress_fn,
                 )
                 session.current_report_id = result.get("report_id", "")
                 session.last_report_text = result.get("report_text", "")
@@ -214,6 +219,7 @@ class OrchestratorSession:
                 selected_subjects=selected_subjects,
                 spend_budget_usd=spend_budget_usd,
                 username=self.username,
+                progress_fn=self._progress_fn,
             )
             self.current_report_id = result.get("report_id", "")
             self.last_report_text = result.get("report_text", "")

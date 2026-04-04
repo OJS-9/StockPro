@@ -14,6 +14,7 @@ load_dotenv()
 NIMBLE_API_BASE = "https://sdk.nimbleway.com/v1"
 NIMBLE_TIMEOUT_SECONDS = float(os.getenv("NIMBLE_TIMEOUT_SECONDS", "60.0"))
 NIMBLE_FAST_TIMEOUT_SECONDS = float(os.getenv("NIMBLE_FAST_TIMEOUT_SECONDS", "15.0"))
+PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "30.0"))
 
 _FOCUS_PREFIXES = {
     "news": "As a financial news research assistant focusing on recent events and sources: ",
@@ -135,7 +136,7 @@ class NimbleClient:
         prompt = f"{prefix}{query}"
         payload = {"agent": "perplexity", "params": {"prompt": prompt}}
         try:
-            with httpx.Client(timeout=self.timeout) as client:
+            with httpx.Client(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
                 resp = client.post(
                     f"{NIMBLE_API_BASE}/agents/run",
                     headers=self._headers(),
@@ -145,7 +146,7 @@ class NimbleClient:
                 data = resp.json()
                 return data["data"]["parsing"]["answer"]
         except httpx.TimeoutException as e:
-            return f"[Nimble Perplexity timeout] Exceeded {self.timeout:.0f}s: {e}"
+            return f"[Nimble Perplexity timeout] Exceeded {PERPLEXITY_TIMEOUT_SECONDS:.0f}s: {e}"
         except Exception as e:
             return f"[Nimble Perplexity error] Request failed: {e}"
 
