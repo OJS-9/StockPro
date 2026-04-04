@@ -95,16 +95,14 @@ def compute_effective_specialized_settings_from_estimates(
     min_max_output_tokens: int,
     input_rate_usd_per_1k_tokens: float,
     output_rate_usd_per_1k_tokens: float,
-    min_subject_count: int = 3,
 ) -> Dict[str, Any]:
     """
-    Compute effective specialized depth (turns + subject count + output token caps)
+    Compute effective specialized depth (turns + output token caps)
     so the estimated spend stays within `spend_budget_usd`.
 
-    Reduction order (quality-preserving):
+    Reduction order:
       1. Reduce turns to minimum
-      2. Reduce subject count (drop lowest-priority subjects first)
-      3. Reduce output tokens (last resort, clamped to floor)
+      2. Reduce output tokens (last resort, clamped to floor)
 
     Returns:
         - effective_max_turns
@@ -122,9 +120,7 @@ def compute_effective_specialized_settings_from_estimates(
 
     min_max_turns = max(1, int(min_max_turns))
     min_max_output_tokens = max(1, int(min_max_output_tokens))
-    min_subject_count = max(1, min(int(min_subject_count), subject_count))
-
-    # Approximate input tokens per subject (used when subject count varies).
+    # Approximate input tokens per subject.
     input_per_subject_per_turn = (
         total_input_tokens_per_turn / subject_count if subject_count > 0 else 0
     )
@@ -175,28 +171,15 @@ def compute_effective_specialized_settings_from_estimates(
             "budget_exhausted": False,
         }
 
-    # Step 3: min turns, reduce subject count while keeping base output quality.
-    for n in range(subject_count - 1, min_subject_count - 1, -1):
-        est = estimate(effective_turns, n, base_max_output_tokens)
-        if est <= spend_budget_usd:
-            return {
-                "effective_max_turns": effective_turns,
-                "effective_max_output_tokens": base_max_output_tokens,
-                "effective_subject_count": n,
-                "estimated_spend_usd": est,
-                "budget_exhausted": False,
-            }
-
-    # Step 4: last resort — min turns + min subjects, solve for output tokens.
-    effective_subjects = min_subject_count
+    # Step 3: last resort — min turns + all subjects, solve for output tokens.
     input_cost = (
-        input_per_subject_per_turn * effective_subjects * effective_turns / 1000.0
+        input_per_subject_per_turn * subject_count * effective_turns / 1000.0
     ) * input_rate_usd_per_1k_tokens
     remaining = spend_budget_usd - input_cost
     if remaining <= 0:
         effective_out = min_max_output_tokens
     else:
-        denom = (effective_subjects * effective_turns) * (
+        denom = (subject_count * effective_turns) * (
             output_rate_usd_per_1k_tokens / 1000.0
         )
         effective_out = int(remaining / denom) if denom > 0 else min_max_output_tokens
@@ -204,13 +187,13 @@ def compute_effective_specialized_settings_from_estimates(
         min_max_output_tokens, min(base_max_output_tokens, effective_out)
     )
 
-    est = estimate(effective_turns, effective_subjects, effective_out)
+    est = estimate(effective_turns, subject_count, effective_out)
     budget_exhausted = est > spend_budget_usd
 
     return {
         "effective_max_turns": effective_turns,
         "effective_max_output_tokens": effective_out,
-        "effective_subject_count": effective_subjects,
+        "effective_subject_count": subject_count,
         "estimated_spend_usd": est,
         "budget_exhausted": budget_exhausted,
     }
@@ -304,8 +287,6 @@ def compute_effective_specialized_settings_from_plan(
     min_max_output_tokens = int(
         os.getenv("RESEARCH_SPEND_BUDGET_USD_MIN_MAX_OUTPUT_TOKENS", "512")
     )
-    min_subject_count = int(os.getenv("RESEARCH_SPEND_BUDGET_USD_MIN_SUBJECTS", "3"))
-
     total_input_tokens_per_turn = estimate_total_input_tokens_per_turn(
         ticker=ticker,
         trade_type=trade_type,
@@ -323,7 +304,6 @@ def compute_effective_specialized_settings_from_plan(
         min_max_output_tokens=min_max_output_tokens,
         input_rate_usd_per_1k_tokens=input_rate,
         output_rate_usd_per_1k_tokens=output_rate,
-        min_subject_count=min_subject_count,
     )
 
 

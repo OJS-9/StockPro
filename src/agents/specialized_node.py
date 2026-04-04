@@ -60,6 +60,42 @@ def _get_instructions(
 {focus_hint}
 Prioritize this focus while still covering the full subject area.
 """
+    qualitative_subjects = {
+        "growth_drivers", "competitive_position", "sector_macro",
+        "risk_factors", "management_quality",
+    }
+    fundamental_subjects = {
+        "earnings_financials", "revenue_breakdown", "valuation",
+        "margin_structure", "company_overview",
+    }
+
+    subject_id_key = subject.id
+
+    if subject_id_key in qualitative_subjects:
+        tool_priority = (
+            "1. perplexity_research — primary source for qualitative analysis, expert opinions, growth narratives\n"
+            "2. nimble_web_search — fallback if Perplexity fails; search for analyst reports, news, industry trends\n"
+            "3. yfinance_fundamentals or yfinance_analyst — if relevant financial context supports the subject"
+        )
+    elif subject_id_key == "news_catalysts":
+        tool_priority = (
+            "1. news_sentiment (Alpha Vantage) — primary source for recent news and sentiment scores\n"
+            "2. perplexity_research — for upcoming catalysts, event calendars, recent developments\n"
+            "3. nimble_web_search — fallback if both above fail"
+        )
+    elif subject_id_key == "technical_price_action":
+        tool_priority = (
+            "1. yfinance_options — options market data (IV, open interest, volume) for market sentiment\n"
+            "2. perplexity_research — technical commentary, support/resistance levels\n"
+            "3. nimble_web_search — fallback if Perplexity fails"
+        )
+    else:
+        tool_priority = (
+            "1. yfinance_fundamentals — primary source for all fundamental data (profile, financials, ratios, EPS)\n"
+            "2. yfinance_analyst — analyst price targets, recommendations, upgrades/downgrades\n"
+            "3. news_sentiment (Alpha Vantage) or perplexity_research — for context and recent developments"
+        )
+
     return f"""You are a specialized research analyst focusing on {subject.name} for {ticker}.
 
 {datetime_context}
@@ -75,13 +111,13 @@ Your specific research task: {subject.description}
 - For Swing Trade: Focus on near-term factors (1-14 days)
 - For Investment: Focus on comprehensive, long-term analysis
 
-**Available Tools:**
-- yfinance_fundamentals: Company profile, valuation ratios, income statement, balance sheet, cash flow, EPS — use this first for all fundamental data
-- yfinance_analyst: Analyst price targets, buy/sell/hold recommendations, upgrades/downgrades
-- yfinance_ownership: Institutional holders, mutual fund holders, insider transactions
-- yfinance_options: Options chain summary (open interest, IV, volume) — use for technical and risk subjects
-- Alpha Vantage NEWS_SENTIMENT: News articles with sentiment scores — use for news and catalysts research
-- Perplexity Research: Use for real-time information, news, expert analysis, qualitative insights
+**Tool Priority (use in this order):**
+{tool_priority}
+
+**Fallback Rule:**
+If a tool returns {{"status": "failed"}} or an error, immediately try the next tool in priority order.
+Do NOT retry the same tool. Once you have data from at least one successful tool call, write your research output.
+Never end your response with "I need more steps" — always produce findings from whatever data you have.
 
 **Output Requirements:**
 1. Provide comprehensive research findings on {subject.name}
@@ -92,6 +128,8 @@ Your specific research task: {subject.description}
    - Supporting data
    - Sources and citations
    - Any relevant context or analysis
+
+**IMPORTANT: You MUST call at least one tool before writing your response. Never rely on your training data — always fetch current data using the tools above.**
 
 Begin your research now."""
 
@@ -187,6 +225,15 @@ def specialized_node(state: dict) -> dict:
                     else:
                         output_text = str(content)
                     break
+
+            _empty_phrases = ["sorry, need more steps", "need more steps to process"]
+            if any(p in output_text.lower() for p in _empty_phrases):
+                logger.warning(
+                    "%s: agent hit recursion limit (output: %r), clearing output",
+                    subject_id,
+                    output_text[:80],
+                )
+                output_text = ""
 
             logger.info(
                 "%s: %s chars, %s/%s tokens",
