@@ -345,7 +345,6 @@
     let currentSubjects = [];
     let currentSelectedIds = [];
     let currentSessionId = null;
-    let pollInterval = null;
     let toastTimeout = null;
 
     const usageHintEl = document.getElementById('report-usage-hint');
@@ -489,7 +488,6 @@
     async function submitAnswers(selectedIds) {
         const answers = collectAnswers();
         closePopup();
-        showToast('in_progress', 'Generating report...');
 
         try {
             const genResp = await fetch('/start_generation', {
@@ -516,21 +514,7 @@
         }
 
         if (!currentSessionId) return;
-
-        pollInterval = setInterval(async function () {
-            try {
-                const resp = await fetch('/api/report_status/' + currentSessionId);
-                if (resp.status === 403) { clearInterval(pollInterval); return; }
-                const status = await resp.json();
-                if (status.status === 'ready') {
-                    clearInterval(pollInterval);
-                    showToast('ready', 'Report Ready — Click to view', status.report_id);
-                } else if (status.status === 'error') {
-                    clearInterval(pollInterval);
-                    toast.classList.add('hidden');
-                }
-            } catch (e) {}
-        }, 3000);
+        if (window.rpStartPolling) window.rpStartPolling(currentSessionId);
     }
 
     form.addEventListener('submit', async function (e) {
@@ -583,7 +567,6 @@
         currentSelectedIds = [];
         currentQuestions = [];
         closePopup();
-        showToast('in_progress', 'Generating report...');
         try {
             const genResp = await fetch('/start_generation', {
                 method: 'POST',
@@ -604,20 +587,7 @@
             console.error('start_generation error', e);
         }
         if (!currentSessionId) return;
-        pollInterval = setInterval(async function () {
-            try {
-                const resp = await fetch('/api/report_status/' + currentSessionId);
-                if (resp.status === 403) { clearInterval(pollInterval); return; }
-                const status = await resp.json();
-                if (status.status === 'ready') {
-                    clearInterval(pollInterval);
-                    showToast('ready', 'Report Ready — Click to view', status.report_id);
-                } else if (status.status === 'error') {
-                    clearInterval(pollInterval);
-                    toast.classList.add('hidden');
-                }
-            } catch (e) { /* ignore */ }
-        }, 3000);
+        if (window.rpStartPolling) window.rpStartPolling(currentSessionId);
     });
 
     nextBtn.addEventListener('click', function () {

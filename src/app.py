@@ -233,6 +233,14 @@ def inject_user():
     }
 
 
+@app.context_processor
+def inject_active_research_session():
+    sid = session.get("session_id")
+    if sid and _generation_status.get(sid, {}).get("status") == "in_progress":
+        return {"active_research_session_id": sid}
+    return {"active_research_session_id": None}
+
+
 _MD_ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
     "p",
     "h1",
@@ -966,11 +974,45 @@ def start_generation():
             lines.append(f"A: {a}")
     context_str = "User context:\n" + "\n".join(lines) if lines else ""
 
-    _generation_status[session_id] = {"status": "in_progress", "report_id": None}
+    _generation_status[session_id] = {
+        "status": "in_progress",
+        "report_id": None,
+        "progress": 5,
+        "step": "Starting...",
+    }
 
     def run_generation():
+        import threading as _threading
+
+        subject_counter = {"done": 0, "total": 0}
+        counter_lock = _threading.Lock()
+
+        def progress_fn(progress, step):
+            status = _generation_status.get(session_id)
+            if status is None:
+                return
+            if progress is None:
+                # Subject completed — increment counter, interpolate within 20–75% band
+                with counter_lock:
+                    subject_counter["done"] += 1
+                    done = subject_counter["done"]
+                    total = subject_counter["total"] or 1
+                    pct = 20 + int((done / total) * 55)
+                    status["progress"] = min(pct, 75)
+                    status["step"] = f"Researching: {done}/{total} subjects done"
+            else:
+                status["progress"] = progress
+                status["step"] = step
+                if progress == 20 and "subjects" in step:
+                    # Extract subject count from "Researching N subjects..."
+                    try:
+                        subject_counter["total"] = int(step.split()[1])
+                    except (IndexError, ValueError):
+                        pass
+
         emitter = create_emitter()
         agent.set_emitter(emitter)
+        agent.set_progress_fn(progress_fn)
         try:
             agent.generate_report(
                 context=context_str,
@@ -980,11 +1022,14 @@ def start_generation():
             _generation_status[session_id] = {
                 "status": "ready",
                 "report_id": agent.current_report_id,
+                "progress": 100,
+                "step": "Report ready",
             }
         except Exception as e:
             _generation_status[session_id] = {"status": "error", "message": str(e)}
         finally:
             agent.set_emitter(None)
+            agent.set_progress_fn(None)
 
     threading.Thread(target=run_generation, daemon=True).start()
     return jsonify({"success": True})

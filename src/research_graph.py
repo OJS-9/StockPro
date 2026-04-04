@@ -43,6 +43,7 @@ class ResearchState(TypedDict):
     report_id: str  # set by storage_node
     user_id: Optional[int]
     emitter: Optional[StepEmitter]
+    progress_fn: Optional[Any]  # callable(progress: int | None, step: str) — injected by app.py
     user_selected_subjects: Optional[List[str]]  # set from popup subject selection
     spend_budget_usd: Optional[float]  # estimated USD budget for this run
     estimated_spend_usd: Optional[float]  # estimated from prompt-size heuristics
@@ -91,6 +92,9 @@ def _fan_out(state: ResearchState) -> List[Send]:
             f"[FanOut] Budget trimmed subjects from {len(subject_ids)} → {effective_subject_count}. Dropped: {dropped}"
         )
         subject_ids = trimmed
+
+    if progress_fn := state.get("progress_fn"):
+        progress_fn(20, f"Researching {len(subject_ids)} subjects...")
 
     return [
         Send("specialized_node", {**state, "subject_id": sid}) for sid in subject_ids
@@ -147,6 +151,8 @@ def storage_node(state: ResearchState) -> dict:
 
     if emitter:
         emitter.emit("Storing report...")
+    if progress_fn := state.get("progress_fn"):
+        progress_fn(90, "Saving report...")
 
     report_id = str(uuid.uuid4())
 
@@ -308,6 +314,7 @@ def run_research(
     spend_budget_usd: Optional[float] = None,
     parent_config: Optional[Dict[str, Any]] = None,
     username: Optional[str] = None,
+    progress_fn: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Execute the full research pipeline.
@@ -329,6 +336,7 @@ def run_research(
         "report_id": "",
         "user_id": user_id,
         "emitter": emitter,
+        "progress_fn": progress_fn,
         "user_selected_subjects": selected_subjects,
         "spend_budget_usd": spend_budget_usd,
         "estimated_spend_usd": None,

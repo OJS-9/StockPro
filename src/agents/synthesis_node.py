@@ -263,6 +263,8 @@ def synthesis_node(state: dict) -> dict:
 
     if emitter:
         emitter.emit("Synthesizing report...")
+    if progress_fn := state.get("progress_fn"):
+        progress_fn(80, "Synthesizing report...")
 
     logger.info(
         "Synthesizing %s research outputs for %s...",
