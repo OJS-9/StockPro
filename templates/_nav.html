@@ -24,7 +24,7 @@
                 </div>
             </div>
             <!-- Actions shown only when report is ready -->
-            <a id="rp-view-btn" href="#" style="display:none" class="flex-shrink-0 inline-flex items-center justify-center px-2.5 py-1 bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 text-[11px] font-semibold rounded-md hover:opacity-80 transition-opacity whitespace-nowrap">View Report</a>
+            <a id="rp-view-btn" href="#" onclick="if(window.rpDismiss)rpDismiss()" style="display:none" class="flex-shrink-0 inline-flex items-center justify-center px-2.5 py-1 bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 text-[11px] font-semibold rounded-md hover:opacity-80 transition-opacity whitespace-nowrap">View Report</a>
             <button id="rp-dismiss-btn" style="display:none" onclick="window.rpDismiss()" class="flex-shrink-0 inline-flex items-center justify-center text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors" aria-label="Dismiss">
                 <span class="material-symbols-outlined" style="font-size:16px">close</span>
             </button>
@@ -202,10 +202,8 @@
     function showReady(reportId) {
         showBar(100, 'Report ready');
         stepEl.style.display = 'none';
-        if (reportId) {
-            viewBtn.href = '/report/' + reportId;
-            viewBtn.style.display = 'inline-flex';
-        }
+        viewBtn.href = reportId ? '/report/' + reportId : '{{ url_for("report_history") }}';
+        viewBtn.style.display = 'inline-flex';
         dismissBtn.style.display = 'inline-flex';
     }
 
@@ -216,48 +214,68 @@
         stepEl.style.display = '';
         viewBtn.style.display = 'none';
         dismissBtn.style.display = 'none';
-        viewBtn.href = '#';
     }
 
-    function stopPolling() {
+    function stopInterval() {
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+
+    function clearStorage() {
         sessionStorage.removeItem('rp_session_id');
+        sessionStorage.removeItem('rp_ready');
+        sessionStorage.removeItem('rp_ready_report_id');
     }
 
     function poll(sessionId) {
         fetch('/api/report_status/' + sessionId)
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
-                if (!data) { stopPolling(); hideBar(); return; }
+                if (!data) { stopInterval(); clearStorage(); hideBar(); return; }
                 if (data.status === 'in_progress') {
                     showBar(data.progress || 5, data.step);
                 } else if (data.status === 'ready') {
-                    stopPolling();
+                    stopInterval();
+                    sessionStorage.setItem('rp_ready', '1');
+                    if (data.report_id) sessionStorage.setItem('rp_ready_report_id', data.report_id);
                     showReady(data.report_id);
                 } else {
-                    stopPolling();
-                    hideBar();
+                    stopInterval(); clearStorage(); hideBar();
                 }
             })
-            .catch(function () { stopPolling(); hideBar(); });
+            .catch(function () { stopInterval(); clearStorage(); hideBar(); });
     }
 
     function startPolling(sessionId) {
+        stopInterval();
         sessionStorage.setItem('rp_session_id', sessionId);
         showBar(5, 'Starting');
         pollTimer = setInterval(function () { poll(sessionId); }, 3000);
         poll(sessionId);
     }
 
-    window.rpDismiss = function () { stopPolling(); hideBar(); };
+    window.rpDismiss = function () { stopInterval(); clearStorage(); hideBar(); };
     window.rpStartPolling = startPolling;
-    window.rpStopPolling = stopPolling;
+    window.rpStopPolling = function () { stopInterval(); clearStorage(); };
 
-    var storedId = sessionStorage.getItem('rp_session_id');
-    var serverActiveId = {{ active_research_session_id | tojson }};
-    var activeId = serverActiveId || storedId;
-    if (activeId) {
-        startPolling(activeId);
+    // Attach dismiss to Reports nav links so navigating there auto-clears the bar
+    document.querySelectorAll('a[href="{{ url_for("report_history") }}"]').forEach(function (el) {
+        el.addEventListener('click', function () { if (window.rpDismiss) rpDismiss(); });
+    });
+
+    // Initialise on page load
+    var isReady = sessionStorage.getItem('rp_ready');
+    var readyReportId = sessionStorage.getItem('rp_ready_report_id');
+    var isReportsPage = {{ (request.endpoint == 'report_history') | tojson }};
+
+    if (isReady && !isReportsPage) {
+        showReady(readyReportId);
+    } else if (isReady && isReportsPage) {
+        clearStorage();
+    } else {
+        var storedId = sessionStorage.getItem('rp_session_id');
+        var serverActiveId = {{ active_research_session_id | tojson }};
+        var activeId = serverActiveId || storedId;
+        if (activeId) startPolling(activeId);
     }
 })();
 </script>
