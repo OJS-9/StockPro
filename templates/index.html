@@ -1,5 +1,60 @@
 {% extends "base.html" %}
 
+{% block extra_head %}
+<style>
+/* Subject toggles in research popup: no fill when checked; hover ring; beats @tailwindcss/forms */
+#subjects-list input.popup-subject-check[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: 9999px;
+  border: 2px solid #71717a;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px 10px;
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.dark #subjects-list input.popup-subject-check[type="checkbox"] {
+  border-color: #52525b;
+}
+#subjects-list label.group:hover input.popup-subject-check[type="checkbox"] {
+  border-color: #18181b;
+}
+.dark #subjects-list label.group:hover input.popup-subject-check[type="checkbox"] {
+  border-color: #fafafa;
+}
+#subjects-list input.popup-subject-check[type="checkbox"]:checked {
+  border-color: #18181b;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath stroke='%2318181b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='m3.8 8.2 2.8 2.8 5.6-5.6'/%3E%3C/svg%3E");
+}
+.dark #subjects-list input.popup-subject-check[type="checkbox"]:checked {
+  border-color: #fafafa;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath stroke='%23fafafa' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='m3.8 8.2 2.8 2.8 5.6-5.6'/%3E%3C/svg%3E");
+}
+#subjects-list input.popup-subject-check[type="checkbox"]:focus-visible {
+  outline: 2px solid #a1a1aa;
+  outline-offset: 2px;
+}
+.dark #subjects-list input.popup-subject-check[type="checkbox"]:focus-visible {
+  outline-color: #a1a1aa;
+}
+#subjects-list input.popup-subject-check[type="checkbox"]:checked:focus-visible {
+  outline-color: #71717a;
+}
+.dark #subjects-list input.popup-subject-check[type="checkbox"]:checked:focus-visible {
+  outline-color: #d4d4d8;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 {% include '_nav.html' %}
 
@@ -289,10 +344,13 @@
         </div>
 
         <div id="popup-step-subjects" class="hidden flex flex-col gap-3">
-            <div id="subjects-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1"></div>
-            <div class="flex items-center justify-between pt-4 border-t border-zinc-200 dark:border-zinc-800 mt-2">
-                <button id="popup-skip-subjects" class="text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm">Skip</button>
-                <button id="popup-next" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+            <div id="subjects-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pl-2 pr-2"></div>
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800 mt-2">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <button type="button" id="popup-skip-subjects" class="text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm">Skip</button>
+                    <button type="button" id="popup-deselect-subjects" class="text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm">Deselect all</button>
+                </div>
+                <button type="button" id="popup-next" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
                     Next <span class="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
             </div>
@@ -334,6 +392,7 @@
     const stepIndicator = document.getElementById('popup-step-indicator');
     const closeBtn = document.getElementById('popup-close');
     const skipSubjectsBtn = document.getElementById('popup-skip-subjects');
+    const deselectSubjectsBtn = document.getElementById('popup-deselect-subjects');
     const nextBtn = document.getElementById('popup-next');
     const backBtn = document.getElementById('popup-back');
     const submitBtn = document.getElementById('popup-submit');
@@ -393,9 +452,9 @@
         subjects.forEach(function (s) {
             const label = document.createElement('label');
             label.className = 'flex items-start gap-3 cursor-pointer group';
-            const checked = s.priority === 1 ? 'checked' : '';
+            const checked = 'checked';
             label.innerHTML =
-                '<input type="checkbox" data-id="' + escapeHtml(s.id) + '" class="mt-0.5 rounded border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400" ' + checked + '>' +
+                '<input type="checkbox" data-id="' + escapeHtml(s.id) + '" class="popup-subject-check" ' + checked + '>' +
                 '<div>' +
                 '<p class="text-sm font-medium group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">' + escapeHtml(s.name) + '</p>' +
                 '<p class="text-zinc-500 text-xs">' + escapeHtml(s.description) + '</p>' +
@@ -561,6 +620,13 @@
     closeBtn.addEventListener('click', closePopup);
     backdrop.addEventListener('click', function (e) {
         if (e.target === backdrop) closePopup();
+    });
+
+    deselectSubjectsBtn.addEventListener('click', function () {
+        subjectsList.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+            cb.checked = false;
+            cb.removeAttribute('checked');
+        });
     });
 
     skipSubjectsBtn.addEventListener('click', async function () {
