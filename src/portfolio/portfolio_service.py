@@ -552,6 +552,8 @@ class PortfolioService:
         total_cost_basis = sum(
             h.get("total_cost_basis", Decimal("0")) for h in holdings
         )
+        if track_cash:
+            total_cost_basis += cash_balance
 
         if with_prices:
             total_market_value = sum(
