@@ -9,7 +9,8 @@ import unittest
 from unittest.mock import MagicMock, patch, call
 
 # Add src to path so we can import from app.py
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+_REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(_REPO_ROOT, "src"))
 
 
 class TestWarmPortfolioCache(unittest.TestCase):
@@ -20,7 +21,7 @@ class TestWarmPortfolioCache(unittest.TestCase):
         import importlib
         # We import only the function — avoid full Flask app initialization
         import ast
-        app_path = os.path.join(os.path.dirname(__file__), 'src', 'app.py')
+        app_path = os.path.join(_REPO_ROOT, "src", "app.py")
         with open(app_path) as f:
             tree = ast.parse(f.read())
         func_names = [
@@ -45,7 +46,7 @@ class TestWarmPortfolioCache(unittest.TestCase):
             import importlib.util
 
             # Parse and extract _warm_portfolio_cache source
-            app_path = os.path.join(os.path.dirname(__file__), 'src', 'app.py')
+            app_path = os.path.join(_REPO_ROOT, "src", "app.py")
             with open(app_path) as f:
                 source = f.read()
 
@@ -79,7 +80,7 @@ class TestWarmPortfolioCache(unittest.TestCase):
 
         with patch('portfolio.portfolio_service.get_portfolio_service', return_value=mock_svc):
             import ast
-            app_path = os.path.join(os.path.dirname(__file__), 'src', 'app.py')
+            app_path = os.path.join(_REPO_ROOT, "src", "app.py")
             with open(app_path) as f:
                 source = f.read()
             tree = ast.parse(source)
@@ -100,7 +101,7 @@ class TestWarmPortfolioCache(unittest.TestCase):
     def test_warm_portfolio_cache_thread_spawn_in_login_required(self):
         """login_required block must spawn a daemon thread targeting _warm_portfolio_cache."""
         import ast
-        app_path = os.path.join(os.path.dirname(__file__), 'src', 'app.py')
+        app_path = os.path.join(_REPO_ROOT, "src", "app.py")
         with open(app_path) as f:
             source = f.read()
 

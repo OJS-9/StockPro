@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
 
+from langchain_core.messages import AIMessage
+
 
 def test_fan_out_includes_effective_caps():
     """_fan_out passes planner-populated budget fields through to each specialized_node Send."""
@@ -65,11 +67,9 @@ def test_specialized_node_uses_effective_caps(monkeypatch):
         agent = MagicMock()
 
         def _invoke(_payload, config=None):
-            captured["recursion_limit"] = (config or {}).get("recursion_limit")
-            fake_msg = MagicMock()
-            fake_msg.content = "OUTPUT"
-            fake_msg.tool_calls = None
-            return {"messages": [fake_msg]}
+                captured["recursion_limit"] = (config or {}).get("recursion_limit")
+                fake_msg = AIMessage(content="OUTPUT")
+                return {"messages": [fake_msg]}
 
         agent.invoke.side_effect = _invoke
         return agent

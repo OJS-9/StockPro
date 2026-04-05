@@ -15,11 +15,8 @@ Phase 2 — quality_gate_node:
 9. synthesis prompt has no missing-sections note when all subjects succeed
 """
 
-import uuid
 import sys
 import os
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -27,14 +24,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 _GOOD_TEXT = "x" * 200
 
 
-def test_checkpointer_attached():
+def test_graph_compiled_without_checkpointer():
+    """Research graph is compiled without a checkpointer (no thread-scoped persistence)."""
     from research_graph import research_graph
-    from langgraph.checkpoint.memory import MemorySaver
 
-    assert research_graph.checkpointer is not None, "No checkpointer attached"
-    assert isinstance(research_graph.checkpointer, MemorySaver), (
-        f"Expected MemorySaver, got {type(research_graph.checkpointer).__name__}"
-    )
+    assert getattr(research_graph, "checkpointer", None) is None
 
 
 def test_expected_nodes_present():
@@ -45,62 +39,40 @@ def test_expected_nodes_present():
         assert expected in nodes, f"Missing node: {expected}"
 
 
-def test_invoke_without_thread_id_raises():
-    """LangGraph requires thread_id in config when a checkpointer is attached."""
+def test_invoke_does_not_require_thread_id_without_checkpointer():
+    """Without a checkpointer, invoke is not required to receive configurable.thread_id."""
     from research_graph import research_graph
     from langgraph.graph.state import CompiledStateGraph
 
     assert isinstance(research_graph, CompiledStateGraph)
-
-    with pytest.raises(ValueError, match="thread_id"):
-        research_graph.invoke({
-            "ticker": "AAPL",
-            "trade_type": "investment",
-            "conversation_context": "",
-            "plan": None,
-            "subject_id": "",
-            "research_outputs": {},
-            "report_text": "",
-            "report_id": "",
-            "user_id": None,
-            "emitter": None,
-        })
+    assert research_graph.checkpointer is None
 
 
-def test_run_research_passes_thread_id(monkeypatch):
-    """run_research should pass a valid UUID thread_id in the invoke config."""
+def test_run_research_passes_run_name(monkeypatch):
+    """run_research passes a human-readable run_name in the invoke config."""
     import research_graph as rg
 
     captured = {}
 
     def mock_invoke(state, config=None):
         captured["config"] = config
-        # return minimal state so run_research doesn't crash
         return {**state, "report_id": "test-id", "report_text": "ok"}
 
     monkeypatch.setattr(rg.research_graph, "invoke", mock_invoke)
 
     rg.run_research("AAPL", "investment")
 
-    assert "config" in captured, "invoke was not called with config"
-    cfg = captured["config"]
-    assert "configurable" in cfg, "config missing 'configurable' key"
-    thread_id = cfg["configurable"].get("thread_id")
-    assert thread_id is not None, "thread_id not set in config"
-
-    # must be a valid UUID
-    parsed = uuid.UUID(thread_id)
-    assert str(parsed) == thread_id, "thread_id is not a valid UUID"
+    assert captured.get("config", {}).get("run_name") == "AAPL Research"
 
 
-def test_each_run_gets_unique_thread_id(monkeypatch):
-    """Two calls to run_research must use different thread_ids."""
+def test_each_run_gets_distinct_run_name_for_different_tickers(monkeypatch):
+    """Different tickers produce different run_name values (LangSmith / tracing)."""
     import research_graph as rg
 
-    ids = []
+    names = []
 
     def mock_invoke(state, config=None):
-        ids.append(config["configurable"]["thread_id"])
+        names.append((config or {}).get("run_name"))
         return {**state, "report_id": "x", "report_text": "ok"}
 
     monkeypatch.setattr(rg.research_graph, "invoke", mock_invoke)
@@ -108,8 +80,7 @@ def test_each_run_gets_unique_thread_id(monkeypatch):
     rg.run_research("AAPL", "investment")
     rg.run_research("NVDA", "swing")
 
-    assert len(ids) == 2
-    assert ids[0] != ids[1], "Both runs used the same thread_id"
+    assert names == ["AAPL Research", "NVDA Research"]
 
 
 # ---------------------------------------------------------------------------
