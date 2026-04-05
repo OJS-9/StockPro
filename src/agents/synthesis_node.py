@@ -117,7 +117,9 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
 - Ensure the report is comprehensive and fully utilizes all research findings"""
 
 
-def _build_report_sections(trade_type: str, subject_ids_run: List[str], has_position: bool = False) -> str:
+def _build_report_sections(
+    trade_type: str, subject_ids_run: List[str], has_position: bool = False
+) -> str:
     subject_names: Dict[str, str] = {}
     subject_descriptions: Dict[str, str] = {}
     for sid in subject_ids_run:
@@ -181,7 +183,9 @@ def _build_synthesis_prompt(
         if sid not in ordered_ids:
             ordered_ids.append(sid)
 
-    sections_text = _build_report_sections(trade_type, ordered_ids, has_position=bool(plan.position_summary))
+    sections_text = _build_report_sections(
+        trade_type, ordered_ids, has_position=bool(plan.position_summary)
+    )
 
     prompt_parts = [
         f"**TASK: Synthesize research into {framing} for {ticker} ({trade_type})**",
@@ -256,7 +260,7 @@ def _build_synthesis_prompt(
         prompt_parts += [
             "",
             f"**Position Context section — write it as follows{goal_hint}:**",
-            f"- Open with: the user's position details exactly as stated: \"{plan.position_summary}\"",
+            f'- Open with: the user\'s position details exactly as stated: "{plan.position_summary}"',
             "- Then list 3–5 specific findings from the research that are most relevant to their goal.",
             "  Pick findings that directly bear on their cost basis, risk exposure, or stated intent.",
             "  Examples by goal type:",
