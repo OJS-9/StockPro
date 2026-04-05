@@ -4,7 +4,7 @@ Tests for watchlist service — WatchlistService unit tests using mocked DB and 
 
 import sys
 import os
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from decimal import Decimal
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -93,12 +93,13 @@ class TestWatchlistService:
         }
         self.mock_factory.get_provider_for_symbol.return_value = (mock_provider, 'crypto')
 
-        self.service.add_symbol('wl-1', 'BTC')
+        mock_pcs = MagicMock()
+        with patch("price_cache_service.get_price_cache_service", return_value=mock_pcs):
+            self.service.add_symbol('wl-1', 'BTC')
 
-        assert self.mock_db.upsert_price_cache.called
-        call_args = self.mock_db.upsert_price_cache.call_args[0]
-        assert call_args[0] == 'BTC'
-        assert call_args[1] == 'crypto'
+        mock_pcs.refresh.assert_called_once()
+        assert mock_pcs.refresh.call_args[0][0] == [('BTC', 'crypto')]
+        assert mock_pcs.refresh.call_args[1].get('force') is True
 
     # ── Pins ─────────────────────────────────────────────────
 

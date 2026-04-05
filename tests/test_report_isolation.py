@@ -26,6 +26,6 @@ def test_supabase_doc_mentions_rls():
     """Docs stay aligned with [STOA-4](/STOA/issues/STOA-4#document-plan) Supabase verification."""
     from pathlib import Path
 
-    doc = Path(__file__).resolve().parent / "docs" / "SUPABASE.md"
+    doc = Path(__file__).resolve().parents[1] / "docs" / "SUPABASE.md"
     text = doc.read_text(encoding="utf-8")
     assert "Row Level Security" in text or "RLS" in text

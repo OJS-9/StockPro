@@ -47,7 +47,14 @@ def test_ticker_page_renders_reports_and_notes(api_client):
         1,
     )
     mock_db = MagicMock()
-    mock_db.get_ticker_note.return_value = "<p>Existing thesis note</p>"
+    mock_db.get_ticker_notes.return_value = [
+        {
+            "id": 1,
+            "title": "Thesis",
+            "content": "<p>Existing thesis note</p>",
+            "created_at": None,
+        }
+    ]
 
     with patch.object(app_module, "ReportStorage", return_value=mock_storage):
         with patch("database.get_database_manager", return_value=mock_db):
@@ -71,9 +78,9 @@ def test_save_ticker_notes_persists_content(api_client):
         resp = api_client.post("/ticker/AAPL/notes", data={"content": "<p>My note</p>"})
 
     assert resp.status_code == 302
-    mock_db.upsert_ticker_note.assert_called_once()
-    call_args = mock_db.upsert_ticker_note.call_args[0]
+    mock_db.create_ticker_note.assert_called_once()
+    call_args = mock_db.create_ticker_note.call_args[0]
     assert call_args[0] == "u1"
     assert call_args[1] == "AAPL"
-    assert "My note" in call_args[2]
+    assert "My note" in call_args[3]
 
