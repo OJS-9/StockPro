@@ -1293,6 +1293,36 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
+    def get_holdings_for_ticker(
+        self, user_id: str, symbol: str
+    ) -> List[Dict[str, Any]]:
+        """Get all holdings of a ticker across a user's portfolios in one query."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT h.holding_id, h.portfolio_id, h.symbol, h.asset_type,
+                           h.total_quantity, h.average_cost, h.total_cost_basis,
+                           p.name AS portfolio_name
+                    FROM holdings h
+                    JOIN portfolios p ON p.portfolio_id = h.portfolio_id
+                    WHERE p.user_id = %s AND h.symbol = %s AND h.total_quantity > 0
+                """,
+                    (user_id, symbol.upper()),
+                )
+                results = cur.fetchall()
+            for result in results:
+                result["total_quantity"] = Decimal(str(result["total_quantity"]))
+                result["average_cost"] = Decimal(str(result["average_cost"]))
+                result["total_cost_basis"] = Decimal(str(result["total_cost_basis"]))
+            return results
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to get holdings for ticker: {e}")
+        finally:
+            self._release(conn)
+
     def get_holdings(self, portfolio_id: str) -> List[Dict[str, Any]]:
         """Get all holdings for a portfolio."""
         conn = None

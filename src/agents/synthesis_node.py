@@ -132,7 +132,11 @@ def _build_report_sections(
             subject_descriptions[sid] = ""
 
     sections = [
-        "1. **Executive Summary** — Key findings, recommendation, and top metrics"
+        (
+            "1. **Executive Summary** — Key findings and top metrics"
+            if has_position
+            else "1. **Executive Summary** — Key findings, recommendation, and top metrics"
+        )
     ]
     section_num = 2
     if has_position:

@@ -1071,20 +1071,17 @@ def position_check(ticker: str):
     if not user_id:
         return jsonify({"positions": []})
     svc = get_portfolio_service()
-    portfolios = svc.list_portfolios(user_id=user_id)
-    positions = []
-    for p in portfolios:
-        holding = svc.get_holding(p["portfolio_id"], ticker.upper())
-        if holding and float(holding.get("total_quantity", 0)) > 0:
-            positions.append(
-                {
-                    "portfolio_name": p["name"],
-                    "portfolio_id": p["portfolio_id"],
-                    "quantity": float(holding["total_quantity"]),
-                    "average_cost": float(holding["average_cost"]),
-                    "total_cost_basis": float(holding["total_cost_basis"]),
-                }
-            )
+    holdings = svc.get_holdings_for_ticker(user_id=user_id, symbol=ticker.upper())
+    positions = [
+        {
+            "portfolio_name": h["portfolio_name"],
+            "portfolio_id": h["portfolio_id"],
+            "quantity": float(h["total_quantity"]),
+            "average_cost": float(h["average_cost"]),
+            "total_cost_basis": float(h["total_cost_basis"]),
+        }
+        for h in holdings
+    ]
     return jsonify({"positions": positions})
 
 

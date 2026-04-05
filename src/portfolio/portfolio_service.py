@@ -286,6 +286,14 @@ class PortfolioService:
         """
         return self.db.get_holding_by_id(holding_id)
 
+    def get_holdings_for_ticker(self, user_id: str, symbol: str) -> List[Dict]:
+        """
+        Get all holdings of a ticker across a user's portfolios in one query.
+
+        Returns dicts with portfolio_name included.
+        """
+        return self.db.get_holdings_for_ticker(user_id, symbol)
+
     # ==================== Transactions ====================
 
     def add_transaction(

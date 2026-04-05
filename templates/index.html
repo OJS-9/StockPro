@@ -314,7 +314,7 @@
 
 <!-- Position Pre-screen Modal -->
 <div id="position-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 max-w-lg w-full mx-4 shadow-card-lg">
+    <div id="position-modal" role="dialog" aria-modal="true" aria-labelledby="position-modal-title" tabindex="-1" class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 max-w-lg w-full mx-4 shadow-card-lg">
         <!-- Step 1: show position + yes/skip -->
         <div id="position-step-1">
             <div class="flex items-center gap-3 mb-4">
@@ -322,7 +322,7 @@
                     <span class="material-symbols-outlined text-xl text-zinc-500">account_balance_wallet</span>
                 </div>
                 <div>
-                    <h3 class="text-base font-semibold">You hold <span id="position-ticker-label" class="font-mono"></span></h3>
+                    <h3 id="position-modal-title" class="text-base font-semibold">You hold <span id="position-ticker-label" class="font-mono"></span></h3>
                     <p class="text-zinc-500 text-xs">Include your position in the research report?</p>
                 </div>
             </div>
@@ -342,7 +342,7 @@
                 </div>
                 <div>
                     <h3 class="text-base font-semibold">What's your goal?</h3>
-                    <p class="text-zinc-500 text-xs">This will guide the report's recommendations.</p>
+                    <p class="text-zinc-500 text-xs">This will guide the report's position-aware framing.</p>
                 </div>
             </div>
             <div id="position-goal-options" class="flex flex-col gap-2 mb-5"></div>
@@ -604,7 +604,7 @@
         }
     }
 
-    function showGoalOptions(tradeType, positionSummary, ticker) {
+    function showGoalOptions(tradeType, positionSummary, ticker, dismissPositionModal) {
         const options = POSITION_GOALS[tradeType] || POSITION_GOALS['Investment'];
         const goalOptionsEl = document.getElementById('position-goal-options');
         goalOptionsEl.innerHTML = options.map(function (g) {
@@ -613,9 +613,7 @@
         goalOptionsEl.querySelectorAll('.goal-option').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 const goal = btn.getAttribute('data-goal');
-                positionBackdrop.classList.add('hidden');
-                document.getElementById('position-step-1').classList.remove('hidden');
-                document.getElementById('position-step-2').classList.add('hidden');
+                dismissPositionModal();
                 proceedToResearch(ticker, tradeType, positionSummary, goal);
             });
         });
@@ -644,15 +642,32 @@
         }).join('; ');
 
         positionBackdrop.classList.remove('hidden');
+        document.getElementById('position-modal').focus();
+
+        function dismissPositionModal() {
+            positionBackdrop.classList.add('hidden');
+            document.getElementById('position-step-1').classList.remove('hidden');
+            document.getElementById('position-step-2').classList.add('hidden');
+            document.removeEventListener('keydown', onPositionEsc);
+        }
+
+        function onPositionEsc(e) {
+            if (e.key === 'Escape') dismissPositionModal();
+        }
+        document.addEventListener('keydown', onPositionEsc);
+
+        positionBackdrop.onclick = function (e) {
+            if (e.target === positionBackdrop) dismissPositionModal();
+        };
 
         document.getElementById('position-skip').onclick = function () {
-            positionBackdrop.classList.add('hidden');
+            dismissPositionModal();
             proceedToResearch(ticker, tradeType, '', '');
         };
         document.getElementById('position-yes').onclick = function () {
             document.getElementById('position-step-1').classList.add('hidden');
             document.getElementById('position-step-2').classList.remove('hidden');
-            showGoalOptions(tradeType, positionSummary, ticker);
+            showGoalOptions(tradeType, positionSummary, ticker, dismissPositionModal);
         };
     }
 

@@ -247,6 +247,7 @@
 
     function startPolling(sessionId) {
         stopInterval();
+        stepEl.style.display = '';
         sessionStorage.setItem('rp_session_id', sessionId);
         showBar(5, 'Starting');
         pollTimer = setInterval(function () { poll(sessionId); }, 3000);
