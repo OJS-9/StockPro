@@ -312,6 +312,49 @@
     </div>
 </div>
 
+<!-- Position Pre-screen Modal -->
+<div id="position-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="position-modal" role="dialog" aria-modal="true" aria-labelledby="position-modal-title" tabindex="-1" class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 max-w-lg w-full mx-4 shadow-card-lg">
+        <!-- Step 1: show position + yes/skip -->
+        <div id="position-step-1">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="size-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-xl text-zinc-500">account_balance_wallet</span>
+                </div>
+                <div>
+                    <h3 id="position-modal-title" class="text-base font-semibold">You hold <span id="position-ticker-label" class="font-mono"></span></h3>
+                    <p class="text-zinc-500 text-xs">Include your position in the research report?</p>
+                </div>
+            </div>
+            <div id="position-list" class="flex flex-col gap-2 mb-5"></div>
+            <div class="flex gap-3 justify-end pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                <button id="position-skip" class="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors">Skip</button>
+                <button id="position-yes" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors">
+                    Yes, consider my position <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+        <!-- Step 2: goal question -->
+        <div id="position-step-2" class="hidden">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="size-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-xl text-zinc-500">flag</span>
+                </div>
+                <div>
+                    <h3 class="text-base font-semibold">What's your goal?</h3>
+                    <p class="text-zinc-500 text-xs">This will guide the report's position-aware framing.</p>
+                </div>
+            </div>
+            <div id="position-goal-options" class="flex flex-col gap-2 mb-5"></div>
+            <div class="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                <button id="position-goal-back" class="text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 transition-colors text-sm flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span> Back
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 hidden">
     <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3 shadow-card-lg min-w-[260px] cursor-pointer">
@@ -517,19 +560,22 @@
         if (window.rpStartPolling) window.rpStartPolling(currentSessionId);
     }
 
-    form.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const ticker = document.getElementById('ticker').value.trim();
-        const tradeType = document.getElementById('trade_type').value;
-        if (!ticker || !tradeType) return;
+    const positionBackdrop = document.getElementById('position-backdrop');
 
+    const POSITION_GOALS = {
+        'Investment': ['DCA into my position', 'Re-evaluate (hold or sell)', 'Assess for initial sizing'],
+        'Swing Trade': ['Increase my position', 'Hedge with options or short', 'Start a new leveraged position'],
+        'Day Trade': ['Leveraged long play', 'Hedge my position', 'Exit strategy — close today']
+    };
+
+    async function proceedToResearch(ticker, tradeType, positionSummary, positionGoal) {
         openPopup();
-
         const formData = new FormData();
         formData.append('ticker', ticker);
         formData.append('trade_type', tradeType);
         formData.append('csrf_token', csrfToken);
-
+        if (positionSummary) formData.append('position_summary', positionSummary);
+        if (positionGoal) formData.append('position_goal', positionGoal);
         try {
             const resp = await fetch('/popup_start', { method: 'POST', body: formData });
             const data = await resp.json();
@@ -556,6 +602,93 @@
             closePopup();
             console.error('popup_start error', e);
         }
+    }
+
+    function showGoalOptions(tradeType, positionSummary, ticker, dismissPositionModal) {
+        const options = POSITION_GOALS[tradeType] || POSITION_GOALS['Investment'];
+        const goalOptionsEl = document.getElementById('position-goal-options');
+        goalOptionsEl.innerHTML = options.map(function (g) {
+            return '<button type="button" class="goal-option w-full text-left px-4 py-3 rounded-lg border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all" data-goal="' + escapeHtml(g) + '">' + escapeHtml(g) + '</button>';
+        }).join('');
+        goalOptionsEl.querySelectorAll('.goal-option').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const goal = btn.getAttribute('data-goal');
+                dismissPositionModal();
+                proceedToResearch(ticker, tradeType, positionSummary, goal);
+            });
+        });
+        document.getElementById('position-goal-back').onclick = function () {
+            document.getElementById('position-step-2').classList.add('hidden');
+            document.getElementById('position-step-1').classList.remove('hidden');
+        };
+    }
+
+    function showPositionModal(positions, ticker, tradeType) {
+        document.getElementById('position-ticker-label').textContent = ticker;
+        const positionList = document.getElementById('position-list');
+        positionList.innerHTML = positions.map(function (p) {
+            const qty = p.quantity % 1 === 0 ? p.quantity.toLocaleString() : p.quantity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+            const avgCost = p.average_cost.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            const totalCost = p.total_cost_basis.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            return '<div class="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-3 border border-zinc-200 dark:border-zinc-700">' +
+                '<p class="text-xs text-zinc-500 font-medium mb-1">' + escapeHtml(p.portfolio_name) + '</p>' +
+                '<p class="text-sm font-semibold">' + qty + ' shares at ' + avgCost + ' avg cost</p>' +
+                '<p class="text-xs text-zinc-400 mt-0.5">' + totalCost + ' total cost basis</p>' +
+                '</div>';
+        }).join('');
+
+        const positionSummary = positions.map(function (p) {
+            return 'Portfolio "' + p.portfolio_name + '": ' + p.quantity + ' shares at $' + p.average_cost.toFixed(2) + ' avg cost ($' + p.total_cost_basis.toFixed(2) + ' total cost basis)';
+        }).join('; ');
+
+        positionBackdrop.classList.remove('hidden');
+        document.getElementById('position-modal').focus();
+
+        function dismissPositionModal() {
+            positionBackdrop.classList.add('hidden');
+            document.getElementById('position-step-1').classList.remove('hidden');
+            document.getElementById('position-step-2').classList.add('hidden');
+            document.removeEventListener('keydown', onPositionEsc);
+        }
+
+        function onPositionEsc(e) {
+            if (e.key === 'Escape') dismissPositionModal();
+        }
+        document.addEventListener('keydown', onPositionEsc);
+
+        positionBackdrop.onclick = function (e) {
+            if (e.target === positionBackdrop) dismissPositionModal();
+        };
+
+        document.getElementById('position-skip').onclick = function () {
+            dismissPositionModal();
+            proceedToResearch(ticker, tradeType, '', '');
+        };
+        document.getElementById('position-yes').onclick = function () {
+            document.getElementById('position-step-1').classList.add('hidden');
+            document.getElementById('position-step-2').classList.remove('hidden');
+            showGoalOptions(tradeType, positionSummary, ticker, dismissPositionModal);
+        };
+    }
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+        const tradeType = document.getElementById('trade_type').value;
+        if (!ticker || !tradeType) return;
+
+        try {
+            const posResp = await fetch('/api/position_check/' + encodeURIComponent(ticker));
+            if (posResp.ok) {
+                const posData = await posResp.json();
+                if (posData.positions && posData.positions.length > 0) {
+                    showPositionModal(posData.positions, ticker, tradeType);
+                    return;
+                }
+            }
+        } catch (e) { /* silently skip position check on error */ }
+
+        proceedToResearch(ticker, tradeType, '', '');
     });
 
     closeBtn.addEventListener('click', closePopup);

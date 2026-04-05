@@ -903,6 +903,17 @@ def popup_start():
     session["current_ticker"] = ticker
     session["current_trade_type"] = trade_type
 
+    position_summary = (request.form.get("position_summary") or "").strip()
+    position_goal = (request.form.get("position_goal") or "").strip()
+    if position_summary:
+        session["position_summary"] = position_summary
+    else:
+        session.pop("position_summary", None)
+    if position_goal:
+        session["position_goal"] = position_goal
+    else:
+        session.pop("position_goal", None)
+
     # Let the orchestrator agent run one turn; it will call ask_user_questions tool
     try:
         agent.start_research(ticker, trade_type)
@@ -974,6 +985,14 @@ def start_generation():
             lines.append(f"A: {a}")
     context_str = "User context:\n" + "\n".join(lines) if lines else ""
 
+    position_summary = session.pop("position_summary", "")
+    position_goal = session.pop("position_goal", "")
+    if position_summary:
+        position_block = f"User's existing position:\n{position_summary}"
+        if position_goal:
+            position_block += f"\nUser's goal for this research: {position_goal}"
+        context_str = position_block + ("\n\n" + context_str if context_str else "")
+
     _generation_status[session_id] = {
         "status": "in_progress",
         "report_id": None,
@@ -1042,6 +1061,28 @@ def report_status(session_id: str):
     if session.get("session_id") != session_id:
         return jsonify({"error": "forbidden"}), 403
     return jsonify(_generation_status.get(session_id, {"status": "unknown"}))
+
+
+@app.route("/api/position_check/<ticker>")
+@login_required
+def position_check(ticker: str):
+    """Return user's existing holdings of a ticker across all portfolios."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"positions": []})
+    svc = get_portfolio_service()
+    holdings = svc.get_holdings_for_ticker(user_id=user_id, symbol=ticker.upper())
+    positions = [
+        {
+            "portfolio_name": h["portfolio_name"],
+            "portfolio_id": h["portfolio_id"],
+            "quantity": float(h["total_quantity"]),
+            "average_cost": float(h["average_cost"]),
+            "total_cost_basis": float(h["total_cost_basis"]),
+        }
+        for h in holdings
+    ]
+    return jsonify({"positions": positions})
 
 
 @app.route("/api/usage", methods=["GET"])
