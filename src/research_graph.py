@@ -42,7 +42,9 @@ class ResearchState(TypedDict):
     report_id: str  # set by storage_node
     user_id: Optional[int]
     emitter: Optional[StepEmitter]
-    progress_fn: Optional[Any]  # callable(progress: int | None, step: str) — injected by app.py
+    progress_fn: Optional[
+        Any
+    ]  # callable(progress: int | None, step: str) — injected by app.py
     user_selected_subjects: Optional[List[str]]  # set from popup subject selection
     spend_budget_usd: Optional[float]  # estimated USD budget for this run
     estimated_spend_usd: Optional[float]  # estimated from prompt-size heuristics
