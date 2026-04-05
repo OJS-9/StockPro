@@ -14,6 +14,7 @@ import psycopg2
 import psycopg2.pool
 import psycopg2.extras
 from dotenv import load_dotenv
+from encryption import encrypt, decrypt, hmac_email
 
 load_dotenv()
 
@@ -117,10 +118,22 @@ class DatabaseManager:
                         END IF;
                     END $$
                 """)
+                # email_hash column: HMAC of email for indexed lookup (email column stores ciphertext)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_hash'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN email_hash VARCHAR(64);
+                        END IF;
+                    END $$
+                """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
                 )
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_email     ON users (email)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_email_hash ON users (email_hash)")
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_google_id ON users (google_id)"
                 )
@@ -932,17 +945,17 @@ class DatabaseManager:
         password_hash: Optional[str] = None,
         google_id: Optional[str] = None,
     ):
-        """Create a new user."""
+        """Create a new user. Email is stored AES-256 encrypted; email_hash used for lookups."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO users (user_id, username, email, password_hash, google_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO users (user_id, username, email, email_hash, password_hash, google_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                    (user_id, username, email, password_hash, google_id),
+                    (user_id, username, encrypt(email), hmac_email(email), password_hash, google_id),
                 )
             conn.commit()
         except psycopg2.Error as e:
@@ -951,6 +964,17 @@ class DatabaseManager:
             raise RuntimeError(f"Failed to create user: {e}")
         finally:
             self._release(conn)
+
+    def _decrypt_user_row(self, row) -> Optional[Dict[str, Any]]:
+        """Decrypt sensitive fields on a user row dict returned from the DB."""
+        if row is None:
+            return None
+        row = dict(row)
+        if row.get("email"):
+            row["email"] = decrypt(row["email"])
+        if row.get("telegram_chat_id"):
+            row["telegram_chat_id"] = decrypt(row["telegram_chat_id"])
+        return row
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """Get a user by username."""
@@ -966,7 +990,7 @@ class DatabaseManager:
                 """,
                     (username,),
                 )
-                return cur.fetchone()
+                return self._decrypt_user_row(cur.fetchone())
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
@@ -986,14 +1010,14 @@ class DatabaseManager:
                 """,
                     (user_id,),
                 )
-                return cur.fetchone()
+                return self._decrypt_user_row(cur.fetchone())
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
             self._release(conn)
 
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        """Get a user by email."""
+        """Get a user by email. Uses email_hash for indexed lookup (email column is encrypted)."""
         conn = None
         try:
             conn = self.get_connection()
@@ -1002,11 +1026,11 @@ class DatabaseManager:
                     """
                     SELECT user_id, username, email, password_hash, google_id, tier,
                            COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at
-                    FROM users WHERE email = %s
+                    FROM users WHERE email_hash = %s
                 """,
-                    (email,),
+                    (hmac_email(email),),
                 )
-                return cur.fetchone()
+                return self._decrypt_user_row(cur.fetchone())
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
@@ -1026,7 +1050,7 @@ class DatabaseManager:
                 """,
                     (google_id,),
                 )
-                return cur.fetchone()
+                return self._decrypt_user_row(cur.fetchone())
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
         finally:
@@ -1070,14 +1094,14 @@ class DatabaseManager:
             self._release(conn)
 
     def set_user_telegram_chat_id(self, user_id: str, telegram_chat_id: str) -> None:
-        """Persist Telegram chat_id on the users table."""
+        """Persist Telegram chat_id on the users table (stored AES-256 encrypted)."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE users SET telegram_chat_id = %s WHERE user_id = %s",
-                    (str(telegram_chat_id), user_id),
+                    (encrypt(str(telegram_chat_id)), user_id),
                 )
             conn.commit()
         except psycopg2.Error as e:
