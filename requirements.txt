@@ -3,6 +3,7 @@
 # Dev tools (ruff, black, pytest): pip install -r requirements-dev.txt
 
 bcrypt==5.0.0
+cryptography>=42.0.0
 bleach==6.3.0
 clerk-backend-api==5.0.6
 Flask==3.1.3

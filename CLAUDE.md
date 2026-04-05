@@ -322,6 +322,31 @@ Additional colors used directly via Tailwind utilities:
 - **`static/css/style.css`** contains an unused purple-themed stylesheet — the app exclusively uses Tailwind via CDN.
 - **Icons**: Material Symbols Outlined loaded from Google Fonts CDN. Used for all UI icons (`search`, `arrow_forward`, `smart_toy`, `person`, `menu`, `add`, `trending_up`, etc.).
 
+## Security
+
+### AES-256 Encryption (field-level, data at rest)
+All sensitive user fields are encrypted in the database using AES-256-GCM via `src/encryption.py`.
+
+**Currently encrypted fields:**
+- `users.email` — stored as AES-256-GCM ciphertext
+- `users.telegram_chat_id` — stored as AES-256-GCM ciphertext
+
+**Lookup pattern:** `users.email_hash` stores an HMAC-SHA256 of the email for indexed lookups (since the same plaintext encrypts differently each time). Use `get_user_by_email()` — never query `WHERE email = ?` directly.
+
+**Rules for new code:**
+- Any new column that stores personal data (phone number, address, API tokens, etc.) must use `encrypt()` on write and `decrypt()` on read.
+- Add a `_hash` sibling column if the field needs to be searchable (same HMAC pattern as `email_hash`).
+- Never log or print decrypted sensitive values.
+- Import from `src/encryption.py`: `from encryption import encrypt, decrypt, hmac_email`
+
+**Session cookies** are hardened with `HttpOnly`, `SameSite=Lax`, and `Secure` (HTTPS-only in production via `FLASK_ENV != development`).
+
+**Required env vars:**
+- `ENCRYPTION_KEY` — 64-char hex string (32 bytes). Generate: `python -c "import secrets; print(secrets.token_hex(32))"`
+- `FLASK_ENV=production` — enables `SESSION_COOKIE_SECURE` in prod
+
+---
+
 ## Development Guidelines
 
 ### General Guidelines

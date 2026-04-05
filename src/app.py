@@ -72,6 +72,13 @@ _secret_key = os.getenv("FLASK_SECRET_KEY")
 if not _secret_key:
     raise RuntimeError("FLASK_SECRET_KEY environment variable is not set")
 app.secret_key = _secret_key
+
+# Session cookie hardening — SECURE flag requires HTTPS (disabled in local dev)
+_is_production = os.getenv("FLASK_ENV", "development") != "development"
+app.config["SESSION_COOKIE_HTTPONLY"] = True        # JS cannot read the cookie
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"      # blocks cross-site request forgery
+app.config["SESSION_COOKIE_SECURE"] = _is_production  # HTTPS-only in prod
+
 csrf = CSRFProtect(app)
 
 from flask_limiter import Limiter
