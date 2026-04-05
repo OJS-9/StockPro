@@ -18,7 +18,6 @@ from typing import TypedDict, Dict, Any, Annotated, Optional, List
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
-from langgraph.checkpoint.memory import MemorySaver
 
 from agents.planner_node import planner_node
 from agents.specialized_node import specialized_node
@@ -302,8 +301,7 @@ _builder.add_conditional_edges(
 _builder.add_edge("synthesis_node", "storage_node")
 _builder.add_edge("storage_node", END)
 
-_checkpointer = MemorySaver()
-research_graph = _builder.compile(checkpointer=_checkpointer)
+research_graph = _builder.compile()
 
 
 def run_research(
@@ -351,17 +349,12 @@ def run_research(
         "actual_cost_usd": None,
     }
 
-    from langchain_core.runnables.config import merge_configs
-
     run_name = (
         f"{username} - {ticker.upper()} Research"
         if username
         else f"{ticker.upper()} Research"
     )
-    invoke_config = merge_configs(
-        parent_config or {},
-        {"run_name": run_name, "configurable": {"thread_id": str(uuid.uuid4())}},
-    )
+    invoke_config = {**(parent_config or {}), "run_name": run_name}
 
     result = research_graph.invoke(initial_state, config=invoke_config)
     return result

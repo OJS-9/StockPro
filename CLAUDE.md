@@ -85,7 +85,7 @@ static/css/
 
 ### Research UX Flow (Popup Q&A)
 
-Ticker submit on home page → popup modal (questions fetched via single Gemini call at `POST /popup_start`) → user answers all questions at once → popup closes → "Generating report..." toast → background generation thread (`POST /start_generation`) → polling via `GET /api/report_status/<session_id>` every 3s → "Report Ready" toast → click → `/report/<report_id>`.
+Ticker submit on home page → popup modal (questions fetched via single Gemini call at `POST /popup_start`) → step 1: optional subject checkboxes (custom outline/hover styling; **Deselect all** in footer) → step 2: user answers all questions at once → popup closes → "Generating report..." toast → background generation thread (`POST /start_generation`) → polling via `GET /api/report_status/<session_id>` every 3s → "Report Ready" toast → click → `/report/<report_id>`.
 
 Module-level `_generation_status` dict in `app.py` tracks per-session state (`in_progress` / `ready` / `error`).
 
