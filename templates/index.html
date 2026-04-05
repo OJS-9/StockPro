@@ -452,7 +452,7 @@
         subjects.forEach(function (s) {
             const label = document.createElement('label');
             label.className = 'flex items-start gap-3 cursor-pointer group';
-            const checked = 'checked';
+            const checked = s.priority === 1 ? 'checked' : '';
             label.innerHTML =
                 '<input type="checkbox" data-id="' + escapeHtml(s.id) + '" class="popup-subject-check" ' + checked + '>' +
                 '<div>' +
