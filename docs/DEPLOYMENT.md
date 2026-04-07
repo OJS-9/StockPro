@@ -1,148 +1,126 @@
-# Deployment Guide — StockIntel
-
-Steps required to run the app locally and to deploy it to production.
+# Deployment Guide -- StockPro
 
 ---
 
 ## 1. Prerequisites
 
 - **Python 3.10+**
-- **MySQL** (server running, accessible)
-- **API keys**: Gemini, Perplexity, Alpha Vantage (see Environment Variables below)
+- **PostgreSQL** (Supabase-hosted or local)
+- **Node.js 18+** (for React SPA development only)
+- **API keys**: Gemini, Alpha Vantage (see Environment Variables below)
+- **Clerk account**: publishable key, secret key, JWT public key
 
 ---
 
 ## 2. Environment Variables
 
-Create a `.env` file in the project root (or set these in your host’s environment).
+Create a `.env` file in the project root. See `.env.example` for the full template.
 
 ### Required
 
 | Variable | Description |
-|---------|-------------|
-| `GEMINI_API_KEY` | Google GenAI API key |
-| `PERPLEXITY_API_KEY` | Perplexity Sonar API key |
-| `ALPHA_VANTAGE_API_KEY` | Alpha Vantage API key |
-| `MYSQL_HOST` | MySQL host (e.g. `localhost` or your DB host) |
-| `MYSQL_USER` | MySQL user |
-| `MYSQL_PASSWORD` | MySQL password |
-| `MYSQL_DATABASE` | Database name (e.g. `stock_research`) |
-| `FLASK_SECRET_KEY` | Secret for session signing. **Must be set in production** — use a long random string; if unset, a new key is generated on each restart and sessions break. |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (Supabase pooler recommended, port 6543) |
+| `CLERK_SECRET_KEY` | Clerk backend secret key |
+| `CLERK_PUBLISHABLE_KEY` | Clerk publishable key (used by ClerkJS in templates) |
+| `CLERK_JWT_KEY` | Clerk JWT public key (PEM format, for backend JWT verification) |
+| `GEMINI_API_KEY` | Google GenAI API key (research agents + embeddings) |
+| `FLASK_SECRET_KEY` | Secret for session signing. Must be fixed in production. |
+| `ENCRYPTION_KEY` | 64-char hex string for AES-256-GCM field encryption. Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
 
 ### Optional
 
 | Variable | Description |
-|----------|-------------|
-| `MYSQL_PORT` | MySQL port (default `3306`) |
-| `RESEARCH_MAX_WORKERS` | ThreadPoolExecutor concurrency (default `3`) |
-| `PLANNER_MAX_SUBJECTS` | Max subjects for planner (default `8`) |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID (see Redirect URI section below) |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+|---|---|
+| `PORT` | Flask port (default 5000) |
+| `FLASK_HOST` | Bind address (default 127.0.0.1; use 0.0.0.0 for LAN) |
+| `ALPHA_VANTAGE_API_KEY` | Alpha Vantage MCP (NEWS_SENTIMENT tool) |
+| `NIMBLE_API_KEY` | Nimble web search + extraction |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot for alerts and /research |
+| `LANGCHAIN_TRACING_V2` / `LANGSMITH_API_KEY` | LangSmith tracing (optional) |
+| `SUPABASE_URL` / `SUPABASE_KEY` | If using supabase-py client directly |
+| `STOCKPRO_FREE_TIER_REPORT_LIMIT` | Monthly report cap per user (default 3, 0 = unlimited) |
+
+See `.env.example` for rate limits, research tuning, model overrides, spend budget, Alpaca, and ConvertKit vars.
 
 ---
 
-## 3. Google OAuth — Redirect URI (Google Cloud Console)
+## 3. Clerk Authentication
 
-To use “Sign in with Google,” configure OAuth 2.0 in [Google Cloud Console](https://console.cloud.google.com/) and set the **Authorized redirect URIs** for your OAuth client.
+StockPro uses Clerk for auth. Routes: `/sign-in`, `/sign-up`, `/sign-out`, `/auth/sso-callback`.
 
-### What to put in the “URI” field
+### SSO Callback (required for Google OAuth)
 
-The redirect URI is the **full URL** where Google sends the user after they approve sign-in. The app’s callback path is `/login/google/callback`.
+After OAuth, Clerk redirects to `/auth/sso-callback` where ClerkJS sets the session cookie, then redirects to `/`.
 
-| Environment | Authorized redirect URI to add |
-|-------------|--------------------------------|
-| **Local**   | `http://localhost:5000/login/google/callback` |
-| **Production** | `https://<your-domain>/login/google/callback` |
+**Add these redirect URLs in Clerk Dashboard:**
 
-Examples for production:
-
-- `https://stockintel.example.com/login/google/callback`
-- `https://app.example.com/login/google/callback`
-
-### Steps in Google Cloud Console
-
-1. Open **APIs & Services** → **Credentials**.
-2. Create or edit an **OAuth 2.0 Client ID** (application type: **Web application**).
-3. Under **Authorized redirect URIs**, add:
-   - For local: `http://localhost:5000/login/google/callback`
-   - For production: `https://<your-domain>/login/google/callback` (HTTPS required for non-localhost).
-4. Save. Copy **Client ID** and **Client secret** into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` (or your production env).
-
-### When deploying
-
-- Add the **production** redirect URI to the same OAuth client (you can have both local and production URIs).
-- Ensure the production URL uses **HTTPS**; Google will reject `http://` for non-localhost.
-- If the OAuth consent screen is in “Testing,” add test users or publish the app for broader access; add your production domain to authorized domains if required.
+| Environment | Redirect URL |
+|---|---|
+| Local | `http://localhost:5000/auth/sso-callback` |
+| Production | `https://<your-domain>/auth/sso-callback` |
 
 ---
 
 ## 4. Database Setup
 
-1. **Create the database** (if it does not exist):
+StockPro uses PostgreSQL (Supabase-hosted). Schema is managed by `src/database.py`.
 
-   ```bash
-   python recreate_schema.py
-   ```
+```bash
+# Create/recreate all tables
+python scripts/recreate_schema.py
 
-   This creates `MYSQL_DATABASE` if missing and initializes all tables (including users with `google_id` and nullable `password_hash`).
+# Or initialize schema only (if DB already exists)
+python scripts/init_db.py
+```
 
-2. **Or only initialize schema** (database already exists):
-
-   ```bash
-   python init_db.py
-   ```
-
-   This uses `get_database_manager()`, which runs `init_schema()` and applies any inline migrations (e.g. adding `google_id` to existing `users` tables).
+Use the Supabase **connection pooler** URI (transaction mode, port 6543) for the Flask app.
 
 ---
 
 ## 5. MCP Configuration
 
-For Alpha Vantage data:
+For Alpha Vantage data tools:
 
-1. Copy `mcp.json.example` to `mcp.json`.
-2. Set the MCP server endpoint and Alpha Vantage API key in `mcp.json`.
+1. Copy `mcp.json.example` to `mcp.json`
+2. Set the MCP server endpoint and Alpha Vantage API key
 
 ---
 
-## 6. Install Dependencies and Run
+## 6. Install and Run
+
+### Backend (Flask)
 
 ```bash
-# From project root
 pip install -r requirements.txt
-
-# Run the Flask app
 python src/app.py
 ```
 
-Default: app listens on `http://127.0.0.1:5000`. Open that URL in a browser.
+Default: `http://127.0.0.1:5000`
 
-### WeasyPrint system dependencies (PDF export)
-
-WeasyPrint requires Pango and HarfBuzz system libraries. If the PDF download returns a 500 error with `cannot load library 'libpango-1.0-0'`, install the missing libraries:
-
-**macOS (Anaconda Python)**
+### Frontend (React SPA -- development only)
 
 ```bash
-conda install -c conda-forge pango harfbuzz
+cd stockpro-web
+npm install
+npm run dev
 ```
 
-**macOS (Homebrew Python / pyenv)**
+Dev server on `http://localhost:3000`, proxies `/api`, `/stream`, `/ws` to Flask on port 5000.
 
-```bash
-brew install pango harfbuzz
-```
+React SPA requires `VITE_CLERK_PUBLISHABLE_KEY` in `stockpro-web/.env`.
 
-**Linux (Debian/Ubuntu)**
+### WeasyPrint System Dependencies (PDF export)
 
-```bash
-apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b
-```
+WeasyPrint requires Pango and HarfBuzz. If PDF export returns a 500 error:
 
-**Linux (production server / Docker)**
+| Platform | Command |
+|---|---|
+| macOS (Homebrew) | `brew install pango harfbuzz` |
+| macOS (Conda) | `conda install -c conda-forge pango harfbuzz` |
+| Linux (Debian/Ubuntu) | `apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b` |
 
-Add to your Dockerfile or server provisioning script:
-
+For Docker, add to Dockerfile:
 ```dockerfile
 RUN apt-get update && apt-get install -y \
     libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
@@ -152,24 +130,19 @@ RUN apt-get update && apt-get install -y \
 
 ---
 
-## 7. Production Deployment Checklist
+## 7. Production Checklist
 
-- [ ] Set **FLASK_SECRET_KEY** to a fixed, random value (do not leave unset).
-- [ ] Set **GOOGLE_CLIENT_ID** and **GOOGLE_CLIENT_SECRET** and add the **production redirect URI** in Google Cloud Console (see section 3).
-- [ ] Use **HTTPS** for the public site; production redirect URI must be `https://...`.
-- [ ] Point **MYSQL_*** to the production MySQL instance (host, user, password, database).
-- [ ] Run **schema init** against the production DB once (`python recreate_schema.py` or `init_db.py` after DB exists).
-- [ ] Run the app with **debug=False** and bind to the correct host/port (e.g. via Gunicorn/uWSGI behind a reverse proxy; avoid `debug=True` in production).
-- [ ] Restrict **MYSQL** access (firewall, user grants) and keep `.env` and secrets out of version control.
-- [ ] Install **WeasyPrint system dependencies** on the server (`libpango`, `libharfbuzz`, `libcairo`) — see section 6 for platform-specific commands.
+- [ ] Set `FLASK_SECRET_KEY` to a fixed random value
+- [ ] Set `ENCRYPTION_KEY` to a fixed 64-char hex string
+- [ ] Configure Clerk keys and add production SSO callback URL
+- [ ] Point `DATABASE_URL` to production Supabase instance
+- [ ] Run schema init once: `python scripts/recreate_schema.py`
+- [ ] Run with `debug=False` behind a WSGI server (Gunicorn) + reverse proxy
+- [ ] Use HTTPS -- Clerk and session cookies require it in production
+- [ ] Install WeasyPrint system dependencies on the server
+- [ ] Restrict database access (firewall, user grants)
+- [ ] Keep `.env` out of version control
 
 ---
 
-## 8. Summary
-
-| Step | Local | Production |
-|------|--------|------------|
-| Env vars | `.env` with required + optional (incl. Google OAuth if used) | Same vars in host env or secrets manager |
-| Redirect URI | `http://localhost:5000/login/google/callback` in Google Console | `https://<domain>/login/google/callback` in Google Console |
-| Database | `recreate_schema.py` or `init_db.py` | Same, run once against prod DB |
-| Run | `python src/app.py` | WSGI server (e.g. Gunicorn) with `debug=False`, HTTPS in front |
+*Last updated: April 2026*

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Import CSV</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 760px; margin: 0 auto; padding: 48px 48px 80px; }
+
+  .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+  .breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb .material-symbols-outlined { font-size: 14px; }
+
+  .page-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+
+  /* BROKER SELECTOR */
+  .broker-section { margin-bottom: 28px; }
+  .section-label { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 12px; letter-spacing: 0.02em; }
+  .broker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .broker-btn {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 8px; text-align: center; cursor: pointer; font-size: 12.5px; font-weight: 500;
+    color: var(--muted); transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .broker-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.25); background: var(--surface-2); }
+  .broker-btn.selected { color: var(--text); border-color: rgba(214,211,209,0.35); background: rgba(214,211,209,0.05); }
+  .broker-btn .material-symbols-outlined { font-size: 22px; }
+  .broker-other { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .broker-other a { color: var(--muted); text-decoration: underline; }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 16px; padding: 48px 24px;
+    text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 24px;
+  }
+  .upload-zone:hover { border-color: rgba(214,211,209,0.35); background: rgba(255,255,255,0.01); }
+  .upload-zone.drag-over { border-color: var(--accent); background: rgba(214,211,209,0.03); }
+  .upload-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .upload-icon .material-symbols-outlined { font-size: 28px; color: var(--muted); }
+  .upload-zone h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .upload-zone p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .upload-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 600;
+    padding: 9px 20px; border-radius: 8px; border: none; cursor: pointer; transition: opacity 0.15s;
+  }
+  .upload-btn:hover { opacity: 0.88; }
+  .upload-btn .material-symbols-outlined { font-size: 16px; }
+  .upload-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+
+  /* FILE UPLOADED STATE */
+  .file-uploaded {
+    background: var(--surface); border: 1px solid var(--gain-border); border-radius: 14px;
+    padding: 16px 20px; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+  }
+  .file-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--gain-bg); border: 1px solid var(--gain-border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .file-icon .material-symbols-outlined { font-size: 20px; color: var(--gain); }
+  .file-info { flex: 1; }
+  .file-name { font-size: 14px; font-weight: 600; }
+  .file-meta { font-size: 12px; color: var(--muted); }
+  .file-remove { background: transparent; border: none; color: var(--muted); cursor: pointer; display: flex; align-items: center; }
+  .file-remove .material-symbols-outlined { font-size: 18px; }
+
+  /* PREVIEW TABLE */
+  .preview-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+  .preview-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .preview-header-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .preview-header-title .material-symbols-outlined { font-size: 16px; color: var(--muted); }
+  .preview-count { font-size: 12px; color: var(--muted); }
+
+  .preview-table-wrap { overflow-x: auto; }
+  .preview-table { width: 100%; border-collapse: collapse; }
+  .preview-table th { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: left; padding: 10px 18px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--surface-2); }
+  .preview-table td { padding: 11px 18px; border-bottom: 1px solid rgba(41,37,36,0.4); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .preview-table tr:last-child td { border-bottom: none; }
+  .row-valid { color: var(--gain); font-size: 15px; }
+  .row-warn { color: var(--warn); font-size: 15px; }
+  .badge-buy { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border); }
+  .badge-sell { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-border); }
+
+  /* SUMMARY BAR */
+  .summary-bar {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; display: flex; align-items: center; gap: 24px; margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .sum-item { }
+  .sum-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .sum-val { font-family: 'Nunito', sans-serif; font-size: 18px; font-weight: 600; }
+  .sum-val.ok { color: var(--gain); }
+  .sum-val.warn { color: var(--warn); }
+  .sum-divider { width: 1px; height: 32px; background: var(--border); }
+
+  /* ACTIONS */
+  .form-actions { display: flex; gap: 10px; }
+  .btn-cancel { flex: 1; padding: 13px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-cancel:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-import { flex: 2; padding: 13px; border-radius: 10px; border: none; background: var(--accent); color: var(--bg); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.15s; }
+  .btn-import:hover { opacity: 0.88; }
+  .btn-import .material-symbols-outlined { font-size: 17px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="breadcrumb">
+    <a href="#">Portfolios</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <a href="#">Tech Growth</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <span>Import CSV</span>
+  </div>
+
+  <div class="page-title">Import Transactions</div>
+  <div class="page-sub">Import your transaction history from any broker CSV export into Tech Growth</div>
+
+  <!-- BROKER SELECTOR -->
+  <div class="broker-section">
+    <div class="section-label">Select your broker (optional — auto-detects column mapping)</div>
+    <div class="broker-grid">
+      <div class="broker-btn selected">
+        <span class="material-symbols-outlined">account_balance</span>
+        Robinhood
+      </div>
+      <div class="broker-btn">
+        <span class="material-symbols-outlined">account_balance</span>
+        IBKR
+      </div>
+      <div class="broker-btn">
+        <span class="material-symbols-outlined">account_balance</span>
+        Fidelity
+      </div>
+      <div class="broker-btn">
+        <span class="material-symbols-outlined">tune</span>
+        Other / Custom
+      </div>
+    </div>
+    <p class="broker-other">Expected columns for Robinhood: Date, Symbol, Side, Quantity, Average Price</p>
+  </div>
+
+  <!-- FILE UPLOADED (showing "file selected" state) -->
+  <div class="file-uploaded">
+    <div class="file-icon"><span class="material-symbols-outlined">description</span></div>
+    <div class="file-info">
+      <div class="file-name">robinhood_trades_2026.csv</div>
+      <div class="file-meta">47 rows &middot; 24 KB &middot; Uploaded just now</div>
+    </div>
+    <button class="file-remove"><span class="material-symbols-outlined">close</span></button>
+  </div>
+
+  <!-- SUMMARY BAR -->
+  <div class="summary-bar">
+    <div class="sum-item">
+      <div class="sum-label">Total rows</div>
+      <div class="sum-val">47</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Valid</div>
+      <div class="sum-val ok">44</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Warnings</div>
+      <div class="sum-val warn">3</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Tickers detected</div>
+      <div class="sum-val">8</div>
+    </div>
+    <div class="sum-divider"></div>
+    <div class="sum-item">
+      <div class="sum-label">Date range</div>
+      <div class="sum-val" style="font-size:14px;">Jun 2024 – Apr 2026</div>
+    </div>
+  </div>
+
+  <!-- PREVIEW TABLE -->
+  <div class="preview-section">
+    <div class="preview-header">
+      <div class="preview-header-title">
+        <span class="material-symbols-outlined">table_rows</span>
+        Preview (first 5 rows)
+      </div>
+      <div class="preview-count">Showing 5 of 47 rows</div>
+    </div>
+    <div class="preview-table-wrap">
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Symbol</th>
+            <th>Type</th>
+            <th>Shares</th>
+            <th>Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="row-valid material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20;">check_circle</span></td>
+            <td>2026-04-06</td><td style="font-weight:600;">NVDA</td><td><span class="badge-buy">Buy</span></td><td>5</td><td>$1,130.00</td><td>$5,650.00</td>
+          </tr>
+          <tr>
+            <td><span class="row-valid material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20;">check_circle</span></td>
+            <td>2026-03-28</td><td style="font-weight:600;">MSFT</td><td><span class="badge-buy">Buy</span></td><td>10</td><td>$420.00</td><td>$4,200.00</td>
+          </tr>
+          <tr>
+            <td><span class="row-warn material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20;">warning</span></td>
+            <td>2026-03-15</td><td style="font-weight:600;">TSLA</td><td><span class="badge-sell">Sell</span></td><td>5</td><td style="color:var(--warn)">$?</td><td style="color:var(--warn)">Missing price</td>
+          </tr>
+          <tr>
+            <td><span class="row-valid material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20;">check_circle</span></td>
+            <td>2026-01-15</td><td style="font-weight:600;">AAPL</td><td><span class="badge-buy">Buy</span></td><td>20</td><td>$195.00</td><td>$3,900.00</td>
+          </tr>
+          <tr>
+            <td><span class="row-valid material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20;">check_circle</span></td>
+            <td>2025-12-10</td><td style="font-weight:600;">BTC</td><td><span class="badge-buy">Buy</span></td><td>0.5</td><td>$95,000.00</td><td>$47,500.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn-cancel">Cancel</button>
+    <button class="btn-import">
+      <span class="material-symbols-outlined">upload</span>
+      Import 44 valid transactions
+    </button>
+  </div>
+
+</main>
+</body>
+</html>

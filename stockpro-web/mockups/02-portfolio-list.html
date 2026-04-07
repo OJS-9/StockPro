@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — My Portfolios</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 48px; height: 60px;
+    background: rgba(12,10,9,0.95); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 1100px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 36px; }
+  .page-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .page-subtitle { font-size: 13px; color: var(--muted); }
+  .header-actions { display: flex; gap: 8px; }
+  .btn-ghost { background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-ghost .material-symbols-outlined { font-size: 16px; }
+  .btn-primary { background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary .material-symbols-outlined { font-size: 16px; }
+
+  /* AGGREGATE STRIP */
+  .agg-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden; margin-bottom: 36px;
+  }
+  .agg-item { background: var(--surface); padding: 20px 24px; }
+  .agg-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+  .agg-val { font-family: 'Nunito', sans-serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .agg-sub { font-size: 12px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .agg-sub.up { color: var(--gain); }
+  .agg-sub.down { color: var(--loss); }
+  .agg-sub.muted { color: var(--muted); }
+
+  /* PORTFOLIO GRID */
+  .portfolio-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+
+  .portfolio-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    overflow: hidden; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .portfolio-card:hover { border-color: rgba(214,211,209,0.25); background: #201d1c; }
+
+  .card-header {
+    padding: 22px 24px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .portfolio-name { font-family: 'Nunito', sans-serif; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 4px; }
+  .portfolio-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .portfolio-type {
+    font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted); background: var(--surface-2);
+  }
+  .card-menu { color: var(--muted); cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+  .portfolio-card:hover .card-menu { opacity: 1; }
+  .card-menu .material-symbols-outlined { font-size: 18px; }
+
+  .card-body { padding: 22px 24px; }
+  .value-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+  .portfolio-value {
+    font-family: 'Nunito', sans-serif; font-size: 32px; font-weight: 600;
+    letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .pnl-badge {
+    font-size: 13px; font-weight: 500; padding: 5px 12px; border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pnl-badge.up { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border); }
+  .pnl-badge.down { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-border); }
+
+  /* Sparkline */
+  .sparkline { margin-bottom: 18px; height: 56px; }
+  .sparkline svg { width: 100%; height: 56px; }
+
+  /* Holdings preview row */
+  .holdings-preview { display: flex; align-items: center; gap: 10px; }
+  .holding-dot-row { display: flex; gap: 4px; }
+  .h-dot { width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; font-family: 'Nunito', sans-serif; letter-spacing: -0.02em; }
+  .holdings-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  .card-footer {
+    padding: 14px 24px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .footer-stat { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .footer-stat .material-symbols-outlined { font-size: 14px; }
+  .footer-action { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
+  .footer-action:hover { color: var(--text); }
+  .footer-action .material-symbols-outlined { font-size: 14px; }
+
+  /* CREATE NEW CARD */
+  .create-card {
+    border: 2px dashed var(--border); border-radius: 16px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 48px 24px; text-align: center; min-height: 240px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .create-card:hover { border-color: rgba(214,211,209,0.35); background: rgba(255,255,255,0.01); }
+  .create-card .material-symbols-outlined { font-size: 32px; color: var(--muted); }
+  .create-card h3 { font-size: 15px; font-weight: 600; }
+  .create-card p { font-size: 13px; color: var(--muted); max-width: 240px; }
+
+  /* IMPORT ROW */
+  .import-row {
+    margin-top: 24px; padding: 18px 24px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .import-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .import-icon .material-symbols-outlined { font-size: 20px; color: var(--muted); }
+  .import-info { flex: 1; }
+  .import-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .import-desc { font-size: 12.5px; color: var(--muted); }
+  .btn-import { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; white-space: nowrap; }
+  .btn-import:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-import .material-symbols-outlined { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">My Portfolios</div>
+      <div class="page-subtitle">2 portfolios &nbsp;&middot;&nbsp; 12 holdings &nbsp;&middot;&nbsp; Last updated just now</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost"><span class="material-symbols-outlined">analytics</span>Analytics</button>
+      <button class="btn-primary"><span class="material-symbols-outlined">add</span>New Portfolio</button>
+    </div>
+  </div>
+
+  <!-- AGGREGATE STRIP -->
+  <div class="agg-strip">
+    <div class="agg-item">
+      <div class="agg-label">Total Value</div>
+      <div class="agg-val">$178,430</div>
+      <div class="agg-sub up">+$1,840 today</div>
+    </div>
+    <div class="agg-item">
+      <div class="agg-label">Total P&amp;L</div>
+      <div class="agg-val" style="color:var(--gain)">+$24,230</div>
+      <div class="agg-sub up">+15.7% all time</div>
+    </div>
+    <div class="agg-item">
+      <div class="agg-label">Today's Change</div>
+      <div class="agg-val" style="color:var(--gain)">+$1,840</div>
+      <div class="agg-sub up">+1.04%</div>
+    </div>
+    <div class="agg-item">
+      <div class="agg-label">Holdings</div>
+      <div class="agg-val">12</div>
+      <div class="agg-sub muted">Across 2 portfolios</div>
+    </div>
+  </div>
+
+  <!-- PORTFOLIO GRID -->
+  <div class="portfolio-grid">
+
+    <!-- Portfolio 1 -->
+    <div class="portfolio-card">
+      <div class="card-header">
+        <div>
+          <div class="portfolio-name">Tech Growth</div>
+          <div class="portfolio-meta">
+            <span>7 holdings</span>
+            <span>&middot;</span>
+            <span class="portfolio-type">Stocks</span>
+          </div>
+        </div>
+        <div class="card-menu"><span class="material-symbols-outlined">more_vert</span></div>
+      </div>
+      <div class="card-body">
+        <div class="value-row">
+          <div class="portfolio-value">$142,830</div>
+          <div class="pnl-badge up">+14.8% all time</div>
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 400 56" preserveAspectRatio="none" fill="none">
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#22c55e" stop-opacity="0.18"/>
+                <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,44 40,38 80,40 120,30 160,24 200,28 240,18 280,12 320,16 360,8 400,6 400,56 0,56" fill="url(#g1)"/>
+            <polyline points="0,44 40,38 80,40 120,30 160,24 200,28 240,18 280,12 320,16 360,8 400,6" stroke="#22c55e" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="holdings-preview">
+          <div class="holding-dot-row">
+            <div class="h-dot" style="background:rgba(96,165,250,0.15);color:#60a5fa">NV</div>
+            <div class="h-dot" style="background:rgba(167,139,250,0.15);color:#a78bfa">MS</div>
+            <div class="h-dot" style="background:rgba(34,197,94,0.12);color:var(--gain)">AP</div>
+            <div class="h-dot" style="background:rgba(245,158,11,0.12);color:#f59e0b">TS</div>
+            <div class="h-dot" style="background:rgba(244,114,182,0.12);color:#f472b6">AM</div>
+          </div>
+          <div class="holdings-count">+2 more holdings</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="footer-stat"><span class="material-symbols-outlined">schedule</span>Updated just now</div>
+        <div class="footer-action">
+          View details <span class="material-symbols-outlined">chevron_right</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Portfolio 2 -->
+    <div class="portfolio-card">
+      <div class="card-header">
+        <div>
+          <div class="portfolio-name">Crypto Exposure</div>
+          <div class="portfolio-meta">
+            <span>5 holdings</span>
+            <span>&middot;</span>
+            <span class="portfolio-type">Crypto</span>
+          </div>
+        </div>
+        <div class="card-menu"><span class="material-symbols-outlined">more_vert</span></div>
+      </div>
+      <div class="card-body">
+        <div class="value-row">
+          <div class="portfolio-value">$35,600</div>
+          <div class="pnl-badge down">-8.2% all time</div>
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 400 56" preserveAspectRatio="none" fill="none">
+            <defs>
+              <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ef4444" stop-opacity="0.15"/>
+                <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,10 60,14 120,20 160,18 200,24 250,32 300,28 340,36 400,40 400,56 0,56" fill="url(#g2)"/>
+            <polyline points="0,10 60,14 120,20 160,18 200,24 250,32 300,28 340,36 400,40" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="holdings-preview">
+          <div class="holding-dot-row">
+            <div class="h-dot" style="background:rgba(245,158,11,0.15);color:#f59e0b">BT</div>
+            <div class="h-dot" style="background:rgba(96,165,250,0.15);color:#60a5fa">ET</div>
+            <div class="h-dot" style="background:rgba(167,139,250,0.15);color:#a78bfa">SO</div>
+          </div>
+          <div class="holdings-count">+2 more holdings</div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="footer-stat"><span class="material-symbols-outlined">schedule</span>Updated 3 min ago</div>
+        <div class="footer-action">
+          View details <span class="material-symbols-outlined">chevron_right</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE NEW -->
+    <div class="create-card">
+      <span class="material-symbols-outlined">add_circle</span>
+      <h3>Create a portfolio</h3>
+      <p>Track a new set of holdings with P&amp;L, analytics, and AI research.</p>
+    </div>
+
+  </div>
+
+  <!-- IMPORT ROW -->
+  <div class="import-row">
+    <div class="import-icon"><span class="material-symbols-outlined">upload_file</span></div>
+    <div class="import-info">
+      <div class="import-title">Import from CSV</div>
+      <div class="import-desc">Import your transaction history from Robinhood, IBKR, Fidelity, or any broker CSV export.</div>
+    </div>
+    <button class="btn-import">
+      <span class="material-symbols-outlined">upload</span>
+      Import CSV
+    </button>
+  </div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — New Research</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --warn: #f59e0b;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 800px; margin: 0 auto; padding: 56px 48px 80px; }
+
+  /* STEP INDICATOR */
+  .step-indicator { display: flex; align-items: center; gap: 0; margin-bottom: 48px; }
+  .step-item { display: flex; align-items: center; gap: 8px; flex: 1; }
+  .step-circle {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; font-family: 'Nunito', sans-serif;
+  }
+  .step-circle.done { background: var(--gain); color: var(--bg); }
+  .step-circle.active { background: var(--accent); color: var(--bg); }
+  .step-circle.inactive { background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+  .step-label { font-size: 12.5px; font-weight: 500; }
+  .step-label.active { color: var(--text); }
+  .step-label.inactive { color: var(--muted); }
+  .step-connector { flex: 1; height: 1px; background: var(--border); margin: 0 12px; }
+  .step-connector.done { background: var(--gain); }
+
+  /* WIZARD SECTION */
+  .wizard-section { margin-bottom: 40px; }
+  .wizard-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+  .wizard-label .material-symbols-outlined { font-size: 14px; }
+  .wizard-title { font-family: 'Nunito', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .wizard-sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+
+  /* TICKER INPUT */
+  .ticker-input-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    display: flex; align-items: center; gap: 12px; padding: 0 20px; height: 60px;
+    transition: border-color 0.2s, box-shadow 0.2s; margin-bottom: 16px;
+  }
+  .ticker-input-wrap:focus-within { border-color: rgba(214,211,209,0.35); box-shadow: 0 0 0 3px rgba(214,211,209,0.06); }
+  .ticker-input-wrap .material-symbols-outlined { font-size: 22px; color: var(--muted); flex-shrink: 0; }
+  .ticker-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 600;
+    color: var(--text); letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  .ticker-input::placeholder { color: var(--muted); font-weight: 400; font-size: 18px; text-transform: none; }
+  .ticker-result {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    padding: 6px 14px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; font-size: 13px;
+  }
+  .ticker-result .ticker-sym { font-weight: 600; color: var(--accent); }
+  .ticker-result .ticker-co { color: var(--muted); }
+  .ticker-result .ticker-price { font-variant-numeric: tabular-nums; }
+  .ticker-result .ticker-chg { color: var(--gain); }
+
+  /* RECENT TICKERS */
+  .recent-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .recent-label { font-size: 12px; color: var(--muted); }
+  .recent-chip {
+    padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    cursor: pointer; font-family: 'Nunito', sans-serif; transition: all 0.15s;
+  }
+  .recent-chip:hover { color: var(--text); border-color: rgba(214,211,209,0.3); background: var(--surface-2); }
+
+  /* THESIS TYPE CARDS */
+  .thesis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .thesis-card {
+    background: var(--surface); border: 2px solid var(--border); border-radius: 14px; padding: 20px;
+    cursor: pointer; transition: all 0.2s; position: relative;
+  }
+  .thesis-card:hover { border-color: rgba(214,211,209,0.25); background: var(--surface-2); }
+  .thesis-card.selected { border-color: var(--accent); background: rgba(214,211,209,0.04); }
+  .thesis-card.selected::after {
+    content: ''; position: absolute; top: 12px; right: 12px;
+    width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230c0a09'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E");
+    background-size: 14px; background-repeat: no-repeat; background-position: center;
+  }
+  .thesis-icon { width: 40px; height: 40px; border-radius: 10px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
+  .thesis-icon.bull { background: var(--gain-bg); }
+  .thesis-icon.bull .material-symbols-outlined { color: var(--gain); font-size: 22px; }
+  .thesis-icon.bear { background: rgba(239,68,68,0.08); }
+  .thesis-icon.bear .material-symbols-outlined { color: var(--loss); font-size: 22px; }
+  .thesis-icon.neutral { background: rgba(214,211,209,0.08); }
+  .thesis-icon.neutral .material-symbols-outlined { color: var(--accent); font-size: 22px; }
+  .thesis-icon.full { background: rgba(96,165,250,0.08); }
+  .thesis-icon.full .material-symbols-outlined { color: #60a5fa; font-size: 22px; }
+  .thesis-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .thesis-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+  /* OPTIONS */
+  .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .option-item { display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+  .option-item:hover { border-color: rgba(214,211,209,0.25); }
+  .option-item.selected { border-color: rgba(214,211,209,0.35); background: rgba(214,211,209,0.04); }
+  .option-check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border); flex-shrink: 0; }
+  .option-check.checked { background: var(--accent); border-color: var(--accent); }
+  .option-label { font-size: 13.5px; font-weight: 500; }
+  .option-sub { font-size: 11.5px; color: var(--muted); }
+
+  /* LAUNCH SECTION */
+  .launch-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  }
+  .launch-info h3 { font-family: 'Nunito', sans-serif; font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .launch-info p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .launch-estimate { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .launch-estimate .material-symbols-outlined { font-size: 15px; }
+  .btn-launch {
+    background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 700;
+    padding: 14px 28px; border-radius: 10px; border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; transition: opacity 0.15s;
+    font-family: 'Nunito', sans-serif; flex-shrink: 0;
+  }
+  .btn-launch:hover { opacity: 0.88; }
+  .btn-launch .material-symbols-outlined { font-size: 20px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <!-- STEP INDICATOR -->
+  <div class="step-indicator">
+    <div class="step-item">
+      <div class="step-circle done"><span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></div>
+      <span class="step-label active">Ticker</span>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item">
+      <div class="step-circle active">2</div>
+      <span class="step-label active">Research type</span>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-circle inactive">3</div>
+      <span class="step-label inactive">Options</span>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-circle inactive">4</div>
+      <span class="step-label inactive">Launch</span>
+    </div>
+  </div>
+
+  <!-- STEP 1: TICKER (completed) -->
+  <div class="wizard-section">
+    <div class="wizard-label"><span class="material-symbols-outlined">search</span>Step 1 — Ticker</div>
+    <div class="ticker-input-wrap">
+      <span class="material-symbols-outlined">query_stats</span>
+      <input class="ticker-input" type="text" value="NVDA" />
+      <div class="ticker-result">
+        <span class="ticker-sym">NVDA</span>
+        <span class="ticker-co">NVIDIA Corporation</span>
+        <span class="ticker-price">$1,130</span>
+        <span class="ticker-chg">+2.34%</span>
+      </div>
+    </div>
+    <div class="recent-row">
+      <span class="recent-label">Recent:</span>
+      <span class="recent-chip">MSFT</span>
+      <span class="recent-chip">AAPL</span>
+      <span class="recent-chip">TSLA</span>
+      <span class="recent-chip">BTC</span>
+    </div>
+  </div>
+
+  <!-- STEP 2: TRADE TYPE (active) -->
+  <div class="wizard-section">
+    <div class="wizard-label"><span class="material-symbols-outlined">psychology</span>Step 2 — Trade type</div>
+    <div class="wizard-title">What's your trade type?</div>
+    <p class="wizard-sub">The AI will frame the analysis for your intended holding period.</p>
+    <div class="thesis-grid">
+      <div class="thesis-card selected">
+        <div class="thesis-icon bull"><span class="material-symbols-outlined">bolt</span></div>
+        <div class="thesis-name">Day Trade</div>
+        <div class="thesis-desc">Short-term intraday focus: momentum, technicals, and entry/exit levels.</div>
+      </div>
+      <div class="thesis-card">
+        <div class="thesis-icon neutral"><span class="material-symbols-outlined">show_chart</span></div>
+        <div class="thesis-name">Swing Trade</div>
+        <div class="thesis-desc">Multi-day to multi-week holds: catalysts, technical setups, and near-term drivers.</div>
+      </div>
+      <div class="thesis-card">
+        <div class="thesis-icon full"><span class="material-symbols-outlined">library_books</span></div>
+        <div class="thesis-name">Investment</div>
+        <div class="thesis-desc">Long-term fundamental analysis: valuation, competitive moat, and growth thesis.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: OPTIONS -->
+  <div class="wizard-section">
+    <div class="wizard-label"><span class="material-symbols-outlined">tune</span>Step 3 — Focus areas</div>
+    <div class="options-grid">
+      <div class="option-item selected">
+        <div class="option-check checked"></div>
+        <div><div class="option-label">Financials &amp; Valuation</div><div class="option-sub">Revenue, margins, P/E, DCF</div></div>
+      </div>
+      <div class="option-item selected">
+        <div class="option-check checked"></div>
+        <div><div class="option-label">Competitive Analysis</div><div class="option-sub">Moat, market share, threats</div></div>
+      </div>
+      <div class="option-item selected">
+        <div class="option-check checked"></div>
+        <div><div class="option-label">Growth Catalysts</div><div class="option-sub">AI, products, partnerships</div></div>
+      </div>
+      <div class="option-item selected">
+        <div class="option-check checked"></div>
+        <div><div class="option-label">Risk Factors</div><div class="option-sub">Macro, regulatory, competitive</div></div>
+      </div>
+      <div class="option-item">
+        <div class="option-check"></div>
+        <div><div class="option-label">Technical Analysis</div><div class="option-sub">Chart patterns, support/resistance</div></div>
+      </div>
+      <div class="option-item">
+        <div class="option-check"></div>
+        <div><div class="option-label">Insider Activity</div><div class="option-sub">Insider trades, institutional flows</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LAUNCH -->
+  <div class="launch-card">
+    <div class="launch-info">
+      <h3>Ready to research NVDA</h3>
+      <p>Long thesis &middot; 4 focus areas selected &middot; Full AI research pipeline</p>
+      <div class="launch-estimate"><span class="material-symbols-outlined">schedule</span>Estimated time: 2-4 minutes</div>
+    </div>
+    <button class="btn-launch">
+      <span class="material-symbols-outlined">auto_awesome</span>
+      Launch Research
+    </button>
+  </div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --loss: #ef4444;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  .page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
+
+  /* LEFT — branding panel */
+  .brand-panel {
+    background: var(--surface); border-right: 1px solid var(--border);
+    padding: 48px; display: flex; flex-direction: column; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .brand-panel::before {
+    content: ''; position: absolute; top: -120px; right: -120px;
+    width: 440px; height: 440px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(34,197,94,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .brand-logo { font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
+  .brand-content { position: relative; z-index: 1; }
+  .brand-headline {
+    font-family: 'Nunito', sans-serif; font-size: 38px; font-weight: 600;
+    line-height: 1.15; letter-spacing: -0.03em; margin-bottom: 20px;
+  }
+  .brand-headline em { font-style: normal; color: var(--gain); }
+  .brand-sub { font-size: 15px; color: var(--muted); line-height: 1.75; max-width: 380px; }
+  .feature-list { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; }
+  .feature-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--text-2); }
+  .feature-item .material-symbols-outlined { font-size: 18px; color: var(--gain); flex-shrink: 0; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .brand-footer { font-size: 12px; color: var(--muted); }
+
+  /* RIGHT — auth form */
+  .auth-panel { display: flex; align-items: center; justify-content: center; padding: 48px; }
+  .auth-card { width: 100%; max-width: 380px; }
+  .auth-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 6px; }
+  .auth-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+
+  .btn-google {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
+    padding: 12px 20px; border-radius: 10px; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s; margin-bottom: 20px;
+  }
+  .btn-google:hover { border-color: rgba(214,211,209,0.3); background: var(--surface-2); }
+
+  .divider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .divider-line { flex: 1; height: 1px; background: var(--border); }
+  .divider-text { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.02em; }
+  .input-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 44px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-wrap:focus-within { border-color: rgba(214,211,209,0.35); box-shadow: 0 0 0 3px rgba(214,211,209,0.06); }
+  .input-wrap .material-symbols-outlined { font-size: 17px; color: var(--muted); flex-shrink: 0; }
+  .input-wrap input { flex: 1; background: transparent; border: none; outline: none; font-family: 'Inter', sans-serif; font-size: 14px; color: var(--text); }
+  .input-wrap input::placeholder { color: var(--muted); }
+
+  .form-footer { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .remember { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .remember input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent); }
+  .forgot { font-size: 13px; color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .forgot:hover { color: var(--text); }
+
+  .btn-submit {
+    width: 100%; padding: 13px; border-radius: 10px; border: none;
+    background: var(--accent); color: var(--bg); font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-submit:hover { opacity: 0.88; }
+
+  .auth-switch { text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted); }
+  .auth-switch a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .terms { text-align: center; margin-top: 24px; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+  .terms a { color: var(--muted); text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="brand-panel">
+    <div class="brand-logo">StockPro</div>
+    <div class="brand-content">
+      <div class="brand-headline">Institutional research for <em>every investor</em></div>
+      <p class="brand-sub">AI-powered multi-agent research on any stock or crypto. Portfolio tracking, price alerts, and Telegram notifications — all in one place.</p>
+      <div class="feature-list">
+        <div class="feature-item"><span class="material-symbols-outlined">auto_awesome</span>Deep AI research reports in minutes</div>
+        <div class="feature-item"><span class="material-symbols-outlined">pie_chart</span>Portfolio tracking with real P&amp;L analytics</div>
+        <div class="feature-item"><span class="material-symbols-outlined">notifications_active</span>Instant price alerts via Telegram</div>
+        <div class="feature-item"><span class="material-symbols-outlined">visibility</span>Watchlists with earnings calendar</div>
+      </div>
+    </div>
+    <div class="brand-footer">&copy; 2026 StockPro. Built for retail investors.</div>
+  </div>
+
+  <div class="auth-panel">
+    <div class="auth-card">
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to your StockPro account</div>
+
+      <button class="btn-google">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+        Continue with Google
+      </button>
+
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span class="divider-text">or continue with email</span>
+        <div class="divider-line"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <div class="input-wrap">
+          <span class="material-symbols-outlined">mail</span>
+          <input id="email" type="email" placeholder="you@example.com" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="input-wrap">
+          <span class="material-symbols-outlined">lock</span>
+          <input id="password" type="password" placeholder="••••••••" />
+          <span class="material-symbols-outlined" style="cursor:pointer;font-size:17px;">visibility</span>
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <label class="remember"><input type="checkbox" checked />Remember me</label>
+        <a class="forgot" href="#">Forgot password?</a>
+      </div>
+
+      <button class="btn-submit">Sign in</button>
+      <div class="auth-switch">Don't have an account? <a href="#">Create one free</a></div>
+      <div class="terms">By signing in you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Chat with AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.75); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  /* LAYOUT: report context panel + chat panel */
+  .layout { display: flex; height: calc(100vh - 60px); overflow: hidden; }
+
+  /* CONTEXT PANEL: mini report summary */
+  .context-panel {
+    width: 280px; flex-shrink: 0; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; background: var(--bg); overflow: hidden;
+  }
+  .context-header { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+  .context-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 12px; }
+  .context-report {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+  }
+  .ctx-ticker { font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .ctx-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border); }
+  .ctx-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .ctx-btn {
+    display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px;
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-size: 12px; font-weight: 500; padding: 7px 12px; border-radius: 7px; cursor: pointer; transition: all 0.15s;
+  }
+  .ctx-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .ctx-btn .material-symbols-outlined { font-size: 14px; }
+
+  .context-topics { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .topics-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; }
+  .topic-item {
+    display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px;
+    font-size: 12.5px; color: var(--muted); cursor: pointer; margin-bottom: 2px; transition: all 0.15s;
+  }
+  .topic-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .topic-item .material-symbols-outlined { font-size: 15px; flex-shrink: 0; }
+
+  /* CHAT PANEL */
+  .chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .chat-header { padding: 16px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .chat-header-left { display: flex; align-items: center; gap: 10px; }
+  .ai-avatar { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(96,165,250,0.15)); border: 1px solid rgba(34,197,94,0.2); display: flex; align-items: center; justify-content: center; }
+  .ai-avatar .material-symbols-outlined { font-size: 18px; color: var(--gain); font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .chat-header-info h3 { font-size: 14px; font-weight: 600; }
+  .chat-header-info p { font-size: 12px; color: var(--muted); }
+  .chat-header-actions { display: flex; gap: 6px; }
+  .chat-action-btn { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .chat-action-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .chat-action-btn .material-symbols-outlined { font-size: 15px; }
+
+  /* MESSAGES */
+  .messages { flex: 1; overflow-y: auto; padding: 28px 28px 16px; display: flex; flex-direction: column; gap: 20px; }
+
+  .msg { display: flex; gap: 12px; max-width: 680px; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+
+  .msg-avatar { width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .msg-avatar.ai { background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(96,165,250,0.12)); border: 1px solid rgba(34,197,94,0.2); }
+  .msg-avatar.ai .material-symbols-outlined { font-size: 18px; color: var(--gain); font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .msg-avatar.user { background: var(--surface-2); border: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--accent); font-family: 'Nunito', sans-serif; }
+
+  .msg-content { display: flex; flex-direction: column; gap: 4px; }
+  .msg-name { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .msg.user .msg-name { text-align: right; }
+  .msg-bubble {
+    padding: 14px 18px; border-radius: 14px; font-size: 14px; line-height: 1.7;
+  }
+  .msg-bubble.ai { background: var(--surface); border: 1px solid var(--border); color: var(--text-2); border-radius: 4px 14px 14px 14px; }
+  .msg-bubble.user { background: var(--accent); color: var(--bg); font-weight: 500; border-radius: 14px 4px 14px 14px; }
+  .msg-bubble p { margin-bottom: 10px; }
+  .msg-bubble p:last-child { margin-bottom: 0; }
+  .msg-bubble strong { color: var(--text); font-weight: 600; }
+  .msg-bubble.ai strong { color: var(--text); }
+
+  .msg-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .msg.user .msg-time { text-align: right; }
+
+  /* TYPING INDICATOR */
+  .typing-indicator { display: flex; align-items: center; gap: 4px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px 14px 14px 14px; width: fit-content; }
+  .typing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: typing 1.4s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typing { 0%, 60%, 100% { opacity: 0.3; transform: scale(1); } 30% { opacity: 1; transform: scale(1.2); } }
+
+  /* SUGGESTED QUESTIONS */
+  .suggestions { padding: 0 28px 16px; flex-shrink: 0; }
+  .suggestions-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+  .suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 500;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { color: var(--text); border-color: rgba(214,211,209,0.3); background: var(--surface-2); }
+
+  /* INPUT */
+  .chat-input-area { padding: 0 28px 24px; flex-shrink: 0; }
+  .input-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    display: flex; align-items: flex-end; gap: 10px; padding: 12px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-box:focus-within { border-color: rgba(214,211,209,0.3); box-shadow: 0 0 0 3px rgba(214,211,209,0.05); }
+  .chat-textarea {
+    flex: 1; background: transparent; border: none; outline: none; resize: none;
+    font-family: 'Inter', sans-serif; font-size: 14px; color: var(--text);
+    min-height: 24px; max-height: 120px; line-height: 1.6;
+  }
+  .chat-textarea::placeholder { color: var(--muted); }
+  .input-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .send-btn {
+    width: 34px; height: 34px; border-radius: 9px; border: none;
+    background: var(--accent); color: var(--bg); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s;
+  }
+  .send-btn:hover { opacity: 0.88; }
+  .send-btn .material-symbols-outlined { font-size: 18px; font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- CONTEXT PANEL -->
+  <aside class="context-panel">
+    <div class="context-header">
+      <div class="context-title">Report context</div>
+      <div class="context-report">
+        <div class="ctx-ticker">NVDA <span class="ctx-badge">Long thesis</span></div>
+        <div class="ctx-desc">Full investment analysis &middot; April 6, 2026 &middot; 5,400 words</div>
+        <button class="ctx-btn"><span class="material-symbols-outlined">open_in_new</span>View full report</button>
+      </div>
+    </div>
+    <div class="context-topics">
+      <div class="topics-label">Ask about</div>
+      <div class="topic-item"><span class="material-symbols-outlined">trending_up</span>Business overview</div>
+      <div class="topic-item"><span class="material-symbols-outlined">analytics</span>Financial metrics</div>
+      <div class="topic-item"><span class="material-symbols-outlined">account_balance</span>Valuation &amp; price target</div>
+      <div class="topic-item"><span class="material-symbols-outlined">groups</span>Competitive landscape</div>
+      <div class="topic-item"><span class="material-symbols-outlined">psychology</span>AI growth catalysts</div>
+      <div class="topic-item"><span class="material-symbols-outlined">warning</span>Risk factors</div>
+      <div class="topic-item"><span class="material-symbols-outlined">newspaper</span>Recent news impact</div>
+    </div>
+  </aside>
+
+  <!-- CHAT PANEL -->
+  <div class="chat-panel">
+
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="ai-avatar"><span class="material-symbols-outlined">auto_awesome</span></div>
+        <div class="chat-header-info">
+          <h3>StockPro AI</h3>
+          <p>Grounded in the NVDA report</p>
+        </div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="chat-action-btn" title="Clear chat"><span class="material-symbols-outlined">delete_sweep</span></button>
+        <button class="chat-action-btn" title="Copy conversation"><span class="material-symbols-outlined">content_copy</span></button>
+      </div>
+    </div>
+
+    <div class="messages">
+
+      <!-- AI INTRO -->
+      <div class="msg">
+        <div class="msg-avatar ai"><span class="material-symbols-outlined">auto_awesome</span></div>
+        <div class="msg-content">
+          <div class="msg-name">StockPro AI</div>
+          <div class="msg-bubble ai">
+            <p>I've read the full NVDA investment report. Ask me anything — I'll answer based on the research and flag if I'm going beyond what the report covers.</p>
+            <p>The report rates NVIDIA a <strong>Strong Buy</strong> with a $1,450 price target. Key themes are datacenter dominance, CUDA moat, and Blackwell demand.</p>
+          </div>
+          <div class="msg-time">Just now</div>
+        </div>
+      </div>
+
+      <!-- USER MESSAGE -->
+      <div class="msg user">
+        <div class="msg-avatar user">OS</div>
+        <div class="msg-content">
+          <div class="msg-name">You</div>
+          <div class="msg-bubble user">What's the biggest risk to the bull thesis on NVDA right now?</div>
+          <div class="msg-time">2m ago</div>
+        </div>
+      </div>
+
+      <!-- AI RESPONSE -->
+      <div class="msg">
+        <div class="msg-avatar ai"><span class="material-symbols-outlined">auto_awesome</span></div>
+        <div class="msg-content">
+          <div class="msg-name">StockPro AI</div>
+          <div class="msg-bubble ai">
+            <p>The report flags <strong>US export controls</strong> as the highest-rated risk. China represented ~25% of NVIDIA's datacenter revenue before restrictions — if regulations expand, that's a material TAM reduction.</p>
+            <p>The second-highest risk is <strong>hyperscaler custom silicon</strong>. Google's TPU v5, Amazon Trainium 2, and Microsoft Maia are getting better each generation. They won't replace external GPU demand, but they could cap growth at the biggest cloud customers.</p>
+            <p>The report explicitly states these risks are <em>manageable</em> relative to the opportunity size, but they're the most credible threats to the thesis.</p>
+          </div>
+          <div class="msg-time">1m ago</div>
+        </div>
+      </div>
+
+      <!-- USER -->
+      <div class="msg user">
+        <div class="msg-avatar user">OS</div>
+        <div class="msg-content">
+          <div class="msg-name">You</div>
+          <div class="msg-bubble user">How does the valuation compare to AMD and Intel?</div>
+          <div class="msg-time">Just now</div>
+        </div>
+      </div>
+
+      <!-- TYPING -->
+      <div class="msg">
+        <div class="msg-avatar ai"><span class="material-symbols-outlined">auto_awesome</span></div>
+        <div class="msg-content">
+          <div class="msg-name">StockPro AI</div>
+          <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SUGGESTED QUESTIONS -->
+    <div class="suggestions">
+      <div class="suggestions-label">Suggested questions</div>
+      <div class="suggestion-chips">
+        <div class="chip">What's the price target justification?</div>
+        <div class="chip">How does Blackwell impact margins?</div>
+        <div class="chip">When is the next earnings?</div>
+        <div class="chip">Compare to AMD's MI300X</div>
+      </div>
+    </div>
+
+    <!-- INPUT -->
+    <div class="chat-input-area">
+      <div class="input-box">
+        <textarea class="chat-textarea" placeholder="Ask anything about NVDA..." rows="1"></textarea>
+        <div class="input-actions">
+          <button class="send-btn"><span class="material-symbols-outlined">send</span></button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

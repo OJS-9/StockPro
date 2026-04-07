@@ -1,529 +1,169 @@
 # StockPro
 
-An AI-powered multi-agent stock research platform that orchestrates specialized research agents, integrates financial data APIs with real-time web research, and provides an interactive chat interface for exploring investment opportunities. Includes a portfolio tracker for equities and crypto.
+AI-powered multi-agent stock research platform with portfolio tracking, watchlists, price alerts, and a Telegram bot. Built for retail investors who want institutional-grade research on any ticker.
 
----
+## Identity
 
-## Working instructions
-- after every change that adds / change something about the app, from a feature to a new window - update the CLAUDE,md in order to keep knowledge updated.
-- follow the design system rules and color scheme as detailed
-- Keep things simp;e - NEVER over-engineer it, always simplify, no unnecessery defensive progarmming of extra features.
-- be concise, keep README short and simple - DO NOT USE EMOGIJES NOT MATTER WHAT.
+You are a senior full-stack engineer shipping production-ready code for StockPro. Prioritize simplicity over abstraction, working software over perfect architecture, and user experience over developer convenience. You own both the Flask backend and the React frontend rewrite.
+
+## NEVER / ALWAYS / CRITICAL
+
+**CRITICAL: Read before every session.** These are hard-won rules from real bugs.
+
+- NEVER use MySQL or reference MySQL anywhere -- the database is **PostgreSQL** (Supabase). The codebase was migrated; stale MySQL references are bugs.
+- NEVER query `WHERE email = ?` directly -- email is AES-encrypted. Use `get_user_by_email()` which matches on `email_hash` (HMAC-SHA256).
+- NEVER log or print decrypted sensitive values. Use `encrypt()`/`decrypt()` from `src/encryption.py` for any new personal data column.
+- NEVER add a Supabase table without RLS. Patterns in `docs/SUPABASE.md`. Scope via `auth.jwt()->>'sub'`.
+- NEVER use OpenAI Agents SDK -- this project uses **LangGraph + LangChain**. Old docs/comments referencing OpenAI agents are stale.
+- NEVER add emojis to code, docs, commit messages, or UI copy.
+- ALWAYS update this file after adding a feature, new page, or changing architecture.
+- ALWAYS keep design tokens in sync between `templates/base.html` and `stockpro-web/src/index.css`.
+- ALWAYS match the mockups in `stockpro-web/mockups/` for visual decisions -- they are the design source of truth.
+- CRITICAL: `database.py` uses `psycopg2` + `ThreadedConnectionPool`. Never import `mysql` or `sqlalchemy`.
+- CRITICAL: Agent tools are registered in `langchain_tools.py`. yfinance is primary for fundamentals. MCP is only used for `NEWS_SENTIMENT`. Don't re-add other MCP tools to agents without a reason.
+
+## Maintenance
+
+- **Prune this file** every few sessions. Target 200-300 lines. If it grows past 300, something belongs in `docs/` instead.
+- **Don't dump here**: full API docs, SQL examples, style guide details, route listings. Reference the source file.
+- **Add to this file**: new gotchas from real bugs, architecture changes, new subsystems, changed conventions.
+- **Progressive disclosure**: detailed RLS rules -> `docs/SUPABASE.md`, deployment -> `docs/DEPLOYMENT.md`, MCP tools -> `docs/TOOL_SELECTION.md`.
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Backend | Flask (Python 3.10+) |
-| AI / LLM | Google GenAI SDK (`google-genai`), Gemini 3.1 Pro / 3 Flash |
-| Embeddings | Gemini `gemini-embedding-001` (3072d) |
-| Financial data | Alpha Vantage MCP (HTTP, JSON-RPC) |
-| Web research | Nimble SDK API (web search, extraction, Perplexity agent) |
-| Crypto prices | CoinGecko API |
-| Database | MySQL (connection pool, pool_size=5) |
-| Vector search | NumPy cosine similarity (brute-force) |
-| Frontend | Jinja2 templates, Tailwind CSS (CDN), Marked.js |
-| Async compat | `nest_asyncio` for Flask |
+- **Backend**: Flask (Python 3.10+), Flask-CORS, Flask-Limiter, Flask-WTF, flask-sock
+- **AI/LLM**: LangGraph + LangChain, `langchain-google-genai` (ChatGoogleGenerativeAI)
+- **Embeddings**: `gemini-embedding-001` (3072-D) via google-genai SDK
+- **Database**: PostgreSQL via psycopg2 (Supabase-hosted, ThreadedConnectionPool)
+- **Auth**: Clerk (backend: `clerk-backend-api`, frontend: ClerkJS / `@clerk/clerk-react`)
+- **Data**: yfinance (primary), Alpha Vantage MCP, Nimble SDK, CoinGecko
+- **Frontend (current)**: Jinja2 templates, Tailwind CSS CDN, Marked.js, Quill
+- **Frontend (next-gen)**: React 19 + Vite 8 + TypeScript + Tailwind v4 + React Router 7 + React Query
+- **Other**: WeasyPrint (PDF), python-telegram-bot, nest_asyncio, LangSmith tracing
 
-## Project Structure
+## Project Layout
 
 ```
 src/
-├── __init__.py
-├── orchestrator_graph.py          # LangGraph orchestrator session (replaces StockResearchAgent/agent.py)
-├── agents/
-│   ├── __init__.py
-│   ├── planner_node.py            # Research planning node
-│   ├── specialized_node.py        # Per-subject research nodes
-│   ├── synthesis_node.py          # Report synthesis node
-│   └── chat_agent.py              # RAG-lite Q&A on generated reports
-├── research_graph.py              # LangGraph StateGraph for full pipeline
-├── research_subjects.py           # 12 subject definitions with trade-type eligibility
-├── research_plan.py               # ResearchPlan dataclass
-├── research_prompt.py             # System prompts and templates
-├── langsmith_service.py           # LangSmith StepEmitter + SSE integration
-├── mcp_client.py                  # Alpha Vantage MCP HTTP client (JSON-RPC)
-├── mcp_manager.py                 # MCP server configuration
-├── mcp_tools.py                   # MCP tool execution wrapper
-├── nimble_client.py               # Nimble SDK API client (web search, extraction, Perplexity agent)
-├── report_storage.py              # Storage pipeline orchestrator
-├── report_chunker.py              # Semantic text chunking (600-token, 100-overlap)
-├── embedding_service.py           # OpenAI embeddings client
-├── vector_search.py               # Cosine similarity search over stored chunks
-├── database.py                    # MySQL operations & schema (~940 lines)
-├── date_utils.py                  # Datetime context utilities
-├── app.py                         # Flask routes, session management, auth (now uses OrchestratorSession)
-├── portfolio/
-│   ├── __init__.py
-│   ├── portfolio_service.py       # Portfolio business logic
-│   ├── cost_basis.py              # Simple average cost calculator
-│   └── csv_importer.py            # Multi-format CSV parser (Coinbase, Robinhood, generic)
-└── data_providers/
-    ├── __init__.py
-    ├── base_provider.py           # Abstract provider with caching
-    ├── stock_provider.py          # Nimble-first stock prices (MarketWatch) + Alpha Vantage fallback
-    ├── crypto_provider.py         # CoinGecko crypto prices
-    └── provider_factory.py        # Auto-detect stock vs crypto
+  app.py                    # Flask routes, Clerk auth, CSRF, CORS, rate limiting
+  orchestrator_graph.py     # LangGraph ReAct orchestrator (create_react_agent)
+  research_graph.py         # StateGraph: planner -> fan-out -> quality gate -> synthesis -> storage
+  database.py               # PostgreSQL ops, schema, connection pool
+  encryption.py             # AES-256-GCM field encryption + HMAC lookups
+  langchain_tools.py        # StructuredTools: yfinance + MCP + Nimble
+  agents/                   # planner_node, specialized_node, synthesis_node, chat_agent
+  portfolio/                # portfolio_service, cost_basis, csv_importer, history_service
+  data_providers/           # stock_provider, crypto_provider, provider_factory
+  watchlist/                # watchlist_service, price_refresh, news_recap, earnings_calendar
+  alerts/                   # price alert evaluation + Telegram notify
+  realtime/                 # WebSocket price snapshots
+  brokerage/                # Alpaca paper trading (Phase 2)
 
-templates/
-├── base.html                      # Shared layout (Tailwind, dark stone theme)
-├── index.html                     # Landing page with hero search
-├── chat.html                      # AI research chat interface (markdown via Marked.js)
-├── portfolio_list.html            # Portfolio list page (overall recap, per-card summary, empty state + create modal)
-├── portfolio.html                 # Portfolio detail dashboard (single portfolio view)
-├── holding_detail.html            # Per-holding detail + transactions
-├── add_transaction.html           # Manual transaction form
-├── import_csv.html                # CSV import with drag-and-drop
-├── login.html                     # Login form (standalone, not extending base.html)
-└── register.html                  # Registration form (standalone)
+stockpro-web/               # React SPA -- Phase 2 frontend rewrite
+  src/main.tsx              # ClerkProvider, QueryClient, BrowserRouter, Toaster
+  src/App.tsx               # Route table (all placeholders for now)
+  src/index.css             # Tailwind v4 @theme design tokens
+  src/api/client.ts         # useApiClient() -- authenticated fetch with Clerk Bearer
+  mockups/                  # 14 HTML mockups: visual spec for every screen
 
-static/css/
-└── style.css                      # Unused (templates use Tailwind CDN)
+templates/                  # 20 Jinja2 templates
+scripts/                    # DB init, migrations, telegram bot, CI smoke tests
+tests/                      # 40 pytest files
 ```
+
+## Coding Conventions
+
+- **Keep it simple** -- no unnecessary abstractions, no defensive programming "just in case"
+- **One responsibility per module** -- each agent, service, and provider does one thing
+- **Error isolation in agents** -- individual specialized agent failures must not crash the pipeline. Partial results pass through.
+- **Price provider fallback chain** -- Nimble agent -> Alpha Vantage -> yfinance (stocks) or CoinGecko (crypto). Don't skip levels.
+- **Encryption pattern** -- `encrypt()` on write, `decrypt()` on read, `_hash` sibling for searchable fields
+- **Flask routes** -- use `@login_required` decorator (Clerk JWT), CSRF via Flask-WTF on form POSTs
+- **React SPA** -- `useApiClient()` for all API calls (auto-attaches Clerk Bearer token)
+- **Tests** -- `pytest.ini` sets `testpaths = tests`, `pythonpath = src`. Run: `python -m pytest`
 
 ## Architecture
 
-### Research UX Flow (Popup Q&A)
-
-Ticker submit on home page → popup modal (questions fetched via single Gemini call at `POST /popup_start`) → step 1: optional subject checkboxes (custom outline/hover styling; **Deselect all** in footer) → step 2: user answers all questions at once → popup closes → "Generating report..." toast → background generation thread (`POST /start_generation`) → polling via `GET /api/report_status/<session_id>` every 3s → "Report Ready" toast → click → `/report/<report_id>`.
-
-Module-level `_generation_status` dict in `app.py` tracks per-session state (`in_progress` / `ready` / `error`).
-
 ### Research Pipeline
 
-```
-User Request (popup answers submitted)
-    │
-    ▼
-Background Thread (app.py start_generation)
-    │  ── calls agent.generate_report(context=Q&A string)
-    │
-    ▼
-PlannerAgent
-    │  ── single LLM call (no tools), structured JSON response
-    │  ── selects & prioritizes research subjects
-    │  ── outputs ResearchPlan dataclass
-    │  ── fallback to full eligible subject list on parse failure
-    │
-    ▼
-ResearchOrchestrator
-    │  ── ThreadPoolExecutor (3 workers, configurable via RESEARCH_MAX_WORKERS)
-    │  ── each worker calls gemini_runner.run_agent() synchronously
-    │
-    ├──▶ SpecializedAgent: subject A ──┐
-    ├──▶ SpecializedAgent: subject B ──┤
-    └──▶ SpecializedAgent: subject C ──┤
-         ...                           │
-    ◄──────────────────────────────────┘
-    │  research_outputs: {subject_id → text}
-    │  (individual agent failures isolated — partial results pass through)
-    │
-    ▼
-SynthesisAgent
-    │  ── receives ResearchPlan + all research outputs
-    │  ── builds report sections dynamically per plan
-    │  ── max 8,000 output tokens
-    │  ── before specialization, a per-run USD spend budget may reduce
-    │     `effective_max_turns` / `effective_max_output_tokens` to keep
-    │     estimated cost within budget (best-effort preflight)
-    │
-    ▼
-ReportStorage Pipeline
-    │  ── ReportChunker → EmbeddingService → DatabaseManager
-    │  ── 600-token chunks, 100-token overlap, section-aware splitting
-    │  ── text-embedding-004 (768d), stored as JSON in MySQL
-    │
-    ▼
-ReportChatAgent (RAG-lite follow-up Q&A)
-    ── VectorSearch (cosine similarity over stored chunks)
-    ── injects top-k chunks into LLM prompt
-```
+`planner_node` -> parallel `specialized_node` (LangGraph `Send()`) -> `quality_gate_node` -> `synthesis_node` -> `storage_node`
 
-### Agent Inventory
+- **Planner**: single LLM call, picks/prioritizes from 12 subjects (see `research_subjects.py`)
+- **Specialized**: ReAct agent per subject with yfinance + MCP + Nimble tools
+- **Quality gate**: min output length, >50% failure aborts
+- **Synthesis**: merges outputs, position-aware framing, max 8000 tokens, truncation retry
+- **Storage**: chunks (600-token, 100-overlap) -> embeddings -> PostgreSQL
 
-| Component | File | Model | Role | Tools / Integration | Output Tokens |
-|---|---|---|---|---|---|
-| OrchestratorSession | `orchestrator_graph.py` | gemini-2.5-flash (via LangChain) | Orchestrate conversation, ask clarifying questions, trigger research graph | Calls `run_research` tool in `research_graph.py` | ~600 per turn (configured) |
-| Planner node | `agents/planner_node.py` | gemini-3-flash-preview | Select & prioritize research subjects | None (JSON-like state updates) | ~1,200 |
-| Specialized node | `agents/specialized_node.py` | gemini-3.1-pro-preview | Deep-dive one subject | 6 MCP + Perplexity tools | ~1,500 |
-| Synthesis node | `agents/synthesis_node.py` | gemini-3.1-pro-preview | Merge outputs into cohesive report | None (synthesis) | ~8,000 |
-| ReportChatAgent | `agents/chat_agent.py` | gemini-3-flash-preview | RAG Q&A on stored report chunks | Vector search over `report_chunks` | — |
+### Agent Models
 
-### Research Subjects (12 total)
+| Agent | Default model | Env override |
+|---|---|---|
+| Orchestrator | gemini-2.5-flash | `ORCHESTRATOR_MODEL` |
+| Planner | gemini-2.5-flash | `PLANNER_MODEL` |
+| Specialized | gemini-2.5-pro | `SPECIALIZED_AGENT_MODEL` |
+| Synthesis | gemini-2.5-pro | `SYNTHESIS_AGENT_MODEL` |
+| Report chat (RAG) | gemini-2.5-flash | `CHAT_AGENT_MODEL` |
 
-| # | Subject | ID | Day Trade | Swing Trade | Investment |
-|---|---|---|---|---|---|
-| 1 | Company Overview | `company_overview` | yes | yes | yes |
-| 2 | News & Catalysts | `news_catalysts` | yes | yes | yes |
-| 3 | Technical / Price Action | `technical_price_action` | yes | yes | — |
-| 4 | Earnings & Financials | `earnings_financials` | — | yes | yes |
-| 5 | Sector & Macro Context | `sector_macro` | yes | yes | — |
-| 6 | Revenue Breakdown | `revenue_breakdown` | — | yes | yes |
-| 7 | Growth Drivers | `growth_drivers` | — | yes | yes |
-| 8 | Valuation & Peers | `valuation` | — | — | yes |
-| 9 | Margin Structure | `margin_structure` | — | yes | yes |
-| 10 | Competitive Position | `competitive_position` | — | — | yes |
-| 11 | Risk Factors | `risk_factors` | — | yes | yes |
-| 12 | Management Quality | `management_quality` | — | — | yes |
+### Key Subsystems
 
-Each subject carries a priority per trade type (1=high, 2=medium, 3=low). The PlannerAgent selects a subset and reorders based on user context. Subject eligibility count: Day Trade=5, Swing Trade=10, Investment=10.
+- **Portfolio**: multiple per user, simple average cost basis, auto-detect stock vs crypto
+- **Watchlist**: lists/sections/items/pins, 15-min background price refresh, news recap
+- **Alerts**: evaluate on price_cache upsert, cooldown prevents spam, Telegram notify
+- **Report chat**: two-phase RAG (report chunks first, research chunks if score low)
+- **News**: Nimble agent-based briefing, in-memory TTL cache
 
-### Data Sources
+## React SPA (stockpro-web/)
 
-**Alpha Vantage MCP (6 tools via JSON-RPC)**
+- **State**: early scaffold. Routes and providers wired, all pages are placeholders ("Phase 2").
+- **Dev**: `npm run dev` on port 3000, proxies `/api`, `/stream`, `/ws` to Flask :5000
+- **Mockups**: 14 HTML files in `mockups/` -- the design source of truth for every screen
+- **Design tokens**: `primary` (#d6d3d1), `background-dark` (#0c0a09), `surface-dark` (#1c1917), `border-dark` (#292524), `accent-up` (#22c55e), `accent-down` (#ef4444)
+- **Fonts**: Nunito (display), Inter (body). Icons: Material Symbols Outlined.
+- **Patterns**: dark cards with border-dark, sticky blurred nav, pill buttons, rounded-2xl bubbles
 
-| Tool | Data |
-|---|---|
-| `OVERVIEW` | Company profile, sector, market cap, ratios |
-| `INCOME_STATEMENT` | Revenue, expenses, net income (annual + quarterly) |
-| `BALANCE_SHEET` | Assets, liabilities, equity |
-| `CASH_FLOW` | Operating, investing, financing cash flows |
-| `EARNINGS` | EPS actuals vs. estimates |
-| `NEWS_SENTIMENT` | News articles with sentiment scores |
+## Database
 
-Tool outputs are truncated (max 5 series items, max 5 news items) before passing to agents.
+- PostgreSQL via Supabase. Schema defined in `database.py` (`init_schema`).
+- **Tables**: users, reports, report_chunks, portfolios, holdings, transactions, csv_imports, watchlists, price_cache, alerts, notifications, ticker_notes, telegram_connect_tokens
+- **Identity**: `users.user_id` = Clerk user ID. RLS via `auth.jwt()->>'sub'`.
+- **Encrypted fields**: `users.email`, `users.telegram_chat_id`. Lookups via `email_hash`.
 
-**Nimble SDK API** — web search (`POST /v1/search`), URL extraction (`POST /v1/extract`), and Perplexity synthesis (`POST /v1/agents/run` with `agent="perplexity"`). Exposed to specialized agents as `nimble_web_search`, `nimble_extract`, and `perplexity_research` tools. Requires `NIMBLE_API_KEY` env var.
-`NimbleClient.run_agent()` also normalizes Nimble’s inconsistent `data.parsing` shapes (list vs dict) into a consistent list for app consumption.
+## Auth
 
-**CoinGecko API** — crypto prices for portfolio module, 50+ symbol-to-ID mappings, batch price fetching.
-
-### Database Schema (7 MySQL tables)
-
-**Research domain:** `reports` (metadata + full text), `report_chunks` (chunks + embeddings as JSON)
-
-**Portfolio domain:** `users` (auth: username, email, password_hash nullable, google_id for OAuth), `portfolios` (per-user), `holdings` (aggregated positions), `transactions` (buy/sell records), `csv_imports` (audit log)
-
-Relationships: `users 1→N portfolios 1→N holdings 1→N transactions`, `reports 1→N report_chunks`. All child tables use CASCADE deletes.
+- Clerk-based. Routes: `/sign-in`, `/sign-up`, `/sign-out`, `/auth/sso-callback`
+- SSO callback required for Google OAuth -- add redirect URL in Clerk Dashboard
+- Backend verifies JWTs via `clerk-backend-api`
 
 ## Commands
 
 ```bash
-# Run the Flask app
-python src/app.py
-
-# Initialize database
-python init_db.py
-
-# Recreate database schema (creates DB if missing)
-python recreate_schema.py
-
-# Run all tests
-python -m pytest test_*.py
-
-# Run specific test suites
-python -m pytest test_cost_basis.py
-python -m pytest test_csv_importer.py
-python -m pytest test_mcp.py
-python -m pytest test_nvda_research.py
+python src/app.py                    # Flask app
+cd stockpro-web && npm run dev       # React dev (port 3000)
+python scripts/recreate_schema.py    # Recreate DB schema
+python -m pytest                     # Run all tests
+python scripts/run_telegram_bot.py   # Telegram bot
 ```
 
-## Environment Variables
+## Env Vars
 
-Required in `.env`:
-```
-GEMINI_API_KEY=
-ALPHA_VANTAGE_API_KEY=
-MYSQL_HOST=localhost
-MYSQL_USER=
-MYSQL_PASSWORD=
-MYSQL_DATABASE=stock_research
-FLASK_SECRET_KEY=           # REQUIRED in production — random key per restart if unset
-```
+**Required** (`.env`):
+- `DATABASE_URL` -- Supabase PostgreSQL connection string
+- `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_KEY`
+- `GEMINI_API_KEY`
+- `FLASK_SECRET_KEY`
+- `ENCRYPTION_KEY` -- 64-char hex (`python -c "import secrets; print(secrets.token_hex(32))"`)
 
-Optional:
-```
-PORT=5000                   # Flask dev server port (default 5000); use 5050 if 5000 is busy (e.g. macOS AirPlay Receiver)
-FLASK_HOST=127.0.0.1        # Bind address; set to 0.0.0.0 for access from other devices on the LAN
-RESEARCH_MAX_WORKERS=3      # ThreadPoolExecutor concurrency
-PLANNER_MAX_SUBJECTS=8     # Max subjects shown to PlannerAgent
-QUALITY_GATE_MIN_OUTPUT_CHARS=200  # Min chars for a specialized output to pass quality gate (default 200)
-GOOGLE_CLIENT_ID=          # Google OAuth (Authlib). Redirect URI: .../login/google/callback
-GOOGLE_CLIENT_SECRET=      # From Google Cloud Console OAuth 2.0 credentials
-NIMBLE_API_KEY=            # Nimble web search + extraction. Get from app.nimbleway.com
-NIMBLE_TIMEOUT_SECONDS=30  # Request timeout for Nimble API calls (default 30)
+**Optional** -- see `.env.example` for full list: `PORT`, `FLASK_HOST`, rate limits (`STOCKPRO_RATE_LIMIT_*`), research tuning (`RESEARCH_MAX_WORKERS`, model overrides, spend budget), integrations (`ALPHA_VANTAGE_API_KEY`, `NIMBLE_API_KEY`, `TELEGRAM_BOT_TOKEN`, `LANGSMITH_API_KEY`), Phase 2 (`APCA_API_*`, `CONVERTKIT_*`).
 
-# Per-run USD spend budget (best-effort preflight; requires USD/token rates)
-RESEARCH_SPEND_BUDGET_USD_DEFAULT=         # Default estimated USD budget for a single research run
-GEMINI_INPUT_USD_PER_1K_TOKENS=           # USD per 1K input tokens (used for budget estimation)
-GEMINI_OUTPUT_USD_PER_1K_TOKENS=          # USD per 1K output tokens (used for budget estimation)
-RESEARCH_SPEND_BUDGET_USD_MIN_MAX_TURNS=2
-RESEARCH_SPEND_BUDGET_USD_MIN_MAX_OUTPUT_TOKENS=512
-USER_BUDGET_USD_OVERRIDES_JSON=          # Optional JSON: {"user_id_string":"budget_usd", ...}
-```
+## Docs (progressive disclosure)
 
-## Auth
-
-Clerk-based auth with Flask session sync. Routes: `/sign-in`, `/sign-up`, `/sign-out`, `/auth/sso-callback`. The SSO callback route is required for "Continue with Google": after OAuth, Clerk redirects to `/auth/sso-callback`, where ClerkJS runs `handleRedirectCallback()` to set the `__session` cookie on the app origin, then the user is redirected to `/` (or `next`). Add the callback URL to Clerk Dashboard allowed redirect URLs if needed (e.g. `http://localhost:5000/auth/sso-callback`, `https://<domain>/auth/sso-callback`).
-
-## MCP Configuration
-
-Copy `mcp.json.example` to `mcp.json` and configure the Alpha Vantage MCP server endpoint and API key.
-
-## Design System
-
-### Color Palette (Tailwind custom config in `base.html`)
-
-| Token | Hex | Tailwind Equivalent | Usage |
-|---|---|---|---|
-| `primary` | `#d6d3d1` | stone-300 | Brand color, logo tint, CTA buttons, links, active tab pills |
-| `background-light` | `#fafaf9` | stone-50 | Light mode page background |
-| `background-dark` | `#0c0a09` | stone-950 | Dark mode page background, code block backgrounds |
-| `surface-dark` | `#1c1917` | stone-900 | Cards, chat bubbles, input fields, table headers |
-| `border-dark` | `#292524` | stone-800 | Card borders, dividers, markdown `hr` / `th` / `td` borders |
-| `accent-up` | `#22c55e` | green-500 | Positive P&L, bullish indicators, inline code text, chart uptrends |
-| `accent-down` | `#ef4444` | red-500 | Negative P&L, bearish indicators, chart downtrends, error states |
-
-Additional colors used directly via Tailwind utilities:
-- `stone-400` / `stone-500` — secondary text, timestamps, muted labels
-- `orange-500` — Bitcoin/crypto icon accent on landing page
-- `blue-500/10` — finance article card gradient on landing page
-- `red-900/40`, `red-700` — error banners (login/register)
-- `green-400` — hover state for portfolio "Add Transaction" button
-
-### Typography
-
-| Role | Font Family | Weight Range | Where |
-|---|---|---|---|
-| Display (headings, brand) | **Nunito** | 400–800 | `font-display` class — page titles, card headings, hero text, prices |
-| Body (UI text) | **Inter** | 400–700 | `font-body` class — paragraphs, labels, nav links, descriptions |
-| Loaded but secondary | Manrope, Noto Sans | — | Referenced in CDN link; Manrope may be used in older templates |
-
-**Login/Register pages use a different type stack** (standalone, not extending `base.html`):
-- Display: **Space Grotesk** (700)
-- Body: **Inter** (400–600)
-
-### Border Radius
-
-| Token | Value | Typical usage |
-|---|---|---|
-| Default | `1rem` (16px) | Inputs, small cards, badges |
-| `rounded-2xl` | 1rem | Chat bubbles, search bar, form containers |
-| `rounded-3xl` | 1.5rem | Landing page market cards, news article cards |
-| `rounded-xl` | 0.75rem | Portfolio summary cards, icon containers |
-| `rounded-lg` | 0.5rem | Buttons, badges, tag pills |
-| `rounded-full` | 9999px | Avatar circles, pill buttons (Sign Up, Log Out) |
-
-### Component Patterns
-
-**Cards** — `bg-surface-dark rounded-3xl p-6 border border-border-dark` with subtle hover effects (`hover:border-accent-up/50`, `hover:shadow-2xl`, `hover:-translate-y-1`). Landing page cards include a decorative blurred circle (`bg-accent-up/5 rounded-full blur-3xl`) and a bottom SVG sparkline.
-
-**Buttons** — Primary: `bg-primary text-background-dark font-bold rounded-xl` with `hover:brightness-110`. Secondary: `bg-surface-dark border border-border-dark text-white`. Pill style: `rounded-full h-10 px-4`.
-
-**Chat bubbles** — Both user and AI: `bg-surface-dark rounded-2xl px-4 py-3 max-w-3xl`. User avatar: `bg-primary/20 rounded-full`. AI avatar: `bg-surface-dark rounded-full` with `smart_toy` icon.
-
-**Header/Nav** — Sticky, backdrop blur (`bg-background-dark/95 backdrop-blur-md`), bottom border `border-b-border-dark`. Nav links use `hover:text-primary` transition. On viewports below `md`, a hamburger button opens a slide-out drawer (right) with the same links and auth; close via overlay click, close button, Escape, or link click.
-
-**Hero search bar** — `bg-surface-dark/90 backdrop-blur-md border border-border-dark rounded-2xl` with `focus-within:ring-2 ring-primary/50`.
-
-### Inconsistencies to Resolve
-
-- **Login/Register pages** are standalone HTML (not extending `base.html`) with an `amber-400` accent (`#fbbf24`) instead of the `primary` stone-300 used everywhere else. Font is Space Grotesk instead of Nunito. This creates a visual break in the user flow.
-- **`static/css/style.css`** contains an unused purple-themed stylesheet — the app exclusively uses Tailwind via CDN.
-- **Icons**: Material Symbols Outlined loaded from Google Fonts CDN. Used for all UI icons (`search`, `arrow_forward`, `smart_toy`, `person`, `menu`, `add`, `trending_up`, etc.).
-
-## Security
-
-### AES-256 Encryption (field-level, data at rest)
-All sensitive user fields are encrypted in the database using AES-256-GCM via `src/encryption.py`.
-
-**Currently encrypted fields:**
-- `users.email` — stored as AES-256-GCM ciphertext
-- `users.telegram_chat_id` — stored as AES-256-GCM ciphertext
-
-**Lookup pattern:** `users.email_hash` stores an HMAC-SHA256 of the email for indexed lookups (since the same plaintext encrypts differently each time). Use `get_user_by_email()` — never query `WHERE email = ?` directly.
-
-**Rules for new code:**
-- Any new column that stores personal data (phone number, address, API tokens, etc.) must use `encrypt()` on write and `decrypt()` on read.
-- Add a `_hash` sibling column if the field needs to be searchable (same HMAC pattern as `email_hash`).
-- Never log or print decrypted sensitive values.
-- Import from `src/encryption.py`: `from encryption import encrypt, decrypt, hmac_email`
-
-**Session cookies** are hardened with `HttpOnly`, `SameSite=Lax`, and `Secure` (HTTPS-only in production via `FLASK_ENV != development`).
-
-**Required env vars:**
-- `ENCRYPTION_KEY` — 64-char hex string (32 bytes). Generate: `python -c "import secrets; print(secrets.token_hex(32))"`
-- `FLASK_ENV=production` — enables `SESSION_COOKIE_SECURE` in prod
-
----
-
-## Development Guidelines
-
-### General Guidelines
-- keep everything simple, do not over-engineer things
-- in case there's new feature / major behaviral change of the app - update CLAUDE.md 
-- if you see something in the code while reviewing files that can be better - suggest at in your final response.
-
-
-### Agent Patterns
-- All agents use the **OpenAI Agents SDK** (`openai-agents`) — use `Runner.run()` with turn limits
-- Each agent has a single, focused responsibility
-- Async compatibility in Flask via `nest_asyncio`
-- Retry logic exists in `agent.py` and `specialized_agent.py` but is duplicated — extract to shared module
-- `conversation_handler_agent.py` overlaps with `report_chat_agent.py` — consolidate
-
-### MCP Tool Usage
-- Access tools via `mcp_tools.py` wrapper, documented in `TOOL_SELECTION.md`
-- MCP client uses JSON-RPC over HTTP with fallback to hardcoded tool list
-- Handle API rate limits gracefully (Alpha Vantage free tier: 5 calls/min)
-
-### Database Operations
-- All MySQL access through `database.py` (`DatabaseManager`)
-- Reports stored with metadata and chunk-based organization
-- Embeddings stored as JSON text — parsed on every search (scaling concern beyond ~100 reports)
-- No transaction wrapping for report + chunk + embedding saves (atomicity gap)
-
-### Trade Types
-Research depth scales with trade horizon:
-- **Day Trade**: 5 subjects — price action, news, sector context
-- **Swing Trade**: 10 subjects — adds earnings, revenue, margins, risks
-- **Investment**: 10 subjects — full deep-dive including valuation, moat, management
-
-### Portfolio Module
-- `PortfolioService` encapsulates all portfolio operations
-- Users can create multiple named portfolios; `GET /portfolio` shows the list (with overall recap: combined value, P&L and %, total holdings; each card shows that portfolio’s value, P&L %, and holdings count), `GET /portfolio/<id>` shows a detail view
-- All portfolio sub-routes are scoped to portfolio_id: `/portfolio/<id>/add`, `/portfolio/<id>/import`, `/portfolio/<id>/holding/<symbol>`, `/portfolio/<id>/transaction/<txn_id>/delete`
-- Cost basis: simple average method, applied chronologically
-- Asset type auto-detected from symbol (BTC, ETH, etc. → crypto)
-- Price providers: `StockDataProvider` (Nimble MarketWatch agent first, Alpha Vantage fallback) / `CryptoDataProvider` (CoinGecko) via factory
-- Database tables: `portfolios`, `holdings`, `transactions`, `csv_imports`
-
+- `docs/OVERVIEW.md` -- full product/architecture reference
+- `docs/DEPLOYMENT.md` -- deployment, env vars, OAuth redirect URIs
+- `docs/SUPABASE.md` -- RLS patterns, SQL examples, Supabase config
+- `docs/TOOL_SELECTION.md` -- Alpha Vantage MCP tool docs
+- `docs/AGENTS.md` -- Cursor rules for AI dev
+- `docs/plans/` -- dated implementation plans
 
 ## Testing
 
-| Test file | Scope |
-|---|---|
-| `test_cost_basis.py` | 15+ cases — averaging, partial sells, fees, crypto decimals |
-| `test_csv_importer.py` | 20+ cases — format detection, parsing, error handling |
-| `test_mcp.py` | MCP connection, tool discovery, execution (requires live API key) |
-| `test_nvda_research.py` | End-to-end research pipeline (requires live API keys) |
-| `test_setup.py` | Environment validation (Python version, deps, config files) |
-
-**Testing gaps:** No Flask route tests, no mocked API tests (CI-unfriendly), no edge cases for overselling in cost_basis or concurrent agent sessions.
-
-## Key Documentation
-
-| File | Purpose |
-|---|---|
-| `OVERVIEW.md` | Full product and architecture reference |
-| `DEPLOYMENT.md` | Deployment steps, env vars, Google OAuth redirect URIs (local and production) |
-| `AGENTS.md` | Cursor rules for AI-assisted development |
-| `TOOL_SELECTION.md` | Alpha Vantage MCP tool documentation |
-
-
-## StockPro – Supabase + Clerk + RLS Rules
-### Identity model
-
-- Each app user has a row in `public.users`.
-- `public.users.user_id` stores the **Clerk user id** (e.g. `user_abc123`).
-- Every authenticated request to Supabase includes a JWT where:
-  - The `sub` claim is the Clerk user id.
-- In SQL, the current user id is:
-
-```sql
-auth.jwt()->>'sub'
-
-### Base rules for RLS in `public` schema
-
-For any table in `public` that is reachable from the client:
-
-1. **Always enable RLS**:
-
-   ```sql
-   ALTER TABLE public.<table_name> ENABLE ROW LEVEL SECURITY;
-   ```
-
-2. **If the table has a direct `user_id` column** (owned by a single user):
-
-   ```sql
-   CREATE POLICY "<short description>"
-   ON public.<table_name>
-   FOR ALL
-   USING (user_id = auth.jwt()->>'sub')
-   WITH CHECK (user_id = auth.jwt()->>'sub');
-   ```
-
-   This means: the client can only see and change rows where `user_id` equals the Clerk id from `sub`.
-
-3. **If the table has no `user_id` but links to a parent that does**, join through the parent.
-
-   **Example: `holdings` → `portfolios` → `users`**
-
-   ```sql
-   CREATE POLICY "Users manage holdings of their portfolios"
-   ON public.holdings
-   FOR ALL
-   USING (
-     EXISTS (
-       SELECT 1
-       FROM public.portfolios p
-       WHERE p.portfolio_id = holdings.portfolio_id
-         AND p.user_id = auth.jwt()->>'sub'
-     )
-   )
-   WITH CHECK (
-     EXISTS (
-       SELECT 1
-       FROM public.portfolios p
-       WHERE p.portfolio_id = holdings.portfolio_id
-         AND p.user_id = auth.jwt()->>'sub'
-     )
-   );
-   ```
-
-   ### Shared vs per-user tables
-
-#### Shared read-only tables (e.g. `public.price_cache`)
-
-- Everyone can read, but only backend/service_role should write.
-
-```sql
-ALTER TABLE public.price_cache ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Everyone can read price cache"
-ON public.price_cache
-FOR SELECT
-USING (true);
-```
-
-- Do **not** create INSERT/UPDATE/DELETE policies for these tables.
-- All writes must go through trusted backend code using the service key.
-
-#### Sensitive token tables (e.g. `public.telegram_connect_tokens`)
-
-- Tokens are per-user and sensitive.
-- Pattern: “only this user (or backend) can read/write their tokens”.
-
-```sql
-ALTER TABLE public.telegram_connect_tokens ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users manage their telegram tokens"
-ON public.telegram_connect_tokens
-FOR ALL
-USING (user_id = auth.jwt()->>'sub')
-WITH CHECK (user_id = auth.jwt()->>'sub');
-```
-
-If tokens must never be readable from the browser, omit the `FOR SELECT` policy and rely only on backend/service_role access.
-
-#### Child content tables (e.g. `public.report_chunks` tied to `public.reports`)
-
-- `reports` has `user_id`.
-- `report_chunks` has `report_id` → `reports.report_id`.
-- Pattern: join via the parent:
-
-```sql
-ALTER TABLE public.report_chunks ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users read their report chunks"
-ON public.report_chunks
-FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.reports r
-    WHERE r.report_id = report_chunks.report_id
-      AND r.user_id = auth.jwt()->>'sub'
-  )
-);
-```
+40 files under `tests/` (pytest). Covers: Flask routes, Clerk auth, CSRF, research pipeline, budget, portfolio math, CSV import, watchlist, alerts, pricing/WebSocket, Telegram, MCP, utilities. Config in `pytest.ini`.

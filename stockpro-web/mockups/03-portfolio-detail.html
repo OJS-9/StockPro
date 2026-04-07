@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Tech Growth Portfolio</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 1240px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  /* BREADCRUMB */
+  .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  .breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb .material-symbols-outlined { font-size: 14px; }
+
+  /* PAGE HEADER */
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+  .portfolio-title { font-family: 'Nunito', sans-serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .portfolio-meta { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  .meta-badge { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+  .header-actions { display: flex; gap: 8px; }
+  .btn-ghost { background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-ghost .material-symbols-outlined { font-size: 16px; }
+  .btn-primary { background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary .material-symbols-outlined { font-size: 16px; }
+
+  /* SUMMARY STRIP */
+  .summary-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 28px; }
+  .strip-item { background: var(--surface); padding: 18px 20px; }
+  .strip-label { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+  .strip-val { font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .strip-val.up { color: var(--gain); }
+  .strip-val.down { color: var(--loss); }
+  .strip-sub { font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .strip-sub.up { color: var(--gain); }
+  .strip-sub.down { color: var(--loss); }
+  .strip-sub.muted { color: var(--muted); }
+
+  /* MAIN LAYOUT */
+  .main-layout { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+  .left { display: flex; flex-direction: column; gap: 20px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .card-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card-title .material-symbols-outlined { font-size: 16px; color: var(--muted); }
+  .card-action { font-size: 12px; color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
+  .card-action:hover { color: var(--text); }
+  .card-action .material-symbols-outlined { font-size: 14px; }
+
+  /* TIME RANGE TOGGLE */
+  .range-toggle { display: flex; gap: 2px; }
+  .range-btn { font-size: 11.5px; font-weight: 500; padding: 4px 9px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .range-btn.active { background: rgba(214,211,209,0.1); color: var(--text); }
+  .range-btn:hover:not(.active) { color: var(--text); }
+
+  /* CHART AREA */
+  .chart-area { padding: 20px; height: 200px; position: relative; }
+  .chart-svg { width: 100%; height: 160px; }
+
+  /* HOLDINGS TABLE */
+  .holdings-table { width: 100%; border-collapse: collapse; }
+  .holdings-table th { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); text-align: left; padding: 0 0 12px; border-bottom: 1px solid var(--border); }
+  .holdings-table th:not(:first-child) { text-align: right; }
+  .holdings-table td { padding: 14px 0; border-bottom: 1px solid rgba(41,37,36,0.5); font-size: 13.5px; font-variant-numeric: tabular-nums; vertical-align: middle; }
+  .holdings-table tr:last-child td { border-bottom: none; }
+  .holdings-table td:not(:first-child) { text-align: right; }
+  .holding-info { display: flex; align-items: center; gap: 10px; }
+  .ticker-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .h-ticker { font-size: 13px; font-weight: 600; }
+  .h-name { font-size: 11px; color: var(--muted); }
+  .pct-pill { display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  .pct-pill.up { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border); }
+  .pct-pill.down { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-border); }
+  .spark-mini { display: inline-block; }
+
+  /* RIGHT SIDEBAR */
+  .right { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ALLOCATION BARS */
+  .alloc-item { margin-bottom: 14px; }
+  .alloc-item:last-child { margin-bottom: 0; }
+  .alloc-label { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 6px; }
+  .alloc-name { font-weight: 500; }
+  .alloc-pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .alloc-track { height: 5px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .alloc-fill { height: 100%; border-radius: 999px; }
+
+  /* RECENT TRANSACTIONS */
+  .tx-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(41,37,36,0.5); }
+  .tx-item:last-child { border-bottom: none; }
+  .tx-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tx-icon.buy { background: var(--gain-bg); }
+  .tx-icon.buy .material-symbols-outlined { color: var(--gain); font-size: 15px; }
+  .tx-icon.sell { background: var(--loss-bg); }
+  .tx-icon.sell .material-symbols-outlined { color: var(--loss); font-size: 15px; }
+  .tx-info { flex: 1; }
+  .tx-ticker { font-size: 13px; font-weight: 600; }
+  .tx-detail { font-size: 11px; color: var(--muted); }
+  .tx-amount { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .tx-amount.buy { color: var(--gain); }
+  .tx-amount.sell { color: var(--loss); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="breadcrumb">
+    <a href="#">Portfolios</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <span>Tech Growth</span>
+  </div>
+
+  <div class="page-header">
+    <div>
+      <div class="portfolio-title">Tech Growth</div>
+      <div class="portfolio-meta">
+        <span>7 holdings</span>
+        <span class="meta-badge">Stocks</span>
+        <span>Created Jan 2024</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost"><span class="material-symbols-outlined">upload_file</span>Import CSV</button>
+      <button class="btn-ghost"><span class="material-symbols-outlined">download</span>Export</button>
+      <button class="btn-primary"><span class="material-symbols-outlined">add</span>Add Transaction</button>
+    </div>
+  </div>
+
+  <!-- SUMMARY STRIP -->
+  <div class="summary-strip">
+    <div class="strip-item">
+      <div class="strip-label">Market Value</div>
+      <div class="strip-val">$142,830</div>
+      <div class="strip-sub muted">7 holdings</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Cost Basis</div>
+      <div class="strip-val">$124,400</div>
+      <div class="strip-sub muted">Avg. invested</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Total Return</div>
+      <div class="strip-val up">+$18,430</div>
+      <div class="strip-sub up">+14.8%</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Day Change</div>
+      <div class="strip-val up">+$1,204</div>
+      <div class="strip-sub up">+0.85%</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Best Performer</div>
+      <div class="strip-val" style="font-size:18px;color:var(--gain)">NVDA</div>
+      <div class="strip-sub up">+169.2%</div>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <div class="left">
+
+      <!-- PERFORMANCE CHART -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">show_chart</span>Portfolio Performance</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="range-toggle">
+              <button class="range-btn">1W</button>
+              <button class="range-btn">1M</button>
+              <button class="range-btn active">3M</button>
+              <button class="range-btn">YTD</button>
+              <button class="range-btn">1Y</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-area">
+          <svg class="chart-svg" viewBox="0 0 760 160" preserveAspectRatio="none" fill="none">
+            <defs>
+              <linearGradient id="perf-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#22c55e" stop-opacity="0.15"/>
+                <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,130 60,118 120,122 180,104 240,90 300,98 360,76 420,60 480,68 540,44 600,36 660,24 760,18 760,160 0,160" fill="url(#perf-grad)"/>
+            <polyline points="0,130 60,118 120,122 180,104 240,90 300,98 360,76 420,60 480,68 540,44 600,36 660,24 760,18" stroke="#22c55e" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- HOLDINGS TABLE -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">table_rows</span>Holdings</div>
+          <a class="card-action" href="#">Sort by value <span class="material-symbols-outlined">swap_vert</span></a>
+        </div>
+        <div style="padding: 20px 20px 8px;">
+          <table class="holdings-table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Avg Cost</th>
+                <th>Mkt Value</th>
+                <th>P&amp;L</th>
+                <th>Return</th>
+                <th>Day %</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="holding-info"><div class="ticker-color" style="background:#60a5fa"></div><div><div class="h-ticker">NVDA</div><div class="h-name">NVIDIA</div></div></div></td>
+                <td>40</td><td>$420.50</td><td>$45,200</td>
+                <td style="color:var(--gain)">+$28,380</td>
+                <td><span class="pct-pill up">+169.2%</span></td>
+                <td style="color:var(--gain)">+2.34%</td>
+              </tr>
+              <tr>
+                <td><div class="holding-info"><div class="ticker-color" style="background:#a78bfa"></div><div><div class="h-ticker">MSFT</div><div class="h-name">Microsoft</div></div></div></td>
+                <td>60</td><td>$310.00</td><td>$38,400</td>
+                <td style="color:var(--gain)">+$19,800</td>
+                <td><span class="pct-pill up">+106.5%</span></td>
+                <td style="color:var(--gain)">+0.92%</td>
+              </tr>
+              <tr>
+                <td><div class="holding-info"><div class="ticker-color" style="background:#22c55e"></div><div><div class="h-ticker">AAPL</div><div class="h-name">Apple</div></div></div></td>
+                <td>80</td><td>$185.00</td><td>$25,600</td>
+                <td style="color:var(--gain)">+$7,800</td>
+                <td><span class="pct-pill up">+43.8%</span></td>
+                <td style="color:var(--gain)">+1.05%</td>
+              </tr>
+              <tr>
+                <td><div class="holding-info"><div class="ticker-color" style="background:#f59e0b"></div><div><div class="h-ticker">TSLA</div><div class="h-name">Tesla</div></div></div></td>
+                <td>25</td><td>$280.00</td><td>$18,750</td>
+                <td style="color:var(--loss)">-$1,250</td>
+                <td><span class="pct-pill down">-6.3%</span></td>
+                <td style="color:var(--loss)">-1.23%</td>
+              </tr>
+              <tr>
+                <td><div class="holding-info"><div class="ticker-color" style="background:#f472b6"></div><div><div class="h-ticker">AMZN</div><div class="h-name">Amazon</div></div></div></td>
+                <td>50</td><td>$155.00</td><td>$14,880</td>
+                <td style="color:var(--gain)">+$7,130</td>
+                <td><span class="pct-pill up">+91.6%</span></td>
+                <td style="color:var(--gain)">+0.58%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="right">
+
+      <!-- ALLOCATION -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">donut_small</span>Allocation</div>
+        </div>
+        <div style="padding:16px 20px;">
+          <div class="alloc-item">
+            <div class="alloc-label"><span class="alloc-name">NVDA</span><span class="alloc-pct">31.6%</span></div>
+            <div class="alloc-track"><div class="alloc-fill" style="width:31.6%;background:#60a5fa;"></div></div>
+          </div>
+          <div class="alloc-item">
+            <div class="alloc-label"><span class="alloc-name">MSFT</span><span class="alloc-pct">26.9%</span></div>
+            <div class="alloc-track"><div class="alloc-fill" style="width:26.9%;background:#a78bfa;"></div></div>
+          </div>
+          <div class="alloc-item">
+            <div class="alloc-label"><span class="alloc-name">AAPL</span><span class="alloc-pct">17.9%</span></div>
+            <div class="alloc-track"><div class="alloc-fill" style="width:17.9%;background:#22c55e;"></div></div>
+          </div>
+          <div class="alloc-item">
+            <div class="alloc-label"><span class="alloc-name">TSLA</span><span class="alloc-pct">13.1%</span></div>
+            <div class="alloc-track"><div class="alloc-fill" style="width:13.1%;background:#f59e0b;"></div></div>
+          </div>
+          <div class="alloc-item">
+            <div class="alloc-label"><span class="alloc-name">AMZN</span><span class="alloc-pct">10.4%</span></div>
+            <div class="alloc-track"><div class="alloc-fill" style="width:10.4%;background:#f472b6;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECENT TRANSACTIONS -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">receipt_long</span>Transactions</div>
+          <a class="card-action" href="#">All <span class="material-symbols-outlined">chevron_right</span></a>
+        </div>
+        <div style="padding:8px 20px 4px;">
+          <div class="tx-item">
+            <div class="tx-icon buy"><span class="material-symbols-outlined">arrow_downward</span></div>
+            <div class="tx-info"><div class="tx-ticker">NVDA</div><div class="tx-detail">Buy 5 shares &middot; Mar 28</div></div>
+            <div class="tx-amount buy">+$5,650</div>
+          </div>
+          <div class="tx-item">
+            <div class="tx-icon buy"><span class="material-symbols-outlined">arrow_downward</span></div>
+            <div class="tx-info"><div class="tx-ticker">MSFT</div><div class="tx-detail">Buy 10 shares &middot; Mar 20</div></div>
+            <div class="tx-amount buy">+$6,200</div>
+          </div>
+          <div class="tx-item">
+            <div class="tx-icon sell"><span class="material-symbols-outlined">arrow_upward</span></div>
+            <div class="tx-info"><div class="tx-ticker">TSLA</div><div class="tx-detail">Sell 5 shares &middot; Mar 10</div></div>
+            <div class="tx-amount sell">-$3,750</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+</body>
+</html>

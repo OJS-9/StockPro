@@ -129,6 +129,16 @@ class DatabaseManager:
                         END IF;
                     END $$
                 """)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'preferences'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN preferences JSONB DEFAULT '{}';
+                        END IF;
+                    END $$
+                """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
                 )
@@ -1005,7 +1015,8 @@ class DatabaseManager:
                 cur.execute(
                     """
                     SELECT user_id, username, email, password_hash, google_id, tier,
-                           COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at
+                           COALESCE(is_pro, FALSE) AS is_pro, telegram_chat_id, created_at,
+                           COALESCE(preferences, '{}') AS preferences
                     FROM users WHERE user_id = %s
                 """,
                     (user_id,),
@@ -1073,6 +1084,55 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to update user: {e}")
+        finally:
+            self._release(conn)
+
+    def get_user_preferences(self, user_id: str) -> Dict[str, Any]:
+        """Return user preferences dict (empty dict if not set)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COALESCE(preferences, '{}') FROM users WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {}
+                val = row[0]
+                if isinstance(val, str):
+                    return json.loads(val)
+                return val or {}
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to get preferences: {e}")
+        finally:
+            self._release(conn)
+
+    def update_user_preferences(self, user_id: str, patch: Dict[str, Any], display_name: Optional[str] = None) -> None:
+        """Merge patch into preferences JSONB. Optionally update username (display name)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET preferences = COALESCE(preferences, '{}') || %s::jsonb
+                    WHERE user_id = %s
+                    """,
+                    (json.dumps(patch), user_id),
+                )
+                if display_name is not None:
+                    cur.execute(
+                        "UPDATE users SET username = %s WHERE user_id = %s",
+                        (display_name[:80], user_id),
+                    )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update preferences: {e}")
         finally:
             self._release(conn)
 

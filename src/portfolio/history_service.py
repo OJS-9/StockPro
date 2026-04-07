@@ -8,7 +8,7 @@ import json
 import os
 import requests
 from decimal import Decimal
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional
 
 from data_providers.crypto_provider import CryptoDataProvider
@@ -239,6 +239,101 @@ class PortfolioHistoryService:
             return prices
         except Exception:
             return {}
+
+    def get_values_for_range(
+        self, portfolio_id: str, range_str: str = "1M"
+    ) -> List[dict]:
+        """
+        Compute daily portfolio values for a date range.
+
+        Args:
+            portfolio_id: Portfolio ID
+            range_str: "1W" | "1M" | "3M" | "YTD" | "1Y" | "all"
+
+        Returns:
+            List of {"date": "YYYY-MM-DD", "value": float, "cost_basis": float}
+        """
+        import yfinance as yf
+
+        today = date.today()
+        if range_str == "1W":
+            start = today - timedelta(days=7)
+        elif range_str == "1M":
+            start = today - timedelta(days=30)
+        elif range_str == "3M":
+            start = today - timedelta(days=90)
+        elif range_str == "YTD":
+            start = date(today.year, 1, 1)
+        elif range_str == "1Y":
+            start = today - timedelta(days=365)
+        else:  # all — fall back to monthly (existing method)
+            monthly = self.get_monthly_values(portfolio_id, months=24)
+            return [{"date": m["date"], "value": m["value"], "cost_basis": None} for m in monthly]
+
+        transactions = self.db.get_all_portfolio_transactions(portfolio_id)
+        if not transactions:
+            return []
+
+        # Group by symbol
+        by_symbol: Dict[str, list] = {}
+        asset_type_map: Dict[str, str] = {}
+        for txn in transactions:
+            sym = txn["symbol"]
+            by_symbol.setdefault(sym, []).append(txn)
+            asset_type_map[sym] = txn["asset_type"]
+
+        # Fetch daily price history per symbol
+        daily_prices: Dict[str, Dict[str, float]] = {}
+        for sym, asset_type in asset_type_map.items():
+            if asset_type == "stock":
+                try:
+                    hist = yf.Ticker(sym).history(start=start.isoformat(), end=today.isoformat())
+                    if not hist.empty:
+                        daily_prices[sym] = {
+                            str(idx.date()): float(row["Close"])
+                            for idx, row in hist.iterrows()
+                        }
+                except Exception as e:
+                    logger.warning("yfinance daily error for %s: %s", sym, e)
+            else:
+                daily_prices[sym] = self._get_crypto_prices(sym)
+
+        # Build list of trading days in range
+        days = []
+        cursor = start
+        while cursor <= today:
+            days.append(cursor)
+            cursor += timedelta(days=1)
+
+        # Compute running cost basis at each day
+        result = []
+        for day in days:
+            total_value = 0.0
+            total_cost_basis = 0.0
+            for sym, txns in by_symbol.items():
+                qty = self._qty_at_date(txns, day)
+                if qty <= 0:
+                    continue
+                # Cost basis at this date: sum of buy costs up to day
+                cb = sum(
+                    float(t["quantity"]) * float(t["price_per_unit"])
+                    for t in txns
+                    if (t["transaction_date"].date() if isinstance(t["transaction_date"], datetime) else t["transaction_date"]) <= day
+                    and t["transaction_type"] == "buy"
+                )
+                total_cost_basis += cb
+                price = self._lookup_price(daily_prices.get(sym, {}), day, asset_type_map[sym])
+                if price is not None:
+                    total_value += qty * price
+
+            if total_value > 0 or total_cost_basis > 0:
+                result.append({
+                    "date": day.isoformat(),
+                    "value": round(total_value, 2),
+                    "cost_basis": round(total_cost_basis, 2),
+                })
+
+        return result
 
     def _lookup_price(
         self, prices: Dict[str, float], target: date, asset_type: str

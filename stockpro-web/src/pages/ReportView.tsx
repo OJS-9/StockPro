@@ -1,0 +1,200 @@
+import { useState, useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link, useParams } from 'react-router'
+import AppNav from '../components/AppNav'
+import Icon from '../components/Icon'
+import { useApiClient } from '../api/client'
+
+const tocIcons: Record<string, string> = {
+  'Executive Summary': 'summarize',
+  'Business Overview': 'trending_up',
+  'Financial Analysis': 'analytics',
+  'Valuation': 'account_balance',
+  'Competitive Landscape': 'groups',
+  'Growth Catalysts': 'psychology',
+  'Risk Factors': 'warning',
+  'Technical Analysis': 'show_chart',
+  'Conclusion': 'check_circle',
+}
+
+export default function ReportView() {
+  const { id } = useParams()
+  const api = useApiClient()
+  const [activeSection, setActiveSection] = useState(0)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // /report/<id>?format=json returns {report: {report_id, ticker, trade_type, report_text, created_at, ...}}
+  const { data } = useQuery({
+    queryKey: ['report', id],
+    queryFn: async () => {
+      const res = await api.get(`/api/report/${id}`)
+      if (!res.ok) throw new Error('Failed')
+      return res.json()
+    },
+  })
+
+  // /api/report/<id>/sections returns {sections: [string, ...]}
+  const { data: sectionsData } = useQuery({
+    queryKey: ['report-sections', id],
+    queryFn: async () => {
+      const res = await api.get(`/api/report/${id}/sections`)
+      if (!res.ok) return null
+      return res.json()
+    },
+  })
+
+  // API report shape: report_id, ticker, trade_type, report_text, created_at
+  const rawReport = data?.report || data
+  const report = rawReport ? {
+    id: rawReport.report_id || id,
+    symbol: rawReport.ticker || rawReport.symbol || '?',
+    title: rawReport.title || `${rawReport.ticker || ''} Research Report`,
+    type: rawReport.trade_type || rawReport.type || '',
+    created_at: rawReport.created_at ? new Date(rawReport.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+    word_count: rawReport.report_text ? Math.round(rawReport.report_text.split(/\s+/).length) : 0,
+    report_text: rawReport.report_text || '',
+  } : { id, symbol: '', title: '', type: '', created_at: '', word_count: 0, report_text: '' }
+
+  // Sections API returns string array — convert to section objects for display
+  // If no sections data yet, parse headings from report_text
+  const sectionNames: string[] = sectionsData?.sections || []
+  const sections = sectionNames.length > 0
+    ? sectionNames.map((title: string, i: number) => ({ id: `s${i}`, title }))
+    : report.report_text
+      ? (() => {
+          // Parse ## headings from markdown
+          const headings = report.report_text.match(/^#{1,3}\s+.+$/gm) || []
+          return headings.map((h: string, i: number) => ({
+            id: `s${i}`,
+            title: h.replace(/^#+\s+/, '').trim(),
+          }))
+        })()
+      : []
+
+  useEffect(() => {
+    if (!contentRef.current) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            const idx = parseInt(e.target.getAttribute('data-section') || '0')
+            setActiveSection(idx)
+          }
+        })
+      },
+      { threshold: 0.3 }
+    )
+    contentRef.current.querySelectorAll('[data-section]').forEach(el => observer.observe(el))
+    return () => observer.disconnect()
+  }, [sections])
+
+  return (
+    <div style={{ background: '#0c0a09', color: '#fafaf9' }}>
+      <AppNav />
+      <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+
+        {/* LEFT TOC */}
+        <aside style={{ width: 232, flexShrink: 0, borderRight: '1px solid #292524', padding: '28px 16px', overflowY: 'auto', background: '#0c0a09', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', paddingLeft: 12, marginBottom: 8 }}>Contents</div>
+            {sections.map((s: any, i: number) => {
+              const icon = tocIcons[s.title] || 'article'
+              return (
+                <a
+                  key={s.id}
+                  href={`#section-${i}`}
+                  onClick={() => setActiveSection(i)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, fontSize: 13, color: activeSection === i ? '#fafaf9' : '#a8a29e', background: activeSection === i ? 'rgba(214,211,209,0.08)' : 'transparent', textDecoration: 'none', marginBottom: 2, transition: 'all 0.15s' }}
+                >
+                  <Icon name={icon} size={15} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                </a>
+              )
+            })}
+          </div>
+          <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid #292524' }}>
+            {[
+              { icon: 'description', text: `${report.word_count || 5400} words` },
+              { icon: 'schedule', text: report.created_at },
+            ].map(({ icon, text }) => (
+              <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#a8a29e', padding: '6px 12px' }}>
+                <Icon name={icon} size={15} />
+                {text}
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* MAIN */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* STICKY HEADER */}
+          <div style={{ padding: '24px 48px', borderBottom: '1px solid #292524', position: 'sticky', top: 0, background: 'rgba(12,10,9,0.95)', backdropFilter: 'blur(12px)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 6, letterSpacing: '0.02em', fontFamily: 'Nunito, sans-serif' }}>
+                {report.symbol}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 999, background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}>
+                {report.type}
+              </span>
+              <span style={{ fontSize: 13, color: '#a8a29e' }}>{report.created_at}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { icon: 'share', label: 'Share' },
+                { icon: 'download', label: 'Export PDF' },
+              ].map(({ icon, label }) => (
+                <button key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>
+                  <Icon name={icon} size={15} /> {label}
+                </button>
+              ))}
+              <Link
+                to={`/chat/${id}`}
+                style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+              >
+                <Icon name="forum" size={16} /> Chat with AI
+              </Link>
+            </div>
+          </div>
+
+          {/* CONTENT */}
+          <div ref={contentRef} style={{ padding: '40px 48px 100px', maxWidth: 740 }}>
+            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
+              {report.title || `${report.symbol} Research Report`}
+            </h1>
+
+            {report.report_text ? (
+              <div
+                style={{ fontSize: 14, color: 'rgba(250,250,249,0.8)', lineHeight: 1.85 }}
+                dangerouslySetInnerHTML={{ __html: (() => {
+                  // Simple markdown-to-HTML conversion for display
+                  let html = report.report_text
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/^#{3}\s+(.+)$/gm, '<h3 style="font-family:Nunito,sans-serif;font-size:17px;font-weight:700;margin:28px 0 10px;color:#fafaf9">$1</h3>')
+                    .replace(/^#{2}\s+(.+)$/gm, '<h2 style="font-family:Nunito,sans-serif;font-size:20px;font-weight:700;margin:36px 0 14px;color:#fafaf9">$1</h2>')
+                    .replace(/^#{1}\s+(.+)$/gm, '<h1 style="font-family:Nunito,sans-serif;font-size:24px;font-weight:700;margin:40px 0 16px;color:#fafaf9">$1</h1>')
+                    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#fafaf9;font-weight:600">$1</strong>')
+                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                    .replace(/^[-*]\s+(.+)$/gm, '<li style="margin-bottom:6px">$1</li>')
+                    .replace(/(<li.*<\/li>\n?)+/g, '<ul style="padding-left:20px;margin:12px 0">$&</ul>')
+                    .replace(/\n\n/g, '</p><p style="margin:0 0 14px">')
+                    .replace(/^(?!<[h|ul|li])(.+)$/gm, (m: string) => m.startsWith('<') ? m : `<p style="margin:0 0 14px">${m}</p>`)
+                  return html
+                })() }}
+              />
+            ) : (
+              sections.map((s: any, i: number) => (
+                <div key={s.id} id={`section-${i}`} data-section={i} style={{ marginBottom: 40 }}>
+                  <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '44px 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#a8a29e', minWidth: 24 }}>{String(i + 1).padStart(2, '0')}</span>
+                    {s.title}
+                  </h2>
+                  {i < sections.length - 1 && <hr style={{ border: 'none', borderTop: '1px solid #292524', margin: '36px 0' }} />}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

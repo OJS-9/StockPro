@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — NVDA</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.7); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 1240px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  /* TICKER HEADER */
+  .ticker-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 32px; }
+  .ticker-left { }
+  .ticker-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .ticker-sym { font-family: 'Nunito', sans-serif; font-size: 36px; font-weight: 700; letter-spacing: -0.03em; }
+  .ticker-name { font-size: 15px; color: var(--muted); }
+  .sector-badge { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+  .price-row { display: flex; align-items: flex-end; gap: 14px; }
+  .ticker-price { font-family: 'Nunito', sans-serif; font-size: 44px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .price-change { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; }
+  .chg-abs { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chg-pct { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .chg-abs.up, .chg-pct.up { color: var(--gain); }
+  .price-time { font-size: 12px; color: var(--muted); padding-bottom: 6px; }
+
+  .ticker-actions { display: flex; gap: 8px; padding-top: 8px; }
+  .btn-ghost { background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-ghost .material-symbols-outlined { font-size: 16px; }
+  .btn-research { background: var(--accent); color: var(--bg); font-size: 14px; font-weight: 700; padding: 10px 22px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: opacity 0.15s; font-family: 'Nunito', sans-serif; }
+  .btn-research:hover { opacity: 0.88; }
+  .btn-research .material-symbols-outlined { font-size: 18px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+  /* PRICE CHART */
+  .chart-section { margin-bottom: 28px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 20px 12px; }
+  .chart-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .range-toggle { display: flex; gap: 2px; }
+  .range-btn { font-size: 12px; font-weight: 500; padding: 5px 10px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .range-btn.active { background: rgba(214,211,209,0.1); color: var(--text); }
+  .chart-svg { width: 100%; height: 180px; }
+
+  /* MAIN LAYOUT */
+  .main-layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+  .left { display: flex; flex-direction: column; gap: 20px; }
+  .right { display: flex; flex-direction: column; gap: 16px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .card-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card-title .material-symbols-outlined { font-size: 16px; color: var(--muted); }
+  .card-action { font-size: 12px; color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
+  .card-action:hover { color: var(--text); }
+  .card-action .material-symbols-outlined { font-size: 14px; }
+
+  /* KEY STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); }
+  .stat-item { background: var(--surface); padding: 14px 18px; }
+  .stat-label { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+  .stat-val { font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat-val.up { color: var(--gain); }
+
+  /* NEWS */
+  .news-item { padding: 13px 20px; border-bottom: 1px solid rgba(41,37,36,0.5); cursor: pointer; display: flex; gap: 12px; }
+  .news-item:last-child { border-bottom: none; }
+  .news-sentiment-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .news-sentiment-dot.bull { background: var(--gain); }
+  .news-sentiment-dot.bear { background: var(--loss); }
+  .news-sentiment-dot.neutral { background: var(--muted); }
+  .news-body { flex: 1; }
+  .news-source { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .news-headline { font-size: 13.5px; line-height: 1.45; color: var(--text-2); transition: color 0.15s; }
+  .news-item:hover .news-headline { color: var(--text); }
+  .news-age { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* REPORTS MINI */
+  .report-mini { display: flex; align-items: flex-start; gap: 12px; padding: 13px 20px; border-bottom: 1px solid rgba(41,37,36,0.5); cursor: pointer; transition: background 0.15s; }
+  .report-mini:last-child { border-bottom: none; }
+  .report-mini:hover { background: rgba(255,255,255,0.02); }
+  .report-mini-icon { width: 34px; height: 34px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .report-mini-icon .material-symbols-outlined { font-size: 17px; color: var(--muted); }
+  .report-mini-info { flex: 1; }
+  .report-mini-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .report-mini-meta { font-size: 11.5px; color: var(--muted); }
+  .verdict { font-size: 11.5px; font-weight: 500; }
+  .verdict.up { color: var(--gain); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <!-- TICKER HEADER -->
+  <div class="ticker-header">
+    <div class="ticker-left">
+      <div class="ticker-meta">
+        <span class="ticker-sym">NVDA</span>
+        <div>
+          <div class="ticker-name">NVIDIA Corporation</div>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <span class="sector-badge">Semiconductors</span>
+            <span class="sector-badge">NASDAQ</span>
+          </div>
+        </div>
+      </div>
+      <div class="price-row">
+        <div class="ticker-price">$1,130.00</div>
+        <div class="price-change">
+          <span class="chg-abs up">+$25.80</span>
+          <span class="chg-pct up">(+2.34%)</span>
+        </div>
+        <div class="price-time">As of close Apr 5</div>
+      </div>
+    </div>
+    <div class="ticker-actions">
+      <button class="btn-ghost"><span class="material-symbols-outlined">visibility</span>Watch</button>
+      <button class="btn-ghost"><span class="material-symbols-outlined">add_alert</span>Set Alert</button>
+      <button class="btn-research"><span class="material-symbols-outlined">auto_awesome</span>Research NVDA</button>
+    </div>
+  </div>
+
+  <!-- PRICE CHART -->
+  <div class="chart-section">
+    <div class="chart-card">
+      <div class="chart-controls">
+        <div style="font-size:13px;color:var(--muted);">Price (USD)</div>
+        <div class="range-toggle">
+          <button class="range-btn">1D</button>
+          <button class="range-btn">1W</button>
+          <button class="range-btn">1M</button>
+          <button class="range-btn active">3M</button>
+          <button class="range-btn">1Y</button>
+          <button class="range-btn">All</button>
+        </div>
+      </div>
+      <svg class="chart-svg" viewBox="0 0 900 180" preserveAspectRatio="none" fill="none">
+        <defs>
+          <linearGradient id="nvda-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#22c55e" stop-opacity="0.14"/>
+            <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <polygon points="0,150 80,138 160,145 240,122 320,108 400,114 480,90 560,72 640,80 720,58 800,44 900,36 900,180 0,180" fill="url(#nvda-grad)"/>
+        <polyline points="0,150 80,138 160,145 240,122 320,108 400,114 480,90 560,72 640,80 720,58 800,44 900,36" stroke="#22c55e" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <div class="left">
+
+      <!-- KEY STATS -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">bar_chart</span>Key Statistics</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-item"><div class="stat-label">Market Cap</div><div class="stat-val">$2.78T</div></div>
+          <div class="stat-item"><div class="stat-label">P/E Ratio</div><div class="stat-val">42.3x</div></div>
+          <div class="stat-item"><div class="stat-label">EPS (TTM)</div><div class="stat-val">$26.70</div></div>
+          <div class="stat-item"><div class="stat-label">Revenue (TTM)</div><div class="stat-val">$96.3B</div></div>
+          <div class="stat-item"><div class="stat-label">Gross Margin</div><div class="stat-val up">75.9%</div></div>
+          <div class="stat-item"><div class="stat-label">52W Range</div><div class="stat-val" style="font-size:13px;">$612 – $1,240</div></div>
+          <div class="stat-item"><div class="stat-label">Avg Volume</div><div class="stat-val">48.2M</div></div>
+          <div class="stat-item"><div class="stat-label">Beta</div><div class="stat-val">1.68</div></div>
+          <div class="stat-item"><div class="stat-label">Dividend</div><div class="stat-val" style="color:var(--muted)">$0.04 (0.01%)</div></div>
+        </div>
+      </div>
+
+      <!-- NEWS -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">newspaper</span>Latest News</div>
+          <span class="card-action"><span class="material-symbols-outlined" style="font-size:14px;">refresh</span></span>
+        </div>
+        <div class="news-item">
+          <div class="news-sentiment-dot bull"></div>
+          <div class="news-body">
+            <div class="news-source">Bloomberg</div>
+            <div class="news-headline">NVIDIA wins $2.4B in government AI contracts, expanding datacenter pipeline</div>
+            <div class="news-age">2h ago &nbsp;&middot;&nbsp; <span style="color:var(--gain)">Bullish signal</span></div>
+          </div>
+        </div>
+        <div class="news-item">
+          <div class="news-sentiment-dot bull"></div>
+          <div class="news-body">
+            <div class="news-source">Reuters</div>
+            <div class="news-headline">Blackwell GPU demand surpasses H100 ramp pace, TSMC confirms allocation priority</div>
+            <div class="news-age">5h ago &nbsp;&middot;&nbsp; <span style="color:var(--gain)">Bullish signal</span></div>
+          </div>
+        </div>
+        <div class="news-item">
+          <div class="news-sentiment-dot neutral"></div>
+          <div class="news-body">
+            <div class="news-source">WSJ</div>
+            <div class="news-headline">US considers additional export controls on AI chips, NVIDIA shares fall premarket</div>
+            <div class="news-age">1d ago &nbsp;&middot;&nbsp; <span style="color:var(--muted)">Mixed impact</span></div>
+          </div>
+        </div>
+        <div class="news-item">
+          <div class="news-sentiment-dot bear"></div>
+          <div class="news-body">
+            <div class="news-source">FT</div>
+            <div class="news-headline">AMD MI300X finds traction at Meta for inference workloads, analysts note</div>
+            <div class="news-age">2d ago &nbsp;&middot;&nbsp; <span style="color:var(--loss)">Bearish signal</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="right">
+
+      <!-- RESEARCH REPORTS -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">description</span>AI Reports</div>
+          <a class="card-action" href="#">New <span class="material-symbols-outlined">add</span></a>
+        </div>
+        <div class="report-mini">
+          <div class="report-mini-icon"><span class="material-symbols-outlined">query_stats</span></div>
+          <div class="report-mini-info">
+            <div class="report-mini-title">Full Investment Analysis</div>
+            <div class="report-mini-meta">Long thesis &middot; Apr 6</div>
+            <div class="verdict up">Strong Buy &middot; $1,450 target</div>
+          </div>
+        </div>
+        <div class="report-mini">
+          <div class="report-mini-icon"><span class="material-symbols-outlined">query_stats</span></div>
+          <div class="report-mini-info">
+            <div class="report-mini-title">Earnings Preview Q1 FY27</div>
+            <div class="report-mini-meta">Neutral &middot; Mar 28</div>
+            <div class="verdict up">Beat likely on datacenter</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- POSITION INFO (if holding) -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="material-symbols-outlined">pie_chart</span>Your Position</div>
+          <a class="card-action" href="#">View <span class="material-symbols-outlined">chevron_right</span></a>
+        </div>
+        <div style="padding:16px 20px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+            <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Shares held</div><div style="font-family:'Nunito',sans-serif;font-size:20px;font-weight:600;">40</div></div>
+            <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Mkt Value</div><div style="font-family:'Nunito',sans-serif;font-size:20px;font-weight:600;">$45,200</div></div>
+            <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Avg Cost</div><div style="font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;">$420.50</div></div>
+            <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Total Return</div><div style="font-size:15px;font-weight:500;color:var(--gain);font-variant-numeric:tabular-nums;">+$28,380 (+169%)</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+</body>
+</html>

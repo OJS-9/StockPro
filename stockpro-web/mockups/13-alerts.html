@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Price Alerts</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b; --warn-bg: rgba(245,158,11,0.08); --warn-border: rgba(245,158,11,0.2);
+    --info: #60a5fa; --info-bg: rgba(96,165,250,0.08); --info-border: rgba(96,165,250,0.2);
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 48px; height: 60px;
+    background: rgba(12,10,9,0.95); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a {
+    display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none;
+    font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: color 0.15s, background 0.15s;
+  }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn {
+    width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: color 0.15s, border-color 0.15s;
+  }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif;
+  }
+
+  .page { max-width: 1000px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  /* PAGE HEADER */
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 32px; }
+  .page-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .page-subtitle { font-size: 13px; color: var(--muted); }
+  .header-actions { display: flex; gap: 8px; }
+  .btn-ghost {
+    background: transparent; color: var(--muted); font-size: 13px; font-weight: 500;
+    padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer;
+    display: flex; align-items: center; gap: 6px; transition: all 0.15s;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-ghost .material-symbols-outlined { font-size: 16px; }
+  .btn-primary {
+    background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary .material-symbols-outlined { font-size: 16px; }
+
+  /* STATS ROW */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .stat-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+  .stat-val { font-family: 'Nunito', sans-serif; font-size: 28px; font-weight: 600; line-height: 1; }
+  .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* SECTION LABEL */
+  .section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 0 0 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ALERT CARD */
+  .alert-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; margin-bottom: 10px; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .alert-card:hover { border-color: rgba(214,211,209,0.2); }
+  .alert-card.triggered { border-color: var(--gain-border); background: linear-gradient(135deg, #1c1917, #1a211d); }
+  .alert-card.warn { border-color: var(--warn-border); background: linear-gradient(135deg, #1c1917, #211e18); }
+
+  .alert-row {
+    display: flex; align-items: center; gap: 16px; padding: 16px 20px;
+  }
+
+  /* Status indicator */
+  .alert-status { flex-shrink: 0; display: flex; align-items: center; gap: 8px; min-width: 80px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.active { background: var(--gain); box-shadow: 0 0 8px var(--gain); animation: pulse 2s infinite; }
+  .status-dot.near { background: var(--warn); box-shadow: 0 0 8px var(--warn); animation: pulse 2s infinite; }
+  .status-dot.paused { background: var(--muted); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .status-label { font-size: 11px; font-weight: 500; }
+  .status-label.active { color: var(--gain); }
+  .status-label.near { color: var(--warn); }
+  .status-label.paused { color: var(--muted); }
+
+  /* Ticker badge */
+  .alert-ticker {
+    font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 700;
+    padding: 6px 12px; border-radius: 8px; background: var(--surface-2);
+    border: 1px solid var(--border); letter-spacing: 0.02em; min-width: 64px; text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* Condition */
+  .alert-condition { flex: 1; }
+  .alert-cond-text { font-size: 14px; font-weight: 500; }
+  .alert-cond-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* Progress bar */
+  .alert-progress { min-width: 180px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+  .progress-track { height: 4px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+  .progress-fill.up { background: var(--gain); }
+  .progress-fill.near { background: var(--warn); }
+  .progress-fill.down { background: var(--loss); }
+
+  /* Notification method */
+  .alert-notify { display: flex; gap: 6px; flex-shrink: 0; }
+  .notify-badge {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 3px 8px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .notify-badge .material-symbols-outlined { font-size: 13px; }
+
+  /* Actions */
+  .alert-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .action-btn {
+    width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .action-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); background: rgba(255,255,255,0.04); }
+  .action-btn .material-symbols-outlined { font-size: 15px; }
+  .action-btn.danger:hover { color: var(--loss); border-color: var(--loss-border); }
+
+  /* TRIGGERED ALERT (fired) */
+  .triggered-banner {
+    background: var(--gain-bg); border-top: 1px solid var(--gain-border);
+    padding: 10px 20px; display: flex; align-items: center; gap: 10px;
+    font-size: 12.5px; color: var(--gain);
+  }
+  .triggered-banner .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+
+  /* CREATE ALERT FORM */
+  .create-card {
+    background: var(--surface); border: 2px dashed var(--border); border-radius: 14px;
+    padding: 28px; cursor: pointer; transition: border-color 0.2s;
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;
+  }
+  .create-card:hover { border-color: rgba(214,211,209,0.35); }
+  .create-card .material-symbols-outlined { font-size: 32px; color: var(--muted); }
+  .create-card h3 { font-size: 14px; font-weight: 600; }
+  .create-card p { font-size: 12.5px; color: var(--muted); max-width: 320px; }
+
+  /* TRIGGERED HISTORY */
+  .history-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid rgba(41,37,36,0.5);
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-icon {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .history-icon.gain { background: var(--gain-bg); }
+  .history-icon.gain .material-symbols-outlined { color: var(--gain); font-size: 18px; }
+  .history-icon.loss { background: var(--loss-bg); }
+  .history-icon.loss .material-symbols-outlined { color: var(--loss); font-size: 18px; }
+  .history-info { flex: 1; }
+  .history-desc { font-size: 13px; font-weight: 500; }
+  .history-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .history-price { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .history-price.gain { color: var(--gain); }
+  .history-price.loss { color: var(--loss); }
+
+  /* LAYOUT */
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: start; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Price Alerts</div>
+      <div class="page-subtitle">Monitor price levels with instant Telegram notifications</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost">
+        <span class="material-symbols-outlined">settings</span>
+        Notification settings
+      </button>
+      <button class="btn-primary">
+        <span class="material-symbols-outlined">add_alert</span>
+        New Alert
+      </button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Active Alerts</div>
+      <div class="stat-val" style="color:var(--gain)">3</div>
+      <div class="stat-sub">Monitoring prices</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Near Trigger</div>
+      <div class="stat-val" style="color:var(--warn)">1</div>
+      <div class="stat-sub">Within 10% of target</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Paused</div>
+      <div class="stat-val" style="color:var(--muted)">2</div>
+      <div class="stat-sub">Temporarily off</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Triggered (30d)</div>
+      <div class="stat-val">4</div>
+      <div class="stat-sub">Last: NVDA 2d ago</div>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- ALERTS LIST -->
+    <div>
+      <div class="section-label">Active</div>
+
+      <!-- Alert: NEAR TRIGGER -->
+      <div class="alert-card warn">
+        <div class="alert-row">
+          <div class="alert-status">
+            <div class="status-dot near"></div>
+            <span class="status-label near">Near</span>
+          </div>
+          <div class="alert-ticker" style="color:var(--warn)">NVDA</div>
+          <div class="alert-condition">
+            <div class="alert-cond-text">Price rises above <strong>$1,200</strong></div>
+            <div class="alert-cond-sub">Current: $1,130 &nbsp;&middot;&nbsp; 5.8% from target</div>
+          </div>
+          <div class="alert-progress">
+            <div class="progress-label">
+              <span>$1,130</span>
+              <span>$1,200</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill near" style="width: 94%"></div>
+            </div>
+          </div>
+          <div class="alert-notify">
+            <div class="notify-badge">
+              <span class="material-symbols-outlined">send</span>
+              Telegram
+            </div>
+          </div>
+          <div class="alert-actions">
+            <button class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></button>
+            <button class="action-btn" title="Pause"><span class="material-symbols-outlined">pause</span></button>
+            <button class="action-btn danger" title="Delete"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert: Active -->
+      <div class="alert-card">
+        <div class="alert-row">
+          <div class="alert-status">
+            <div class="status-dot active"></div>
+            <span class="status-label active">Active</span>
+          </div>
+          <div class="alert-ticker">TSLA</div>
+          <div class="alert-condition">
+            <div class="alert-cond-text">Price drops below <strong>$650</strong></div>
+            <div class="alert-cond-sub">Current: $750 &nbsp;&middot;&nbsp; 13.3% from target</div>
+          </div>
+          <div class="alert-progress">
+            <div class="progress-label">
+              <span>$650</span>
+              <span>$750</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill down" style="width: 13%"></div>
+            </div>
+          </div>
+          <div class="alert-notify">
+            <div class="notify-badge">
+              <span class="material-symbols-outlined">send</span>
+              Telegram
+            </div>
+          </div>
+          <div class="alert-actions">
+            <button class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></button>
+            <button class="action-btn" title="Pause"><span class="material-symbols-outlined">pause</span></button>
+            <button class="action-btn danger" title="Delete"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert: Active (Gain-flavored) -->
+      <div class="alert-card">
+        <div class="alert-row">
+          <div class="alert-status">
+            <div class="status-dot active"></div>
+            <span class="status-label active">Active</span>
+          </div>
+          <div class="alert-ticker">AAPL</div>
+          <div class="alert-condition">
+            <div class="alert-cond-text">Price rises above <strong>$230</strong></div>
+            <div class="alert-cond-sub">Current: $200 &nbsp;&middot;&nbsp; 15.0% from target</div>
+          </div>
+          <div class="alert-progress">
+            <div class="progress-label">
+              <span>$200</span>
+              <span>$230</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill up" style="width: 87%"></div>
+            </div>
+          </div>
+          <div class="alert-notify">
+            <div class="notify-badge">
+              <span class="material-symbols-outlined">send</span>
+              Telegram
+            </div>
+          </div>
+          <div class="alert-actions">
+            <button class="action-btn"><span class="material-symbols-outlined">edit</span></button>
+            <button class="action-btn"><span class="material-symbols-outlined">pause</span></button>
+            <button class="action-btn danger"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top: 24px;">Paused</div>
+
+      <!-- Alert: Paused -->
+      <div class="alert-card" style="opacity: 0.6;">
+        <div class="alert-row">
+          <div class="alert-status">
+            <div class="status-dot paused"></div>
+            <span class="status-label paused">Paused</span>
+          </div>
+          <div class="alert-ticker" style="color:var(--muted)">BTC</div>
+          <div class="alert-condition">
+            <div class="alert-cond-text">Price rises above <strong>$75,000</strong></div>
+            <div class="alert-cond-sub">Current: $67,240 &nbsp;&middot;&nbsp; Paused by user</div>
+          </div>
+          <div class="alert-progress">
+            <div class="progress-label">
+              <span>$67,240</span>
+              <span>$75,000</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill up" style="width: 90%; background: var(--muted);"></div>
+            </div>
+          </div>
+          <div class="alert-notify">
+            <div class="notify-badge">
+              <span class="material-symbols-outlined">send</span>
+              Telegram
+            </div>
+          </div>
+          <div class="alert-actions">
+            <button class="action-btn"><span class="material-symbols-outlined">play_arrow</span></button>
+            <button class="action-btn danger"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert-card" style="opacity: 0.6;">
+        <div class="alert-row">
+          <div class="alert-status">
+            <div class="status-dot paused"></div>
+            <span class="status-label paused">Paused</span>
+          </div>
+          <div class="alert-ticker" style="color:var(--muted)">MSFT</div>
+          <div class="alert-condition">
+            <div class="alert-cond-text">Price drops below <strong>$380</strong></div>
+            <div class="alert-cond-sub">Current: $640 &nbsp;&middot;&nbsp; Paused by user</div>
+          </div>
+          <div class="alert-progress">
+            <div class="progress-label">
+              <span>$380</span>
+              <span>$640</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill down" style="width: 0%; background: var(--muted);"></div>
+            </div>
+          </div>
+          <div class="alert-notify">
+            <div class="notify-badge">
+              <span class="material-symbols-outlined">send</span>
+              Telegram
+            </div>
+          </div>
+          <div class="alert-actions">
+            <button class="action-btn"><span class="material-symbols-outlined">play_arrow</span></button>
+            <button class="action-btn danger"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CREATE NEW -->
+      <div style="margin-top: 20px;">
+        <div class="create-card">
+          <span class="material-symbols-outlined">add_alert</span>
+          <h3>Create a new alert</h3>
+          <p>Set price levels for any stock or crypto. Get notified instantly via Telegram when triggered.</p>
+          <button class="btn-primary" style="margin-top: 4px;">
+            <span class="material-symbols-outlined">add</span>
+            New Alert
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: HISTORY -->
+    <div>
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding: 14px 18px; border-bottom: 1px solid var(--border);">
+          <div style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;">
+            <span class="material-symbols-outlined" style="font-size:16px; color:var(--muted);">history</span>
+            Triggered History
+          </div>
+          <span style="font-size:12px; color:var(--muted);">Last 30 days</span>
+        </div>
+        <div style="padding: 8px 18px 4px;">
+          <div class="history-item">
+            <div class="history-icon gain">
+              <span class="material-symbols-outlined">arrow_upward</span>
+            </div>
+            <div class="history-info">
+              <div class="history-desc">NVDA above $1,100</div>
+              <div class="history-time">Apr 4 at 10:32 AM</div>
+            </div>
+            <div class="history-price gain">$1,108</div>
+          </div>
+          <div class="history-item">
+            <div class="history-icon loss">
+              <span class="material-symbols-outlined">arrow_downward</span>
+            </div>
+            <div class="history-info">
+              <div class="history-desc">TSLA below $800</div>
+              <div class="history-time">Mar 28 at 2:15 PM</div>
+            </div>
+            <div class="history-price loss">$793</div>
+          </div>
+          <div class="history-item">
+            <div class="history-icon gain">
+              <span class="material-symbols-outlined">arrow_upward</span>
+            </div>
+            <div class="history-info">
+              <div class="history-desc">AAPL above $200</div>
+              <div class="history-time">Mar 22 at 9:45 AM</div>
+            </div>
+            <div class="history-price gain">$204</div>
+          </div>
+          <div class="history-item">
+            <div class="history-icon gain">
+              <span class="material-symbols-outlined">arrow_upward</span>
+            </div>
+            <div class="history-info">
+              <div class="history-desc">BTC above $70,000</div>
+              <div class="history-time">Mar 15 at 11:50 AM</div>
+            </div>
+            <div class="history-price gain">$70,420</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TELEGRAM CONNECT -->
+      <div style="background: var(--surface); border: 1px solid var(--gain-border); border-radius: 14px; padding: 18px; margin-top: 16px;">
+        <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 12px;">
+          <span class="material-symbols-outlined" style="font-size:20px; color:var(--gain); font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;">send</span>
+          <div>
+            <div style="font-size:13px; font-weight:600;">Telegram Connected</div>
+            <div style="font-size:11px; color:var(--muted);">@orsalinas_bot</div>
+          </div>
+          <div style="margin-left:auto; font-size:11px; font-weight:500; padding: 3px 8px; border-radius:999px; background:var(--gain-bg); color:var(--gain); border: 1px solid var(--gain-border);">Active</div>
+        </div>
+        <p style="font-size:12px; color:var(--muted); line-height:1.5;">All triggered alerts will be delivered to your Telegram chat in real time.</p>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+</body>
+</html>

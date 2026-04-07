@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Add Transaction</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 640px; margin: 0 auto; padding: 48px 48px 80px; }
+
+  .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+  .breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb .material-symbols-outlined { font-size: 14px; }
+
+  .page-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+
+  /* TRANSACTION TYPE TOGGLE */
+  .type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 28px; }
+  .type-btn {
+    padding: 14px; border-radius: 12px; border: 2px solid var(--border);
+    background: var(--surface); cursor: pointer; text-align: center; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .type-btn:hover { border-color: rgba(214,211,209,0.25); }
+  .type-btn.buy.selected { border-color: var(--gain-border); background: var(--gain-bg); }
+  .type-btn.sell.selected { border-color: var(--loss-border); background: var(--loss-bg); }
+  .type-btn .material-symbols-outlined { font-size: 20px; }
+  .type-btn.buy .material-symbols-outlined { color: var(--gain); }
+  .type-btn.sell .material-symbols-outlined { color: var(--loss); }
+  .type-label { font-size: 15px; font-weight: 600; }
+  .type-btn.buy.selected .type-label { color: var(--gain); }
+  .type-btn.sell.selected .type-label { color: var(--loss); }
+
+  /* FORM */
+  .form-group { margin-bottom: 20px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 7px; letter-spacing: 0.03em; }
+  .form-group label span { color: var(--loss); margin-left: 2px; }
+  .input-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 46px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-wrap:focus-within { border-color: rgba(214,211,209,0.35); box-shadow: 0 0 0 3px rgba(214,211,209,0.06); }
+  .input-wrap .material-symbols-outlined { font-size: 17px; color: var(--muted); flex-shrink: 0; }
+  .input-wrap input, .input-wrap select {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: 'Inter', sans-serif; font-size: 14px; color: var(--text);
+  }
+  .input-wrap input::placeholder { color: var(--muted); }
+  .input-wrap select { -webkit-appearance: none; cursor: pointer; }
+  .input-wrap select option { background: var(--surface); }
+  .input-prefix { font-size: 15px; color: var(--muted); flex-shrink: 0; }
+
+  /* FORM ROW */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+  /* TICKER PREVIEW */
+  .ticker-preview {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-top: 8px;
+  }
+  .ticker-preview .sym { font-weight: 600; color: var(--accent); }
+  .ticker-preview .co { color: var(--muted); font-size: 13px; }
+  .ticker-preview .price { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* PREVIEW CARD */
+  .preview-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-top: 28px;
+  }
+  .preview-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 14px; }
+  .preview-rows { display: flex; flex-direction: column; gap: 10px; }
+  .preview-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+  .preview-row .preview-key { color: var(--muted); }
+  .preview-row .preview-val { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .preview-row.total { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }
+  .preview-row.total .preview-key { font-weight: 600; color: var(--text); }
+  .preview-row.total .preview-val { font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 700; color: var(--gain); }
+
+  /* NEW COST BASIS IMPACT */
+  .impact-note { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); line-height: 1.55; }
+  .impact-note .material-symbols-outlined { font-size: 15px; flex-shrink: 0; color: var(--muted); margin-top: 1px; }
+
+  /* ACTIONS */
+  .form-actions { display: flex; gap: 10px; margin-top: 28px; }
+  .btn-cancel { flex: 1; padding: 13px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-cancel:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-save { flex: 2; padding: 13px; border-radius: 10px; border: none; background: var(--accent); color: var(--bg); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.15s; }
+  .btn-save:hover { opacity: 0.88; }
+  .btn-save .material-symbols-outlined { font-size: 17px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="breadcrumb">
+    <a href="#">Portfolios</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <a href="#">Tech Growth</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <span>Add Transaction</span>
+  </div>
+
+  <div class="page-title">Add Transaction</div>
+  <div class="page-sub">Record a buy or sell to Tech Growth portfolio</div>
+
+  <!-- BUY / SELL TOGGLE -->
+  <div class="type-toggle">
+    <div class="type-btn buy selected">
+      <span class="material-symbols-outlined">arrow_downward</span>
+      <div class="type-label">Buy</div>
+    </div>
+    <div class="type-btn sell">
+      <span class="material-symbols-outlined">arrow_upward</span>
+      <div class="type-label">Sell</div>
+    </div>
+  </div>
+
+  <!-- TICKER -->
+  <div class="form-group">
+    <label for="ticker">Ticker symbol <span>*</span></label>
+    <div class="input-wrap">
+      <span class="material-symbols-outlined">search</span>
+      <input id="ticker" type="text" value="NVDA" placeholder="e.g. AAPL, BTC" style="font-family:'Nunito',sans-serif;font-size:17px;font-weight:700;text-transform:uppercase;" />
+    </div>
+    <div class="ticker-preview">
+      <span class="sym">NVDA</span>
+      <span class="co">NVIDIA Corporation</span>
+      <span class="price">$1,130.00</span>
+    </div>
+  </div>
+
+  <!-- SHARES + PRICE -->
+  <div class="form-row">
+    <div class="form-group" style="margin-bottom:0">
+      <label for="shares">Shares <span>*</span></label>
+      <div class="input-wrap">
+        <span class="material-symbols-outlined">tag</span>
+        <input id="shares" type="number" placeholder="0" value="5" min="0.001" step="any" />
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label for="price">Price per share <span>*</span></label>
+      <div class="input-wrap">
+        <span class="input-prefix">$</span>
+        <input id="price" type="number" placeholder="0.00" value="1130.00" min="0" step="any" />
+      </div>
+    </div>
+  </div>
+
+  <!-- DATE -->
+  <div class="form-group">
+    <label for="date">Transaction date <span>*</span></label>
+    <div class="input-wrap">
+      <span class="material-symbols-outlined">calendar_today</span>
+      <input id="date" type="date" value="2026-04-06" />
+    </div>
+  </div>
+
+  <!-- OPTIONAL NOTES -->
+  <div class="form-group">
+    <label for="notes">Notes (optional)</label>
+    <div class="input-wrap">
+      <span class="material-symbols-outlined">notes</span>
+      <input id="notes" type="text" placeholder="e.g. Q4 earnings buy" />
+    </div>
+  </div>
+
+  <!-- PREVIEW CARD -->
+  <div class="preview-card">
+    <div class="preview-title">Transaction Preview</div>
+    <div class="preview-rows">
+      <div class="preview-row"><span class="preview-key">Type</span><span class="preview-val" style="color:var(--gain)">Buy</span></div>
+      <div class="preview-row"><span class="preview-key">Symbol</span><span class="preview-val">NVDA</span></div>
+      <div class="preview-row"><span class="preview-key">Shares</span><span class="preview-val">5</span></div>
+      <div class="preview-row"><span class="preview-key">Price per share</span><span class="preview-val">$1,130.00</span></div>
+      <div class="preview-row"><span class="preview-key">Date</span><span class="preview-val">April 6, 2026</span></div>
+      <div class="preview-row total">
+        <span class="preview-key">Total cost</span>
+        <span class="preview-val">$5,650.00</span>
+      </div>
+    </div>
+    <div class="impact-note">
+      <span class="material-symbols-outlined">info</span>
+      After this transaction: 45 shares at a new avg cost of $482.00/share. New market value $50,850 (+116.4% return).
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn-cancel">Cancel</button>
+    <button class="btn-save">
+      <span class="material-symbols-outlined">check_circle</span>
+      Save Transaction
+    </button>
+  </div>
+
+</main>
+</body>
+</html>

@@ -434,7 +434,8 @@ class PortfolioService:
     # ==================== CSV Import ====================
 
     def import_csv(
-        self, portfolio_id: str, csv_content: str, filename: str
+        self, portfolio_id: str, csv_content: str, filename: str,
+        format_type: Optional[str] = None,
     ) -> ImportResult:
         """
         Import transactions from CSV.
@@ -443,12 +444,13 @@ class PortfolioService:
             portfolio_id: Portfolio ID
             csv_content: Raw CSV string content
             filename: Original filename for logging
+            format_type: Optional broker format override (robinhood|ibkr|fidelity|coinbase|generic)
 
         Returns:
             ImportResult with success/error counts
         """
         # Parse CSV
-        result = self.csv_importer.parse_csv(csv_content)
+        result = self.csv_importer.parse_csv(csv_content, format_type=format_type)
 
         # Add each transaction
         successful = 0

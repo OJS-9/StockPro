@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — NVDA Investment Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.75); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; }
+
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  /* LAYOUT */
+  .layout { display: flex; height: calc(100vh - 60px); overflow: hidden; }
+
+  /* LEFT SIDEBAR: TOC */
+  .sidebar {
+    width: 232px; flex-shrink: 0; border-right: 1px solid var(--border);
+    padding: 28px 16px; overflow-y: auto; background: var(--bg); display: flex; flex-direction: column; gap: 24px;
+  }
+  .sidebar-section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding-left: 12px; margin-bottom: 8px; }
+  .toc-link {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px; font-size: 13px; color: var(--muted); text-decoration: none;
+    transition: all 0.15s; margin-bottom: 2px;
+  }
+  .toc-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .toc-link.active { color: var(--text); background: rgba(214,211,209,0.08); }
+  .toc-link .material-symbols-outlined { font-size: 15px; flex-shrink: 0; }
+  .toc-num { font-size: 10px; color: var(--muted); min-width: 16px; }
+
+  .sidebar-meta { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+  .sidebar-meta-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding: 6px 12px; }
+  .sidebar-meta-item .material-symbols-outlined { font-size: 15px; }
+
+  /* MAIN CONTENT */
+  .main { flex: 1; overflow-y: auto; }
+
+  /* REPORT HEADER */
+  .report-header {
+    padding: 24px 48px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: rgba(12,10,9,0.95); backdrop-filter: blur(12px); z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .report-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ticker-badge {
+    background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 700;
+    padding: 5px 12px; border-radius: 6px; letter-spacing: 0.02em; font-family: 'Nunito', sans-serif;
+  }
+  .thesis-badge {
+    font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px;
+    background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border);
+  }
+  .report-date { font-size: 13px; color: var(--muted); }
+  .report-actions { display: flex; gap: 8px; }
+  .action-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-size: 12.5px; font-weight: 500; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  .action-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .action-btn .material-symbols-outlined { font-size: 15px; }
+  .btn-chat {
+    background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; transition: opacity 0.15s;
+  }
+  .btn-chat:hover { opacity: 0.88; }
+  .btn-chat .material-symbols-outlined { font-size: 16px; }
+
+  /* REPORT CONTENT */
+  .content { padding: 40px 48px 100px; max-width: 740px; }
+
+  /* EXECUTIVE SUMMARY BOX */
+  .exec-summary {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 28px; margin-bottom: 40px;
+  }
+  .exec-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .exec-title .material-symbols-outlined { font-size: 14px; }
+  .exec-verdict {
+    font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 700;
+    color: var(--gain); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .exec-verdict .material-symbols-outlined { font-size: 22px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .exec-text { font-size: 14px; color: var(--text-2); line-height: 1.75; }
+  .exec-keypoints { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .key-point { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-2); }
+  .key-point .material-symbols-outlined { font-size: 15px; color: var(--gain); flex-shrink: 0; margin-top: 2px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+
+  /* REPORT SECTIONS */
+  .content h2 { font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 44px 0 16px; display: flex; align-items: center; gap: 10px; }
+  .content h2 .section-num { font-size: 13px; font-weight: 500; color: var(--muted); min-width: 24px; }
+  .content h3 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
+  .content p { font-size: 14px; color: var(--text-2); line-height: 1.8; margin-bottom: 16px; }
+  .content hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+
+  /* DATA TABLE */
+  .data-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13.5px; }
+  .data-table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 12px 12px; border-bottom: 1px solid rgba(41,37,36,0.4); font-variant-numeric: tabular-nums; color: var(--text-2); }
+  .data-table td:first-child { font-weight: 500; color: var(--text); }
+
+  /* METRIC CARDS */
+  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+  .metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .metric-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+  .metric-val { font-family: 'Nunito', sans-serif; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .metric-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* RISK ITEM */
+  .risk-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-bottom: 1px solid rgba(41,37,36,0.4); }
+  .risk-item:last-child { border-bottom: none; }
+  .risk-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .risk-icon.hi { background: var(--loss-bg); }
+  .risk-icon.hi .material-symbols-outlined { color: var(--loss); font-size: 15px; }
+  .risk-icon.med { background: var(--warn-bg, rgba(245,158,11,0.08)); }
+  .risk-icon.med .material-symbols-outlined { color: var(--warn); font-size: 15px; }
+  .risk-title { font-size: 13.5px; font-weight: 600; margin-bottom: 4px; }
+  .risk-desc { font-size: 13px; color: var(--muted); line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- LEFT SIDEBAR TOC -->
+  <aside class="sidebar">
+    <div>
+      <div class="sidebar-section-label">Contents</div>
+      <a href="#" class="toc-link active">
+        <span class="material-symbols-outlined">summarize</span>
+        <span class="toc-num">—</span>Executive Summary
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">trending_up</span>
+        <span class="toc-num">1</span>Business Overview
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">analytics</span>
+        <span class="toc-num">2</span>Financial Analysis
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">account_balance</span>
+        <span class="toc-num">3</span>Valuation
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">groups</span>
+        <span class="toc-num">4</span>Competitive Moat
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">psychology</span>
+        <span class="toc-num">5</span>AI &amp; Growth Catalysts
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">warning</span>
+        <span class="toc-num">6</span>Risk Factors
+      </a>
+      <a href="#" class="toc-link">
+        <span class="material-symbols-outlined">price_check</span>
+        <span class="toc-num">7</span>Price Target
+      </a>
+    </div>
+    <div class="sidebar-meta">
+      <div class="sidebar-meta-item"><span class="material-symbols-outlined">schedule</span>Generated 2h ago</div>
+      <div class="sidebar-meta-item"><span class="material-symbols-outlined">token</span>~5,400 words</div>
+    </div>
+  </aside>
+
+  <!-- MAIN REPORT -->
+  <div class="main">
+
+    <div class="report-header">
+      <div class="report-meta">
+        <span class="ticker-badge">NVDA</span>
+        <span class="thesis-badge">Long thesis</span>
+        <span class="report-date">Generated April 6, 2026</span>
+      </div>
+      <div class="report-actions">
+        <button class="action-btn"><span class="material-symbols-outlined">download</span>Export PDF</button>
+        <button class="action-btn"><span class="material-symbols-outlined">share</span>Share</button>
+        <button class="btn-chat"><span class="material-symbols-outlined">forum</span>Chat with AI</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- EXECUTIVE SUMMARY -->
+      <div class="exec-summary">
+        <div class="exec-title"><span class="material-symbols-outlined">auto_awesome</span>Executive Summary</div>
+        <div class="exec-verdict"><span class="material-symbols-outlined">trending_up</span>Strong Buy &nbsp;&middot;&nbsp; $1,450 price target (+28.3%)</div>
+        <p class="exec-text">NVIDIA maintains an unassailable position in the AI accelerator market through its CUDA ecosystem, H100/H200 demand backlog, and emerging NVLink fabric advantages. Datacenter revenue is growing 400%+ YoY with no credible near-term competitive threat.</p>
+        <div class="exec-keypoints">
+          <div class="key-point"><span class="material-symbols-outlined">check_circle</span>AI datacenter TAM expanding to $400B by 2027</div>
+          <div class="key-point"><span class="material-symbols-outlined">check_circle</span>Gross margins expanding to 76%+ this quarter</div>
+          <div class="key-point"><span class="material-symbols-outlined">check_circle</span>CUDA moat deepens with each new model generation</div>
+          <div class="key-point"><span class="material-symbols-outlined">check_circle</span>Blackwell architecture demand exceeds H100 pace</div>
+        </div>
+      </div>
+
+      <h2><span class="section-num">1</span>Business Overview</h2>
+      <p>NVIDIA Corporation designs and manufactures graphics processing units (GPUs) and system-on-chip units. Originally serving gaming markets, NVIDIA has successfully pivoted to become the dominant infrastructure provider for artificial intelligence workloads, commanding an estimated 80-90% share of the AI training accelerator market.</p>
+      <p>The company operates across three segments: Data Center (72% of revenue), Gaming (19%), and Professional Visualization (5%). The Data Center segment is the primary growth engine and the focus of this analysis.</p>
+
+      <h2><span class="section-num">2</span>Financial Analysis</h2>
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="metric-label">Revenue (TTM)</div>
+          <div class="metric-val">$96.3B</div>
+          <div class="metric-sub" style="color:var(--gain)">+122% YoY</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Gross Margin</div>
+          <div class="metric-val">75.9%</div>
+          <div class="metric-sub" style="color:var(--gain)">+8.4pp YoY</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">EPS (TTM)</div>
+          <div class="metric-val">$23.44</div>
+          <div class="metric-sub" style="color:var(--gain)">+288% YoY</div>
+        </div>
+      </div>
+
+      <table class="data-table">
+        <thead><tr><th>Metric</th><th>FY2024</th><th>FY2025</th><th>FY2026E</th></tr></thead>
+        <tbody>
+          <tr><td>Revenue ($B)</td><td>$60.9</td><td>$96.3</td><td>$144.5</td></tr>
+          <tr><td>Gross Margin</td><td>72.7%</td><td>75.9%</td><td>77.2%</td></tr>
+          <tr><td>Operating Income ($B)</td><td>$32.4</td><td>$62.0</td><td>$96.8</td></tr>
+          <tr><td>Net Income ($B)</td><td>$29.8</td><td>$55.8</td><td>$87.1</td></tr>
+        </tbody>
+      </table>
+
+      <hr />
+
+      <h2><span class="section-num">6</span>Risk Factors</h2>
+      <div class="risk-item">
+        <div class="risk-icon hi"><span class="material-symbols-outlined">warning</span></div>
+        <div>
+          <div class="risk-title">Export Control Restrictions</div>
+          <div class="risk-desc">US government restrictions on H100/A100 exports to China and other nations could limit TAM. China represented ~25% of datacenter revenue in FY2023 before restrictions.</div>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon med"><span class="material-symbols-outlined">shield</span></div>
+        <div>
+          <div class="risk-title">Hyperscaler Custom Silicon</div>
+          <div class="risk-desc">Google TPU v5, Amazon Trainium 2, and Microsoft Maia 100 provide partial alternatives for internal workloads, potentially capping GPU demand growth at these key customers.</div>
+        </div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-icon med"><span class="material-symbols-outlined">currency_exchange</span></div>
+        <div>
+          <div class="risk-title">Valuation Premium</div>
+          <div class="risk-desc">At ~35x forward earnings, NVDA trades at a significant premium to the S&amp;P 500. Any growth deceleration could trigger meaningful multiple compression.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

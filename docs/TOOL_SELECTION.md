@@ -1,59 +1,57 @@
 # Tool Selection Guide
 
-## Essential Tools (Fixed List)
+## How Tools Are Registered
 
-The agent uses only the 6 tools explicitly documented in `src/research_prompt.py` (lines 98-120):
+Agent tools are defined in `src/langchain_tools.py` as LangChain `StructuredTool` instances, registered in priority order:
 
-1. **OVERVIEW** - Company overview and fundamental data (line 98)
-   - Parameters: `symbol` (string, required) - Stock ticker symbol
+1. **yfinance** (primary): `yfinance_fundamentals`, `yfinance_analyst`, `yfinance_ownership`, `yfinance_options`
+2. **MCP** (selective): only tools in `ESSENTIAL_MCP_TOOLS` -- currently just `NEWS_SENTIMENT`
+3. **Nimble** (web): `nimble_web_search`, `nimble_extract`, `perplexity_research`
+
+To change which MCP tools are active in agents, edit the `ESSENTIAL_MCP_TOOLS` set in `src/langchain_tools.py`.
+
+## Alpha Vantage MCP Tools (6 total)
+
+All tools are accessible via `src/mcp_tools.py` for direct use, but only NEWS_SENTIMENT is registered as an agent tool (yfinance covers the rest).
+
+1. **OVERVIEW** -- Company profile and fundamental data
+   - Parameters: `symbol` (string, required)
    - Returns: Company name, description, sector, P/E ratio, revenue, EBITDA, and other fundamentals
 
-2. **INCOME_STATEMENT** - Company income statement data (line 102)
-   - Parameters: `symbol` (string, required) - Stock ticker symbol
+2. **INCOME_STATEMENT** -- Company income statement data
+   - Parameters: `symbol` (string, required)
    - Returns: Revenue, expenses, net income, and other income statement metrics
 
-3. **BALANCE_SHEET** - Company balance sheet data (line 106)
-   - Parameters: `symbol` (string, required) - Stock ticker symbol
+3. **BALANCE_SHEET** -- Company balance sheet data
+   - Parameters: `symbol` (string, required)
    - Returns: Assets, liabilities, equity, and other balance sheet items
 
-4. **CASH_FLOW** - Company cash flow statement data (line 110)
-   - Parameters: `symbol` (string, required) - Stock ticker symbol
+4. **CASH_FLOW** -- Company cash flow statement data
+   - Parameters: `symbol` (string, required)
    - Returns: Operating, investing, and financing cash flows
 
-5. **EARNINGS** - Company earnings data (line 114)
-   - Parameters: `symbol` (string, required) - Stock ticker symbol
+5. **EARNINGS** -- Company earnings data
+   - Parameters: `symbol` (string, required)
    - Returns: Quarterly and annual earnings data
 
-6. **NEWS_SENTIMENT** - News articles and sentiment analysis (line 118)
-   - Parameters: `ticker` (string, required) - Stock ticker symbol, `limit` (integer, optional) - Number of articles (default: 50)
+6. **NEWS_SENTIMENT** -- News articles and sentiment analysis (active in agents)
+   - Parameters: `ticker` (string, required), `limit` (integer, optional, default 50)
    - Returns: Recent news articles and sentiment scores
-
-**Total: 6 tools** - This keeps token usage well below limits while providing all essential stock research capabilities.
 
 ## Rationale
 
-These 6 tools are the only ones explicitly documented in the agent's system instructions (`research_prompt.py`). They provide:
+yfinance provides fundamentals, analyst data, ownership, and options data without rate limits. Alpha Vantage MCP is reserved for NEWS_SENTIMENT because yfinance does not provide sentiment-scored news. This keeps token usage low while providing comprehensive research coverage.
 
-- **Company Fundamentals**: OVERVIEW
-- **Financial Statements**: INCOME_STATEMENT, BALANCE_SHEET, CASH_FLOW
-- **Performance Metrics**: EARNINGS
-- **Market Sentiment**: NEWS_SENTIMENT
+## Truncation
 
-This focused set ensures the agent has access to all necessary data for comprehensive stock research while maintaining efficient token usage.
+Tool outputs are truncated before passing to agents:
+- Financial arrays (annualReports, quarterlyReports, etc.): max 5 items
+- News items: max 5 items
 
-## Modifying Tool List
-
-To change the tool list, update the `essential_tool_names` set in `src/agent_tools.py` in the `create_mcp_tools()` function.
+This is handled in `src/langchain_tools.py` via `MAX_SERIES_ITEMS` and `MAX_NEWS_ITEMS`.
 
 ## Available MCP Tools
 
-See the full list at: https://mcp.alphavantage.co/
+Full catalog: https://mcp.alphavantage.co/
 
-Common tool categories:
-- **Time Series**: TIME_SERIES_INTRADAY, TIME_SERIES_DAILY, TIME_SERIES_WEEKLY, etc.
-- **Fundamentals**: COMPANY_OVERVIEW, INCOME_STATEMENT, BALANCE_SHEET, CASH_FLOW, EARNINGS
-- **News**: NEWS_SENTIMENT
-- **Technical Indicators**: SMA, EMA, RSI, MACD, etc.
-- **Commodities**: WTI, BRENT, COPPER, etc.
-- **Forex**: FX_INTRADAY, FX_DAILY, etc.
-- **Crypto**: CRYPTO_INTRADAY, DIGITAL_CURRENCY_DAILY, etc.
+Categories: Time Series, Fundamentals, News, Technical Indicators, Commodities, Forex, Crypto.

@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b; --warn-bg: rgba(245,158,11,0.08); --warn-border: rgba(245,158,11,0.2);
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  /* NAV */
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  /* LAYOUT */
+  .page { max-width: 1100px; margin: 0 auto; padding: 48px 48px 80px; display: grid; grid-template-columns: 220px 1fr; gap: 40px; align-items: start; }
+
+  /* SIDEBAR NAV */
+  .settings-nav { position: sticky; top: 80px; }
+  .settings-nav-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; padding: 0 10px; }
+  .settings-nav-items { display: flex; flex-direction: column; gap: 2px; }
+  .settings-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; color: var(--muted); font-size: 13.5px; font-weight: 500; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+  .settings-nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .settings-nav-item.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .settings-nav-item .material-symbols-outlined { font-size: 17px; }
+
+  /* CONTENT */
+  .settings-content { min-width: 0; }
+  .page-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 36px; }
+
+  /* SECTION */
+  .settings-section { margin-bottom: 32px; }
+  .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; }
+  .settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+
+  /* SETTING ROW */
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); gap: 24px; }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-info { flex: 1; min-width: 0; }
+  .setting-name { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .setting-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .setting-control { flex-shrink: 0; }
+
+  /* TOGGLE SWITCH */
+  .toggle { position: relative; width: 44px; height: 24px; cursor: pointer; }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 100px; transition: background 0.2s, border-color 0.2s; }
+  .toggle input:checked + .toggle-track { background: var(--gain); border-color: var(--gain); }
+  .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: var(--muted); border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(20px); background: #fff; }
+
+  /* SELECT */
+  .setting-select { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px; padding: 7px 28px 7px 10px; -webkit-appearance: none; cursor: pointer; outline: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23a8a29e' d='M1 1l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  .setting-select:focus { border-color: rgba(214,211,209,0.35); }
+  .setting-select option { background: #1c1917; }
+
+  /* INPUT INLINE */
+  .setting-input { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px; padding: 7px 12px; outline: none; width: 180px; }
+  .setting-input:focus { border-color: rgba(214,211,209,0.35); }
+  .setting-input::placeholder { color: var(--muted); }
+
+  /* BADGE */
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 100px; }
+  .badge-connected { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border); }
+  .badge-disconnected { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  .badge .material-symbols-outlined { font-size: 13px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 16; }
+
+  /* PROFILE ROW */
+  .profile-row { display: flex; align-items: center; gap: 16px; padding: 20px; border-bottom: 1px solid var(--border); }
+  .profile-avatar-lg { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: var(--accent); font-family: 'Nunito', sans-serif; flex-shrink: 0; }
+  .profile-info { flex: 1; }
+  .profile-name { font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  .profile-email { font-size: 13px; color: var(--muted); }
+  .btn-sm { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-2); font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .btn-sm:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+
+  /* TELEGRAM CARD */
+  .telegram-card { display: flex; align-items: center; gap: 16px; padding: 18px 20px; }
+  .telegram-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(38,145,218,0.1); border: 1px solid rgba(38,145,218,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .telegram-icon svg { width: 20px; height: 20px; fill: #26a8da; }
+  .telegram-text { flex: 1; }
+  .telegram-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+  .telegram-sub { font-size: 12.5px; color: var(--muted); }
+  .btn-connect { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-connect:hover { border-color: rgba(214,211,209,0.3); }
+
+  /* PLAN CARD */
+  .plan-card { padding: 18px 20px; display: flex; align-items: center; gap: 16px; }
+  .plan-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 100px; background: rgba(214,211,209,0.06); border: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--accent); font-family: 'Nunito', sans-serif; }
+  .plan-badge .material-symbols-outlined { font-size: 14px; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 16; }
+  .plan-info { flex: 1; }
+  .plan-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .plan-desc { font-size: 12.5px; color: var(--muted); }
+
+  /* DANGER ZONE */
+  .danger-card { background: var(--loss-bg); border: 1px solid var(--loss-border); border-radius: 14px; overflow: hidden; }
+  .danger-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(239,68,68,0.15); gap: 24px; }
+  .danger-row:last-child { border-bottom: none; }
+  .danger-name { font-size: 14px; font-weight: 500; color: var(--loss); margin-bottom: 2px; }
+  .danger-desc { font-size: 12.5px; color: rgba(239,68,68,0.65); line-height: 1.5; }
+  .btn-danger { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--loss-border); background: var(--loss-bg); color: var(--loss); font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .btn-danger:hover { background: rgba(239,68,68,0.15); }
+
+  /* SAVE BANNER */
+  .save-banner { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 24px; background: rgba(12,10,9,0.96); backdrop-filter: blur(16px); border-top: 1px solid var(--border); }
+  .save-hint { font-size: 13px; color: var(--muted); }
+  .save-hint strong { color: var(--text); font-weight: 500; }
+  .btn-save { padding: 9px 22px; border-radius: 9px; border: none; background: var(--accent); color: var(--bg); font-family: 'Inter', sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  .btn-save:hover { opacity: 0.88; }
+  .btn-discard { padding: 9px 16px; border-radius: 9px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 13.5px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-discard:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <!-- SIDEBAR -->
+  <aside class="settings-nav">
+    <div class="settings-nav-title">Settings</div>
+    <div class="settings-nav-items">
+      <a class="settings-nav-item active" href="#profile">
+        <span class="material-symbols-outlined">person</span>Profile
+      </a>
+      <a class="settings-nav-item" href="#notifications">
+        <span class="material-symbols-outlined">notifications</span>Notifications
+      </a>
+      <a class="settings-nav-item" href="#integrations">
+        <span class="material-symbols-outlined">hub</span>Integrations
+      </a>
+      <a class="settings-nav-item" href="#portfolio">
+        <span class="material-symbols-outlined">pie_chart</span>Portfolio
+      </a>
+      <a class="settings-nav-item" href="#research">
+        <span class="material-symbols-outlined">manage_search</span>Research
+      </a>
+      <a class="settings-nav-item" href="#billing">
+        <span class="material-symbols-outlined">credit_card</span>Billing
+      </a>
+      <a class="settings-nav-item" href="#danger">
+        <span class="material-symbols-outlined">warning</span>Danger zone
+      </a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="settings-content">
+
+    <div class="page-title">Settings</div>
+    <div class="page-sub">Manage your account, preferences, and integrations</div>
+
+    <!-- PROFILE -->
+    <div class="settings-section" id="profile">
+      <div class="section-label">Profile</div>
+      <div class="settings-card">
+        <div class="profile-row">
+          <div class="profile-avatar-lg">OS</div>
+          <div class="profile-info">
+            <div class="profile-name">Or Salinas</div>
+            <div class="profile-email">or@example.com</div>
+          </div>
+          <button class="btn-sm">Edit profile</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Display name</div>
+            <div class="setting-desc">Shown in the app and any shared reports</div>
+          </div>
+          <div class="setting-control">
+            <input class="setting-input" type="text" value="Or Salinas" />
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Currency</div>
+            <div class="setting-desc">Default currency for portfolio values and P&L display</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option selected>USD — US Dollar</option>
+              <option>EUR — Euro</option>
+              <option>GBP — British Pound</option>
+              <option>ILS — Israeli Shekel</option>
+              <option>JPY — Japanese Yen</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Time zone</div>
+            <div class="setting-desc">Used for market hours, alerts, and scheduled reports</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option>UTC-8 — Pacific Time</option>
+              <option selected>UTC-5 — Eastern Time</option>
+              <option>UTC+0 — London</option>
+              <option>UTC+2 — Tel Aviv</option>
+              <option>UTC+9 — Tokyo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="settings-section" id="notifications">
+      <div class="section-label">Notifications</div>
+      <div class="settings-card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Price alerts</div>
+            <div class="setting-desc">Notify when a watched ticker crosses your target price</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" checked />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Research ready</div>
+            <div class="setting-desc">Notify when a deep research report finishes generating</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" checked />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Earnings calendar</div>
+            <div class="setting-desc">Remind me 1 day before earnings for holdings and watchlist</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" checked />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Daily market brief</div>
+            <div class="setting-desc">Morning summary of your portfolio and watchlist movers</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Alert delivery</div>
+            <div class="setting-desc">Where price alerts and notifications are sent</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option selected>Telegram + In-app</option>
+              <option>In-app only</option>
+              <option>Telegram only</option>
+              <option>Email only</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INTEGRATIONS -->
+    <div class="settings-section" id="integrations">
+      <div class="section-label">Integrations</div>
+      <div class="settings-card">
+        <!-- Telegram -->
+        <div class="telegram-card">
+          <div class="telegram-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.16 14.39l-2.97-.924c-.646-.203-.658-.646.136-.956l11.57-4.461c.538-.194 1.009.131.998.172z"/>
+            </svg>
+          </div>
+          <div class="telegram-text">
+            <div class="telegram-name">Telegram Bot</div>
+            <div class="telegram-sub">Connected as @orsalinas_bot &middot; Chat ID 841209...</div>
+          </div>
+          <span class="badge badge-connected">
+            <span class="material-symbols-outlined">check_circle</span>
+            Connected
+          </span>
+          <button class="btn-sm" style="margin-left:8px">Disconnect</button>
+        </div>
+        <div style="border-top: 1px solid var(--border);">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Send test message</div>
+              <div class="setting-desc">Verify your Telegram connection is working</div>
+            </div>
+            <div class="setting-control">
+              <button class="btn-sm">
+                <span class="material-symbols-outlined" style="font-size:14px;margin-right:4px">send</span>
+                Send test
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PORTFOLIO DEFAULTS -->
+    <div class="settings-section" id="portfolio">
+      <div class="section-label">Portfolio</div>
+      <div class="settings-card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Cost basis method</div>
+            <div class="setting-desc">How average cost is calculated for multi-lot positions</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option selected>Average cost</option>
+              <option>FIFO</option>
+              <option>LIFO</option>
+              <option>Specific lot</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Show cash balance</div>
+            <div class="setting-desc">Include cash holdings in portfolio value and allocation</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" checked />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Return display</div>
+            <div class="setting-desc">Show unrealized gains as percent change or dollar amount</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option selected>Both (% and $)</option>
+              <option>Percent only</option>
+              <option>Dollar only</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Hide small positions</div>
+            <div class="setting-desc">Collapse positions below 0.5% of portfolio in the holdings table</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESEARCH -->
+    <div class="settings-section" id="research">
+      <div class="section-label">Research</div>
+      <div class="settings-card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Default research depth</div>
+            <div class="setting-desc">Number of AI agents deployed per research job</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option>Quick (3 agents)</option>
+              <option selected>Standard (6 agents)</option>
+              <option>Deep (10 agents)</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Default thesis</div>
+            <div class="setting-desc">Pre-select a thesis type on the research wizard</div>
+          </div>
+          <div class="setting-control">
+            <select class="setting-select">
+              <option selected>No default</option>
+              <option>Bull case</option>
+              <option>Bear case</option>
+              <option>Neutral analysis</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Auto-save reports</div>
+            <div class="setting-desc">Automatically save every completed research report to history</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" checked />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Include news sentiment</div>
+            <div class="setting-desc">Always run the news sentiment agent as part of research</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" checked />
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BILLING -->
+    <div class="settings-section" id="billing">
+      <div class="section-label">Billing</div>
+      <div class="settings-card">
+        <div class="plan-card">
+          <div>
+            <span class="plan-badge">
+              <span class="material-symbols-outlined">workspace_premium</span>
+              Pro Plan
+            </span>
+          </div>
+          <div class="plan-info">
+            <div class="plan-name">Pro — $19 / month</div>
+            <div class="plan-desc">Renews June 6, 2026 &middot; Unlimited reports &middot; All integrations</div>
+          </div>
+          <button class="btn-sm">Manage</button>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Monthly research budget</div>
+            <div class="setting-desc">Estimated AI compute cost this month: $4.20 of $20.00 used</div>
+          </div>
+          <div class="setting-control">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:120px;height:5px;background:var(--surface-2);border-radius:100px;overflow:hidden">
+                <div style="width:21%;height:100%;background:var(--gain);border-radius:100px;"></div>
+              </div>
+              <span style="font-size:12.5px;color:var(--muted)">21%</span>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Billing email</div>
+            <div class="setting-desc">Receipts and invoices are sent to this address</div>
+          </div>
+          <div class="setting-control">
+            <input class="setting-input" type="email" value="or@example.com" style="width:200px" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div class="settings-section" id="danger">
+      <div class="section-label">Danger zone</div>
+      <div class="danger-card">
+        <div class="danger-row">
+          <div class="setting-info">
+            <div class="danger-name">Clear all watchlists</div>
+            <div class="danger-desc">Permanently removes all watchlist items across all lists. This cannot be undone.</div>
+          </div>
+          <div class="setting-control">
+            <button class="btn-danger">Clear watchlists</button>
+          </div>
+        </div>
+        <div class="danger-row">
+          <div class="setting-info">
+            <div class="danger-name">Delete all reports</div>
+            <div class="danger-desc">Permanently deletes all saved research reports and their chat history.</div>
+          </div>
+          <div class="setting-control">
+            <button class="btn-danger">Delete reports</button>
+          </div>
+        </div>
+        <div class="danger-row">
+          <div class="setting-info">
+            <div class="danger-name">Delete account</div>
+            <div class="danger-desc">Permanently deletes your account, all portfolios, reports, and data. No recovery.</div>
+          </div>
+          <div class="setting-control">
+            <button class="btn-danger">Delete account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- SAVE BANNER (shown when unsaved changes exist) -->
+<div class="save-banner">
+  <span class="save-hint">You have <strong>unsaved changes</strong></span>
+  <button class="btn-discard">Discard</button>
+  <button class="btn-save">Save changes</button>
+</div>
+
+</body>
+</html>

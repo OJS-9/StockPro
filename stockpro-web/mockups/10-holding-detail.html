@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — NVDA Holding</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  .breadcrumb a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb .material-symbols-outlined { font-size: 14px; }
+
+  /* HOLDING HEADER */
+  .holding-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+  .holding-left { display: flex; align-items: center; gap: 16px; }
+  .holding-sym { font-family: 'Nunito', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+  .holding-info { }
+  .holding-name { font-size: 16px; color: var(--muted); margin-bottom: 4px; }
+  .holding-portfolio { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .holding-portfolio .material-symbols-outlined { font-size: 14px; }
+  .header-actions { display: flex; gap: 8px; }
+  .btn-ghost { background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-ghost .material-symbols-outlined { font-size: 16px; }
+  .btn-primary { background: var(--accent); color: var(--bg); font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary .material-symbols-outlined { font-size: 16px; }
+
+  /* SUMMARY STRIP */
+  .summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 28px; }
+  .strip-item { background: var(--surface); padding: 18px 20px; }
+  .strip-label { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+  .strip-val { font-family: 'Nunito', sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .strip-val.up { color: var(--gain); }
+  .strip-val.down { color: var(--loss); }
+  .strip-sub { font-size: 11.5px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .strip-sub.up { color: var(--gain); }
+  .strip-sub.down { color: var(--loss); }
+  .strip-sub.muted { color: var(--muted); }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 20px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .card-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card-title .material-symbols-outlined { font-size: 16px; color: var(--muted); }
+  .card-action { font-size: 12px; color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
+  .card-action:hover { color: var(--text); }
+
+  /* CHART AREA */
+  .chart-area { padding: 20px 20px 8px; }
+  .chart-area svg { width: 100%; height: 160px; }
+
+  /* TRANSACTIONS TABLE */
+  .tx-table { width: 100%; border-collapse: collapse; }
+  .tx-table th { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); text-align: left; padding: 0 20px 12px; border-bottom: 1px solid var(--border); }
+  .tx-table th:not(:first-child) { text-align: right; }
+  .tx-table td { padding: 13px 20px; border-bottom: 1px solid rgba(41,37,36,0.5); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .tx-table tr:last-child td { border-bottom: none; }
+  .tx-table td:not(:first-child) { text-align: right; }
+  .tx-type { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 999px; }
+  .tx-type.buy { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-border); }
+  .tx-type.sell { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-border); }
+
+  /* COST BASIS */
+  .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 18px 20px; }
+  .cost-item { }
+  .cost-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+  .cost-val { font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cost-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="breadcrumb">
+    <a href="#">Portfolios</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <a href="#">Tech Growth</a>
+    <span class="material-symbols-outlined">chevron_right</span>
+    <span>NVDA</span>
+  </div>
+
+  <div class="holding-header">
+    <div class="holding-left">
+      <div class="holding-sym">NVDA</div>
+      <div class="holding-info">
+        <div class="holding-name">NVIDIA Corporation</div>
+        <div class="holding-portfolio">
+          <span class="material-symbols-outlined">pie_chart</span>
+          Tech Growth portfolio
+        </div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost"><span class="material-symbols-outlined">auto_awesome</span>Research</button>
+      <button class="btn-ghost"><span class="material-symbols-outlined">add_alert</span>Set Alert</button>
+      <button class="btn-primary"><span class="material-symbols-outlined">add</span>Add Transaction</button>
+    </div>
+  </div>
+
+  <div class="summary-strip">
+    <div class="strip-item">
+      <div class="strip-label">Market Value</div>
+      <div class="strip-val">$45,200</div>
+      <div class="strip-sub muted">40 shares @ $1,130</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Cost Basis</div>
+      <div class="strip-val">$16,820</div>
+      <div class="strip-sub muted">Avg $420.50 / share</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Total P&amp;L</div>
+      <div class="strip-val up">+$28,380</div>
+      <div class="strip-sub up">+168.7% return</div>
+    </div>
+    <div class="strip-item">
+      <div class="strip-label">Day Change</div>
+      <div class="strip-val up">+$1,032</div>
+      <div class="strip-sub up">+2.34% today</div>
+    </div>
+  </div>
+
+  <!-- HOLDING PERFORMANCE CHART -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="material-symbols-outlined">show_chart</span>Performance vs Cost Basis</div>
+      <div style="display:flex;gap:2px;">
+        <button style="font-size:11.5px;font-weight:500;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;">1M</button>
+        <button style="font-size:11.5px;font-weight:500;padding:4px 9px;border-radius:6px;border:none;background:rgba(214,211,209,0.1);color:var(--text);cursor:pointer;">All</button>
+      </div>
+    </div>
+    <div class="chart-area">
+      <svg viewBox="0 0 800 160" preserveAspectRatio="none" fill="none">
+        <defs>
+          <linearGradient id="hold-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#22c55e" stop-opacity="0.15"/>
+            <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- Cost basis line (flat) -->
+        <line x1="0" y1="120" x2="800" y2="120" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <!-- Price performance -->
+        <polygon points="0,118 100,110 200,115 300,98 400,84 500,90 600,68 700,52 800,40 800,160 0,160" fill="url(#hold-grad)"/>
+        <polyline points="0,118 100,110 200,115 300,98 400,84 500,90 600,68 700,52 800,40" stroke="#22c55e" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+        <!-- Cost basis label -->
+        <text x="8" y="116" font-size="10" fill="var(--muted)">Cost basis $420.50</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- COST BASIS DETAIL -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="material-symbols-outlined">receipt</span>Cost Basis Breakdown</div>
+    </div>
+    <div class="cost-grid">
+      <div class="cost-item">
+        <div class="cost-label">Total Invested</div>
+        <div class="cost-val">$16,820</div>
+        <div class="cost-sub">Across 3 buy transactions</div>
+      </div>
+      <div class="cost-item">
+        <div class="cost-label">Avg Purchase Price</div>
+        <div class="cost-val">$420.50</div>
+        <div class="cost-sub">Simple average cost</div>
+      </div>
+      <div class="cost-item">
+        <div class="cost-label">Current Price</div>
+        <div class="cost-val">$1,130.00</div>
+        <div class="cost-sub" style="color:var(--gain)">+$709.50 / share</div>
+      </div>
+      <div class="cost-item">
+        <div class="cost-label">Portfolio Weight</div>
+        <div class="cost-val">31.6%</div>
+        <div class="cost-sub">Of Tech Growth portfolio</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRANSACTIONS -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="material-symbols-outlined">receipt_long</span>Transaction History</div>
+      <button class="btn-primary" style="font-size:12px;padding:6px 12px;">
+        <span class="material-symbols-outlined" style="font-size:14px;">add</span>Add
+      </button>
+    </div>
+    <table class="tx-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Shares</th>
+          <th>Price</th>
+          <th>Total</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Mar 28, 2026</td>
+          <td><span class="tx-type buy">Buy</span></td>
+          <td>5</td>
+          <td>$1,130</td>
+          <td>$5,650</td>
+          <td style="text-align:right;">
+            <button style="background:transparent;border:none;color:var(--muted);cursor:pointer;"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+            <button style="background:transparent;border:none;color:var(--muted);cursor:pointer;"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+          </td>
+        </tr>
+        <tr>
+          <td>Jan 15, 2025</td>
+          <td><span class="tx-type buy">Buy</span></td>
+          <td>20</td>
+          <td>$495</td>
+          <td>$9,900</td>
+          <td style="text-align:right;">
+            <button style="background:transparent;border:none;color:var(--muted);cursor:pointer;"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+            <button style="background:transparent;border:none;color:var(--muted);cursor:pointer;"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+          </td>
+        </tr>
+        <tr>
+          <td>Jun 10, 2024</td>
+          <td><span class="tx-type buy">Buy</span></td>
+          <td>15</td>
+          <td>$82</td>
+          <td>$1,270</td>
+          <td style="text-align:right;">
+            <button style="background:transparent;border:none;color:var(--muted);cursor:pointer;"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+            <button style="background:transparent;border:none;color:var(--muted);cursor:pointer;"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+</body>
+</html>

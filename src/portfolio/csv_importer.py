@@ -48,6 +48,26 @@ class CSVImporter:
             "fees": None,  # Robinhood has no fees column
             "notes": "Description",
         },
+        # Interactive Brokers Flex Query / Activity Statement (CSV export)
+        "ibkr": {
+            "date": "TradeDate",
+            "type": "Buy/Sell",
+            "symbol": "Symbol",
+            "quantity": "Quantity",
+            "price": "TradePrice",
+            "fees": "IBCommission",
+            "notes": "Description",
+        },
+        # Fidelity brokerage account history export
+        "fidelity": {
+            "date": "Run Date",
+            "type": "Action",
+            "symbol": "Symbol",
+            "quantity": "Quantity",
+            "price": "Price ($)",
+            "fees": "Commission ($)",
+            "notes": "Description",
+        },
         "generic": {
             "date": "date",
             "type": "type",
@@ -73,6 +93,20 @@ class CSVImporter:
             "BUY": "buy",
             "SELL": "sell",
         },
+        "ibkr": {
+            "BUY": "buy",
+            "SELL": "sell",
+            "Buy": "buy",
+            "Sell": "sell",
+        },
+        "fidelity": {
+            "YOU BOUGHT": "buy",
+            "YOU SOLD": "sell",
+            "BOUGHT": "buy",
+            "SOLD": "sell",
+            "Buy": "buy",
+            "Sell": "sell",
+        },
         "generic": {
             "buy": "buy",
             "sell": "sell",
@@ -91,23 +125,27 @@ class CSVImporter:
         """
         Detect CSV format based on headers.
 
-        Args:
-            headers: List of column headers
-
-        Returns:
-            Format name ('coinbase', 'robinhood', 'generic') or None
+        Returns format name or None.
         """
-        headers_lower = [h.lower() for h in headers]
+        headers_lower = [h.lower().strip() for h in headers]
 
-        # Check for Coinbase format
+        # Coinbase
         if "timestamp" in headers_lower and "asset" in headers_lower:
             return "coinbase"
 
-        # Check for Robinhood format
+        # Robinhood
         if "activity date" in headers_lower and "instrument" in headers_lower:
             return "robinhood"
 
-        # Check for generic format
+        # Interactive Brokers
+        if "tradedate" in headers_lower and "tradeprice" in headers_lower:
+            return "ibkr"
+
+        # Fidelity
+        if "run date" in headers_lower and "action" in headers_lower:
+            return "fidelity"
+
+        # Generic
         if "date" in headers_lower and "symbol" in headers_lower:
             return "generic"
 
