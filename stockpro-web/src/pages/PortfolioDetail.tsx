@@ -98,6 +98,7 @@ export default function PortfolioDetail() {
     name: h.name || h.symbol,
     shares: h.total_quantity ?? h.quantity ?? h.shares ?? 0,
     avg_cost: h.average_cost ?? h.avg_cost ?? 0,
+    current_price: h.current_price ?? null,
     market_value: h.market_value ?? 0,
     pnl: h.unrealized_gain ?? h.pnl ?? 0,
     pnl_pct: h.unrealized_gain_pct ?? h.pnl_pct ?? 0,
@@ -160,7 +161,7 @@ export default function PortfolioDetail() {
                       {pnl >= 0 ? '+' : ''}{fmt(pnl)}
                     </div>
                     <div style={{ fontSize: 13, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {pnl >= 0 ? '+' : ''}{pnlPct}% all time
+                      {pnl >= 0 ? '+' : ''}{Number(pnlPct).toFixed(2)}% all time
                     </div>
                   </div>
                 </div>
@@ -192,7 +193,7 @@ export default function PortfolioDetail() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ padding: '0 24px' }}>
-                    {['Holding', 'Shares', 'Avg Cost', 'Market Value', 'P&L', 'Return'].map(h => (
+                    {['Holding', 'Shares', 'Avg Cost', 'Current Price', 'Market Value', 'P&L', 'Return'].map(h => (
                       <th key={h} style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', textAlign: h === 'Holding' ? 'left' : 'right', padding: '12px 24px', borderBottom: '1px solid #292524' }}>{h}</th>
                     ))}
                   </tr>
@@ -209,15 +210,16 @@ export default function PortfolioDetail() {
                           </div>
                         </Link>
                       </td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.shares}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{Number(h.shares).toFixed(2)}</td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.avg_cost)}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.current_price != null ? fmt(h.current_price) : <span style={{ color: '#57534e' }}>--</span>}</td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.market_value)}</td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: h.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
                         {h.pnl >= 0 ? '+' : ''}{fmt(h.pnl)}
                       </td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right' }}>
                         <span style={{ display: 'inline-flex', fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: h.pnl_pct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: h.pnl_pct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${h.pnl_pct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-                          {h.pnl_pct >= 0 ? '+' : ''}{h.pnl_pct}%
+                          {h.pnl_pct >= 0 ? '+' : ''}{Number(h.pnl_pct).toFixed(2)}%
                         </span>
                       </td>
                     </tr>
