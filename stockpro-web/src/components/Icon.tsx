@@ -1,11 +1,14 @@
+import type { CSSProperties } from 'react'
+
 interface IconProps {
   name: string
   filled?: boolean
   size?: number
   className?: string
+  style?: CSSProperties
 }
 
-export default function Icon({ name, filled = false, size = 24, className = '' }: IconProps) {
+export default function Icon({ name, filled = false, size = 24, className = '', style }: IconProps) {
   const fillVal = filled ? 1 : 0
   return (
     <span
@@ -15,6 +18,7 @@ export default function Icon({ name, filled = false, size = 24, className = '' }
         verticalAlign: 'middle',
         lineHeight: 1,
         fontSize: size,
+        ...style,
       }}
     >
       {name}

@@ -40,7 +40,7 @@ function PriceChart({ data, gain = true }: { data: number[]; gain?: boolean }) {
 export default function TickerPage() {
   const { symbol } = useParams()
   const api = useApiClient()
-  const [range, setRange] = useState('1M')
+  const [range, setRange] = useState('3M')
 
   const { data: hist } = useQuery({
     queryKey: ['ticker-history', symbol, range],
@@ -60,169 +60,236 @@ export default function TickerPage() {
     },
   })
 
-  const { data: newsData } = useQuery({
-    queryKey: ['ticker-news', symbol],
-    queryFn: async () => {
-      const res = await api.get(`/api/news?symbol=${symbol}`)
-      if (!res.ok) throw new Error('Failed')
-      // /api/news returns a list directly, not {news: [...]}
-      const d = await res.json()
-      return Array.isArray(d) ? d : (d.news || d.articles || [])
-    },
-  })
-
   const { data: posData } = useQuery({
     queryKey: ['position', symbol],
     queryFn: async () => {
       const res = await api.get(`/api/position_check/${symbol}`)
+      if (!res.ok) return { position: null }
+      return res.json()
+    },
+  })
+
+  const { data: reportsData } = useQuery({
+    queryKey: ['ticker-reports', symbol],
+    queryFn: async () => {
+      const res = await api.get(`/api/reports?ticker=${symbol}`)
       if (!res.ok) throw new Error('Failed')
       return res.json()
     },
   })
 
-  // /api/ticker/<symbol>/history returns {history: [{date, close}]}
-  // /api/ticker/<symbol>/fundamentals returns {symbol, name, sector, market_cap, pe_ratio, eps, revenue, gross_margin, week_52_high, week_52_low, beta, current_price, ...}
-  const historyArr: {date: string; close: number}[] = hist?.history || []
+  const historyArr: { date: string; close: number }[] = hist?.history || []
   const chartData: number[] = historyArr.map((h: any) => h.close ?? 0).filter((v: number) => v > 0)
   const lastClose = chartData.length > 0 ? chartData[chartData.length - 1] : 0
   const prevClose = chartData.length > 1 ? chartData[chartData.length - 2] : lastClose
   const price = fundData?.current_price ?? lastClose
+  const changeAbs = price && prevClose ? price - prevClose : 0
   const changePct = price && prevClose ? Number((((price - prevClose) / prevClose) * 100).toFixed(2)) : 0
   const gain = changePct >= 0
 
   const fundamentals = fundData || {}
-
-  // newsData is already the array (normalized in queryFn)
-  const news = Array.isArray(newsData) ? newsData : []
   const position = posData?.position || null
+  const tickerReports: any[] = reportsData?.reports || []
 
-  const fundamentalItems = [
+  const name = fundamentals.name || symbol
+  const sector = fundamentals.sector || ''
+  const industry = fundamentals.industry || ''
+
+  const statItems = [
     { label: 'Market Cap', val: fundamentals.market_cap ? fmtCompact(fundamentals.market_cap) : '-' },
-    { label: 'P/E Ratio', val: fundamentals.pe_ratio != null ? Number(fundamentals.pe_ratio).toFixed(1) : '-' },
-    { label: 'Revenue', val: fundamentals.revenue ? fmtCompact(fundamentals.revenue) : '-' },
-    { label: 'Gross Margin', val: fundamentals.gross_margin != null ? `${(fundamentals.gross_margin * 100).toFixed(1)}%` : '-' },
-    { label: 'EPS', val: fundamentals.eps != null ? `$${Number(fundamentals.eps).toFixed(2)}` : '-' },
+    { label: 'P/E Ratio', val: fundamentals.pe_ratio != null ? `${Number(fundamentals.pe_ratio).toFixed(1)}x` : '-' },
+    { label: 'EPS (TTM)', val: fundamentals.eps != null ? `$${Number(fundamentals.eps).toFixed(2)}` : '-' },
+    { label: 'Revenue (TTM)', val: fundamentals.revenue ? fmtCompact(fundamentals.revenue) : '-' },
+    { label: 'Gross Margin', val: fundamentals.gross_margin != null ? `${(fundamentals.gross_margin * 100).toFixed(1)}%` : '-', highlight: fundamentals.gross_margin != null && fundamentals.gross_margin > 0.4 },
+    { label: '52W Range', val: fundamentals.week_52_high && fundamentals.week_52_low ? `$${Number(fundamentals.week_52_low).toFixed(0)} – $${Number(fundamentals.week_52_high).toFixed(0)}` : '-', small: true },
+    { label: 'Avg Volume', val: fundamentals.avg_volume ? fmtCompact(fundamentals.avg_volume) : '-' },
     { label: 'Beta', val: fundamentals.beta != null ? Number(fundamentals.beta).toFixed(2) : '-' },
-    { label: '52W High', val: fundamentals.week_52_high ? fmt(fundamentals.week_52_high) : '-' },
-    { label: '52W Low', val: fundamentals.week_52_low ? fmt(fundamentals.week_52_low) : '-' },
+    { label: 'Dividend', val: fundamentals.dividend_yield != null ? `${(fundamentals.dividend_yield * 100).toFixed(2)}%` : '-', muted: !fundamentals.dividend_yield },
   ]
 
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '36px 48px 80px' }}>
 
-        {/* HEADER */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+        {/* TICKER HEADER */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Nunito, sans-serif', fontSize: 14, fontWeight: 700, color: '#d6d3d1' }}>
-                {(symbol || '').slice(0, 2)}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
               <div>
-                <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>{symbol}</h1>
-                <div style={{ fontSize: 13, color: '#a8a29e' }}>NASDAQ &nbsp;&middot;&nbsp; Technology</div>
+                <div style={{ fontSize: 15, color: '#a8a29e' }}>{name !== symbol ? name : ''}</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {sector && (
+                    <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 999, border: '1px solid #292524', color: '#a8a29e', background: '#1c1917' }}>
+                      {sector}
+                    </span>
+                  )}
+                  {industry && industry !== sector && (
+                    <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 999, border: '1px solid #292524', color: '#a8a29e', background: '#1c1917' }}>
+                      {industry}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(price)}</span>
-              <span style={{ fontSize: 16, fontWeight: 500, color: gain ? '#22c55e' : '#ef4444' }}>
-                {gain ? '+' : ''}{changePct}% today
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
+              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                {price ? fmt(price) : '-'}
               </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
+                <span style={{ fontSize: 18, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
+                  {gain ? '+' : ''}{fmt(changeAbs)}
+                </span>
+                <span style={{ fontSize: 15, fontWeight: 500, color: gain ? '#22c55e' : '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
+                  ({gain ? '+' : ''}{changePct}%)
+                </span>
+              </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link to={`/research?ticker=${symbol}`} style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Icon name="auto_awesome" size={16} /> Research
-            </Link>
-            <button style={{ background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="notifications_none" size={16} /> Set Alert
+          <div style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
+            <button style={{ background: 'transparent', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '9px 16px', borderRadius: 8, border: '1px solid #292524', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="visibility" size={16} /> Watch
             </button>
+            <button style={{ background: 'transparent', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '9px 16px', borderRadius: 8, border: '1px solid #292524', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="add_alert" size={16} /> Set Alert
+            </button>
+            <Link
+              to={`/research?ticker=${symbol}`}
+              style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', fontFamily: 'Nunito, sans-serif' }}
+            >
+              <Icon name="auto_awesome" size={18} /> Research {symbol}
+            </Link>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* CHART */}
-            <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #292524', display: 'flex', gap: 4 }}>
+        {/* PRICE CHART */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 20px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: '#a8a29e' }}>Price (USD)</div>
+              <div style={{ display: 'flex', gap: 2 }}>
                 {RANGES.map(r => (
-                  <button key={r} onClick={() => setRange(r)} style={{ padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer', background: range === r ? 'rgba(214,211,209,0.12)' : 'transparent', color: range === r ? '#fafaf9' : '#a8a29e' }}>
+                  <button
+                    key={r}
+                    onClick={() => setRange(r)}
+                    style={{ fontSize: 12, fontWeight: 500, padding: '5px 10px', borderRadius: 6, border: 'none', background: range === r ? 'rgba(214,211,209,0.1)' : 'transparent', color: range === r ? '#fafaf9' : '#a8a29e', cursor: 'pointer', transition: 'all 0.15s' }}
+                  >
                     {r}
                   </button>
                 ))}
               </div>
-              <div style={{ padding: '20px 20px' }}>
-                <PriceChart data={chartData} gain={gain} />
-              </div>
             </div>
+            <PriceChart data={chartData} gain={gain} />
+          </div>
+        </div>
 
-            {/* FUNDAMENTALS */}
+        {/* MAIN LAYOUT */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* KEY STATISTICS */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #292524', fontSize: 13, fontWeight: 600 }}>Fundamentals</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0 }}>
-                {fundamentalItems.map(({ label, val }, i) => (
-                  <div key={label} style={{ padding: '16px 20px', borderRight: i % 5 < 4 ? '1px solid #292524' : 'none', borderBottom: i < 5 ? '1px solid #292524' : 'none' }}>
-                    <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>{label}</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 600, letterSpacing: '-0.02em' }}>{val}</div>
-                  </div>
-                ))}
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid #292524', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>
+                <Icon name="bar_chart" size={16} style={{ color: '#a8a29e' }} />
+                Key Statistics
               </div>
-            </div>
-
-            {/* NEWS */}
-            <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #292524', fontSize: 13, fontWeight: 600 }}>Recent News</div>
-              <div style={{ padding: '8px 0' }}>
-                {news.map((n: any, i: number) => (
-                  <div key={i} style={{ padding: '14px 20px', borderBottom: i < news.length - 1 ? '1px solid rgba(41,37,36,0.5)' : 'none', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: n.sentiment === 'bull' ? 'rgba(34,197,94,0.08)' : n.sentiment === 'bear' ? 'rgba(239,68,68,0.08)' : '#232120', color: n.sentiment === 'bull' ? '#22c55e' : n.sentiment === 'bear' ? '#ef4444' : '#a8a29e', border: `1px solid ${n.sentiment === 'bull' ? 'rgba(34,197,94,0.2)' : n.sentiment === 'bear' ? 'rgba(239,68,68,0.2)' : '#292524'}` }}>
-                        {n.sentiment === 'bull' ? 'Bullish' : n.sentiment === 'bear' ? 'Bearish' : 'Neutral'}
-                      </span>
-                      <span style={{ fontSize: 11, color: '#a8a29e' }}>{n.source}</span>
-                      <span style={{ fontSize: 11, color: '#a8a29e' }}>&middot;</span>
-                      <span style={{ fontSize: 11, color: '#a8a29e' }}>{n.time}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
+                {statItems.map(({ label, val, highlight, small, muted }, i) => (
+                  <div key={label} style={{ background: '#1c1917', padding: '14px 18px' }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>
+                      {val}
                     </div>
-                    <div style={{ fontSize: 14, lineHeight: 1.5, color: 'rgba(250,250,249,0.85)' }}>{n.title}</div>
                   </div>
                 ))}
               </div>
             </div>
+
           </div>
 
-          {/* SIDEBAR */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Position card */}
+          {/* RIGHT PANEL */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* AI REPORTS */}
+            <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>
+                  <Icon name="description" size={16} style={{ color: '#a8a29e' }} />
+                  AI Reports
+                </div>
+                <Link to={`/research?ticker=${symbol}`} style={{ fontSize: 12, color: '#a8a29e', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                  New <Icon name="add" size={14} />
+                </Link>
+              </div>
+              {tickerReports.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#a8a29e', fontSize: 13 }}>
+                  No reports for {symbol} yet
+                </div>
+              ) : (
+                tickerReports.slice(0, 4).map((r: any) => {
+                  const rid = r.report_id || r.id
+                  const title = r.title || `${symbol} Research Report`
+                  const date = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+                  const type = r.trade_type || r.type || ''
+                  return (
+                    <Link
+                      key={rid}
+                      to={`/report/${rid}`}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)', textDecoration: 'none', transition: 'background 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{ width: 34, height: 34, borderRadius: 9, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Icon name="query_stats" size={17} style={{ color: '#a8a29e' }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#fafaf9', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+                        <div style={{ fontSize: 11.5, color: '#a8a29e' }}>
+                          {type && <span>{type} &middot; </span>}
+                          {date}
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })
+              )}
+            </div>
+
+            {/* YOUR POSITION (if holding) */}
             {position && (
               <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #292524', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Icon name="pie_chart" size={16} /> Your Position
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>
+                    <Icon name="pie_chart" size={16} style={{ color: '#a8a29e' }} />
+                    Your Position
+                  </div>
                 </div>
-                <div style={{ padding: 20 }}>
-                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 600, marginBottom: 4 }}>{fmt(position.market_value)}</div>
-                  <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 16 }}>{position.shares} shares @ {fmt(position.avg_cost)} avg</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid #292524' }}>
-                    <span style={{ fontSize: 12, color: '#a8a29e' }}>Unrealized P&L</span>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: position.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {position.pnl >= 0 ? '+' : ''}{fmt(position.pnl)} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct}%)
-                    </span>
+                <div style={{ padding: '16px 20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Shares held</div>
+                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600 }}>{position.shares}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Mkt Value</div>
+                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600 }}>{fmt(position.market_value)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Avg Cost</div>
+                      <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{fmt(position.avg_cost)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Total Return</div>
+                      <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: position.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
+                        {position.pnl >= 0 ? '+' : ''}{fmt(position.pnl)} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct}%)
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Research CTA */}
-            <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>AI Research</div>
-              <p style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.6, marginBottom: 16 }}>
-                Get a deep AI research report on {symbol} — fundamentals, technicals, risk analysis, and more.
-              </p>
-              <Link to={`/research?ticker=${symbol}`} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '10px 16px', borderRadius: 8, textDecoration: 'none', justifyContent: 'center' }}>
-                <Icon name="auto_awesome" size={16} /> Research {symbol}
-              </Link>
-            </div>
           </div>
         </div>
       </main>
