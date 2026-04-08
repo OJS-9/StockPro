@@ -1,5 +1,9 @@
+import { useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import { SignedIn, SignedOut } from '@clerk/clerk-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { useApiClient } from './api/client'
 
 import Landing from './pages/Landing'
 import Home from './pages/Home'
@@ -20,8 +24,67 @@ import Alerts from './pages/Alerts'
 import TickerPage from './pages/TickerPage'
 import Settings from './pages/Settings'
 
+/**
+ * Runs at app level (never unmounts on navigation) so toast dedup works.
+ * Only toasts notifications arriving AFTER mount to avoid flooding on login.
+ */
+function NotificationListener() {
+  const api = useApiClient()
+  const queryClient = useQueryClient()
+  const shownIds = useRef<Set<string>>(new Set())
+  const baselineTs = useRef<string | null>(null)
+  const initialized = useRef(false)
+
+  const { data } = useQuery({
+    queryKey: ['alert-notifications'],
+    queryFn: async () => {
+      const res = await api.get('/api/alerts/notifications?limit=20')
+      if (!res.ok) return { notifications: [], unread_count: 0 }
+      return res.json()
+    },
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+  })
+
+  const notifications: any[] = data?.notifications ?? []
+
+  if (notifications.length > 0 && !initialized.current) {
+    baselineTs.current = notifications[0]?.created_at ?? null
+    initialized.current = true
+  } else if (initialized.current) {
+    const newUnread = notifications.filter(
+      (n: any) =>
+        !n.read_at &&
+        !shownIds.current.has(n.notification_id) &&
+        baselineTs.current &&
+        n.created_at > baselineTs.current
+    )
+    if (newUnread.length > 0) {
+      newUnread.forEach((n: any) => {
+        shownIds.current.add(n.notification_id)
+        toast(n.body, {
+          duration: 6000,
+          style: {
+            background: '#1c1917',
+            color: '#fafaf9',
+            border: '1px solid #292524',
+            fontSize: 13,
+          },
+        })
+        api.patch(`/api/alerts/notifications/${n.notification_id}`, { read: true }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['alert-notifications'] })
+        })
+      })
+    }
+  }
+
+  return null
+}
+
 export default function App() {
   return (
+    <>
+    <SignedIn><NotificationListener /></SignedIn>
     <Routes>
       {/* Root: landing for unauthenticated, redirect to /home for signed in */}
       <Route
@@ -181,5 +244,6 @@ export default function App() {
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

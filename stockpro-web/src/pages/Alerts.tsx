@@ -23,6 +23,7 @@ export default function Alerts() {
       if (!res.ok) throw new Error('Failed')
       return res.json()
     },
+    refetchInterval: 30_000,
   })
 
   const toggleMutation = useMutation({
@@ -71,8 +72,9 @@ export default function Alerts() {
   // API fields: alert_id, symbol, direction (above|below), target_price, active (bool), created_at
   const alerts = data?.alerts || []
   const stats = data?.stats || {}
-  const activeCount = stats.active_count ?? alerts.filter((a: any) => a.active).length
+  const activeCount = stats.active_count ?? alerts.filter((a: any) => a.active && !a.last_triggered_at).length
   const pausedCount = stats.paused_count ?? alerts.filter((a: any) => !a.active).length
+  const triggeredCount = stats.triggered_count ?? alerts.filter((a: any) => !!a.last_triggered_at).length
   const triggered30d = stats.triggered_30d_count ?? 0
 
   const getProgress = (a: any) => {
@@ -96,7 +98,7 @@ export default function Alerts() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
             <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>Price Alerts</div>
-            <div style={{ fontSize: 13, color: '#a8a29e' }}>{activeCount} active &nbsp;&middot;&nbsp; {pausedCount} paused &nbsp;&middot;&nbsp; {triggered30d} triggered (30d)</div>
+            <div style={{ fontSize: 13, color: '#a8a29e' }}>{activeCount} active &nbsp;&middot;&nbsp; {triggeredCount} triggered &nbsp;&middot;&nbsp; {pausedCount} paused</div>
           </div>
           <button
             onClick={() => setShowCreate(s => !s)}
@@ -110,8 +112,8 @@ export default function Alerts() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32 }}>
           {[
             { label: 'Active', val: activeCount, color: '#22c55e' as string },
+            { label: 'Triggered', val: triggeredCount, color: '#f59e0b' as string },
             { label: 'Paused', val: pausedCount, color: '#a8a29e' as string },
-            { label: 'Triggered (30d)', val: triggered30d, color: '#fafaf9' as string },
             { label: 'Total', val: alerts.length, color: '#fafaf9' as string },
           ].map(({ label, val, color }) => (
             <div key={label} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: '16px 18px' }}>
@@ -175,16 +177,18 @@ export default function Alerts() {
             const targetPrice = a.target_price ?? a.target ?? 0
             const currentPrice = a.current_price ?? 0
             const isActive = a.active !== undefined ? a.active : (a.status === 'active')
+            const isTriggered = !!a.last_triggered_at
             const progress = getProgress(a)
             const progressColor = a.direction === 'above' ? '#22c55e' : '#ef4444'
-            const dotColor = statusDotColor(isActive)
+            const statusColor = isTriggered ? '#f59e0b' : isActive ? '#22c55e' : '#a8a29e'
+            const statusLabel = isTriggered ? 'Triggered' : isActive ? 'Active' : 'Paused'
             return (
               <div key={alertId} style={{ background: '#1c1917', border: `1px solid #292524`, borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px' }}>
                   {/* Status */}
                   <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, minWidth: 80 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, boxShadow: isActive ? `0 0 8px ${dotColor}` : 'none' }} />
-                    <span style={{ fontSize: 11, fontWeight: 500, color: dotColor }}>{isActive ? 'Active' : 'Paused'}</span>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, boxShadow: isActive && !isTriggered ? `0 0 8px ${statusColor}` : 'none' }} />
+                    <span style={{ fontSize: 11, fontWeight: 500, color: statusColor }}>{statusLabel}</span>
                   </div>
                   {/* Ticker */}
                   <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#232120', border: '1px solid #292524', letterSpacing: '0.02em', minWidth: 64, textAlign: 'center', flexShrink: 0 }}>
@@ -198,6 +202,11 @@ export default function Alerts() {
                     {currentPrice > 0 && (
                       <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
                         Current: {fmt(currentPrice)} &nbsp;&middot;&nbsp; {Math.abs(((currentPrice - targetPrice) / targetPrice) * 100).toFixed(1)}% away
+                      </div>
+                    )}
+                    {a.last_triggered_at && (
+                      <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2 }}>
+                        Triggered {new Date(a.last_triggered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
                     )}
                   </div>

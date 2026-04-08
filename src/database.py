@@ -2239,6 +2239,26 @@ class DatabaseManager:
             if conn:
                 self._release(conn)
 
+    def mark_all_price_alert_notifications_read(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE price_alert_notifications SET read_at = NOW() WHERE user_id = %s AND read_at IS NULL",
+                    (user_id,),
+                )
+                count = cur.rowcount
+            conn.commit()
+            return count
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to mark all notifications read: {e}")
+        finally:
+            if conn:
+                self._release(conn)
+
     # ==================== CSV Import Logging ====================
 
     def log_csv_import(

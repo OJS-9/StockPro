@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Iterable, List
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,19 @@ def _format_money(x: float) -> str:
 def _cooldown() -> timedelta:
     sec = float(os.getenv("STOCKPRO_ALERT_COOLDOWN_SEC", "3600"))
     return timedelta(seconds=sec)
+
+
+_ET = ZoneInfo("America/New_York")
+
+
+def _us_market_open() -> bool:
+    """Return True if US stock market is currently open (Mon-Fri 9:30-16:00 ET)."""
+    now_et = datetime.now(_ET)
+    if now_et.weekday() >= 5:  # Saturday=5, Sunday=6
+        return False
+    t = now_et.time()
+    from datetime import time as _time
+    return _time(9, 30) <= t <= _time(16, 0)
 
 
 def _send_telegram_alert_if_connected(db, user_id: str, symbol: str, body: str) -> None:
@@ -80,6 +94,9 @@ def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
         at_cache = (row.get("asset_type") or "stock").lower()
         at_alert = (alert.get("asset_type") or "stock").lower()
         if at_cache != at_alert:
+            continue
+        # Stock alerts only evaluate during US market hours
+        if at_alert == "stock" and not _us_market_open():
             continue
         try:
             price = _to_float(row.get("price"))

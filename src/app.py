@@ -1823,7 +1823,7 @@ def portfolio_history(portfolio_id):
 # ============================================================================
 
 
-def _alert_row_to_json(row):
+def _alert_row_to_json(row, cache=None):
     if not row:
         return None
     return {
@@ -1833,6 +1833,11 @@ def _alert_row_to_json(row):
         "direction": row["direction"],
         "target_price": (
             float(row["target_price"]) if row.get("target_price") is not None else None
+        ),
+        "current_price": (
+            float(cache.get(row["symbol"], {}).get("price", 0))
+            if cache and cache.get(row["symbol"], {}).get("price") is not None
+            else None
         ),
         "active": bool(row["active"]),
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
@@ -1854,19 +1859,22 @@ def api_list_alerts():
     db = get_database_manager()
     uid = session["user_id"]
     rows = db.list_price_alerts_for_user(uid)
-    alerts = [_alert_row_to_json(r) for r in rows]
+    symbols = list({r["symbol"] for r in rows})
+    cache = db.get_cached_prices(symbols) if symbols else {}
+    alerts = [_alert_row_to_json(r, cache) for r in rows]
 
-    # Compute stats
-    active_count = sum(1 for r in rows if r.get("active"))
+    # Compute stats — triggered = has last_triggered_at, active = active but not triggered
+    triggered_count = sum(1 for r in rows if r.get("last_triggered_at"))
+    active_count = sum(1 for r in rows if r.get("active") and not r.get("last_triggered_at"))
     paused_count = sum(1 for r in rows if not r.get("active"))
-    # Triggered in last 30 days: count notifications
+    # Triggered in last 30 days: count DISTINCT alerts, not notification rows
     try:
         cutoff = datetime.now(_tz.utc) - timedelta(days=30)
         notifs = db.list_price_alert_notifications_for_user(uid, limit=500)
-        triggered_30d = sum(
-            1 for n in notifs
+        triggered_30d = len({
+            n["alert_id"] for n in notifs
             if n.get("created_at") and n["created_at"].replace(tzinfo=_tz.utc) >= cutoff
-        )
+        })
     except Exception:
         triggered_30d = 0
 
@@ -1876,6 +1884,7 @@ def api_list_alerts():
         "stats": {
             "active_count": active_count,
             "paused_count": paused_count,
+            "triggered_count": triggered_count,
             "triggered_30d_count": triggered_30d,
         },
     })
@@ -1981,6 +1990,16 @@ def api_list_alert_notifications():
             "unread_count": unread,
         }
     )
+
+
+@app.route("/api/alerts/notifications/mark-all-read", methods=["POST"])
+@login_required
+def api_mark_all_alert_notifications_read():
+    from database import get_database_manager
+
+    db = get_database_manager()
+    count = db.mark_all_price_alert_notifications_read(session["user_id"])
+    return jsonify({"success": True, "marked": count})
 
 
 @app.route("/api/alerts/notifications/<notification_id>", methods=["PATCH"])
