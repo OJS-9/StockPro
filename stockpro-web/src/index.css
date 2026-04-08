@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #d6d3d1;
+  --color-background-dark: #0c0a09;
+  --color-surface-dark: #1c1917;
+  --color-border-dark: #292524;
+  --color-accent-up: #22c55e;
+  --color-accent-down: #ef4444;
+
+  --font-display: 'Nunito', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+body {
+  background-color: #0c0a09;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(1); }
+  30% { opacity: 1; transform: scale(1.2); }
+}
+
+input, textarea, select, button {
+  font-family: 'Inter', sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+/* Material Icons base style */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  line-height: 1;
+  user-select: none;
+}

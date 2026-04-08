@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StockPro — Portfolio Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0c0a09; --surface: #1c1917; --surface-2: #232120; --border: #292524;
+    --text: #fafaf9; --text-2: rgba(250,250,249,0.65); --muted: #a8a29e; --accent: #d6d3d1;
+    --gain: #22c55e; --gain-bg: rgba(34,197,94,0.08); --gain-border: rgba(34,197,94,0.2);
+    --loss: #ef4444; --loss-bg: rgba(239,68,68,0.08); --loss-border: rgba(239,68,68,0.2);
+    --warn: #f59e0b; --info: #60a5fa;
+    --c1: #60a5fa; --c2: #a78bfa; --c3: #22c55e; --c4: #f59e0b; --c5: #f472b6;
+  }
+  html { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+
+  nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 60px; background: rgba(12,10,9,0.95); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 40px; }
+  .nav-logo { font-family: 'Nunito', sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a { display: flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 8px; transition: all 0.15s; }
+  .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-links a.active { color: var(--text); background: rgba(214,211,209,0.07); }
+  .nav-links a .material-symbols-outlined { font-size: 18px; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-icon-btn:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .nav-icon-btn .material-symbols-outlined { font-size: 18px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2d2b29, #3d3a37); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; font-family: 'Nunito', sans-serif; }
+
+  .page { max-width: 1240px; margin: 0 auto; padding: 36px 48px 80px; }
+
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+  .page-title { font-family: 'Nunito', sans-serif; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .page-subtitle { font-size: 13px; color: var(--muted); }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .portfolio-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; outline: none; }
+  .btn-ghost { background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(214,211,209,0.3); }
+  .btn-ghost .material-symbols-outlined { font-size: 16px; }
+
+  /* KPI STRIP */
+  .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 13px; padding: 18px 20px; }
+  .kpi-label { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
+  .kpi-val { font-family: 'Nunito', sans-serif; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .kpi-val.up { color: var(--gain); }
+  .kpi-val.down { color: var(--loss); }
+  .kpi-sub { font-size: 11.5px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi-sub.up { color: var(--gain); }
+  .kpi-sub.down { color: var(--loss); }
+  .kpi-sub.muted { color: var(--muted); }
+
+  /* LAYOUT */
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 18px; }
+  .grid-1-1 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .card-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card-title .material-symbols-outlined { font-size: 16px; color: var(--muted); }
+  .card-action { font-size: 12px; color: var(--muted); cursor: pointer; }
+  .card-body { padding: 20px; }
+
+  /* TIME RANGE */
+  .range-toggle { display: flex; gap: 2px; }
+  .range-btn { font-size: 11.5px; font-weight: 500; padding: 4px 9px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .range-btn.active { background: rgba(214,211,209,0.1); color: var(--text); }
+
+  /* CHARTS */
+  .chart-area svg { width: 100%; display: block; }
+  .chart-area { padding: 16px 20px 8px; }
+
+  /* ALLOCATION TABLE */
+  .alloc-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(41,37,36,0.4); }
+  .alloc-row:last-child { border-bottom: none; }
+  .alloc-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .alloc-ticker { font-size: 13px; font-weight: 600; min-width: 44px; }
+  .alloc-bar-wrap { flex: 1; height: 5px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .alloc-bar { height: 100%; border-radius: 999px; }
+  .alloc-pct { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; }
+  .alloc-val { font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 68px; text-align: right; }
+
+  /* SECTOR TABLE */
+  .sector-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(41,37,36,0.4); }
+  .sector-row:last-child { border-bottom: none; }
+  .sector-color { width: 4px; height: 28px; border-radius: 2px; flex-shrink: 0; }
+  .sector-name { font-size: 13px; flex: 1; }
+  .sector-bar-wrap { width: 120px; height: 5px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .sector-bar { height: 100%; border-radius: 999px; }
+  .sector-pct { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 36px; text-align: right; }
+
+  /* RISK METRICS */
+  .risk-metric { padding: 14px 0; border-bottom: 1px solid rgba(41,37,36,0.4); display: flex; align-items: center; justify-content: space-between; }
+  .risk-metric:last-child { border-bottom: none; }
+  .risk-name { font-size: 13.5px; font-weight: 500; }
+  .risk-desc { font-size: 12px; color: var(--muted); }
+  .risk-val { font-family: 'Nunito', sans-serif; font-size: 18px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* TOP WINNERS/LOSERS */
+  .performer-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(41,37,36,0.4); }
+  .performer-row:last-child { border-bottom: none; }
+  .perf-ticker { font-size: 13px; font-weight: 600; min-width: 48px; }
+  .perf-name { font-size: 12px; color: var(--muted); flex: 1; }
+  .perf-ret { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .perf-ret.up { color: var(--gain); }
+  .perf-ret.down { color: var(--loss); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">StockPro</span>
+    <div class="nav-links">
+      <a href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a>
+      <a href="#" class="active"><span class="material-symbols-outlined">pie_chart</span>Portfolio</a>
+      <a href="#"><span class="material-symbols-outlined">visibility</span>Watchlist</a>
+      <a href="#"><span class="material-symbols-outlined">description</span>Reports</a>
+      <a href="#"><span class="material-symbols-outlined">notifications</span>Alerts</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">search</span></button>
+    <button class="nav-icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+    <div class="avatar">OS</div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Portfolio Analytics</div>
+      <div class="page-subtitle">Performance deep-dive across all portfolios</div>
+    </div>
+    <div class="header-actions">
+      <select class="portfolio-select">
+        <option>All Portfolios</option>
+        <option>Tech Growth</option>
+        <option>Crypto Exposure</option>
+      </select>
+      <div class="range-toggle">
+        <button class="range-btn">1M</button>
+        <button class="range-btn">3M</button>
+        <button class="range-btn active">YTD</button>
+        <button class="range-btn">1Y</button>
+        <button class="range-btn">All</button>
+      </div>
+      <button class="btn-ghost"><span class="material-symbols-outlined">download</span>Export</button>
+    </div>
+  </div>
+
+  <!-- KPI STRIP -->
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Value</div>
+      <div class="kpi-val">$178,430</div>
+      <div class="kpi-sub muted">Cost $154,200</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Return</div>
+      <div class="kpi-val up">+$24,230</div>
+      <div class="kpi-sub up">+15.7% all time</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">YTD Return</div>
+      <div class="kpi-val up">+$11,840</div>
+      <div class="kpi-sub up">+7.2% YTD</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Best Performer</div>
+      <div class="kpi-val" style="font-size:18px;color:var(--gain)">NVDA</div>
+      <div class="kpi-sub up">+169.2% return</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Worst Performer</div>
+      <div class="kpi-val" style="font-size:18px;color:var(--loss)">TSLA</div>
+      <div class="kpi-sub down">-6.3% return</div>
+    </div>
+  </div>
+
+  <!-- PERFORMANCE CHART (full width) -->
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-head">
+      <div class="card-title"><span class="material-symbols-outlined">show_chart</span>Portfolio Value Over Time</div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+          <div style="width:16px;height:2px;background:var(--gain);border-radius:1px;"></div>Portfolio
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+          <div style="width:16px;height:2px;background:var(--border);border-radius:1px;border:1px dashed var(--muted);"></div>Cost Basis
+        </div>
+      </div>
+    </div>
+    <div class="chart-area">
+      <svg viewBox="0 0 1100 200" preserveAspectRatio="none" fill="none">
+        <defs>
+          <linearGradient id="a-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#22c55e" stop-opacity="0.12"/>
+            <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- Cost basis flat -->
+        <line x1="0" y1="140" x2="1100" y2="140" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <!-- Portfolio value -->
+        <polygon points="0,170 100,162 200,165 300,148 400,135 500,140 600,118 700,100 800,108 900,82 1000,68 1100,56 1100,200 0,200" fill="url(#a-grad)"/>
+        <polyline points="0,170 100,162 200,165 300,148 400,135 500,140 600,118 700,100 800,108 900,82 1000,68 1100,56" stroke="#22c55e" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ALLOCATION + SECTOR -->
+  <div class="grid-2-1">
+    <!-- ALLOCATION -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><span class="material-symbols-outlined">donut_large</span>Allocation by Holdings</div>
+      </div>
+      <div class="card-body" style="padding:8px 20px 12px;">
+        <div class="alloc-row">
+          <div class="alloc-color" style="background:var(--c1)"></div>
+          <div class="alloc-ticker">NVDA</div>
+          <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:31.6%;background:var(--c1)"></div></div>
+          <div class="alloc-pct">31.6%</div>
+          <div class="alloc-val">$45,200</div>
+        </div>
+        <div class="alloc-row">
+          <div class="alloc-color" style="background:var(--c2)"></div>
+          <div class="alloc-ticker">MSFT</div>
+          <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:21.5%;background:var(--c2)"></div></div>
+          <div class="alloc-pct">21.5%</div>
+          <div class="alloc-val">$38,400</div>
+        </div>
+        <div class="alloc-row">
+          <div class="alloc-color" style="background:var(--c3)"></div>
+          <div class="alloc-ticker">AAPL</div>
+          <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:14.3%;background:var(--c3)"></div></div>
+          <div class="alloc-pct">14.3%</div>
+          <div class="alloc-val">$25,600</div>
+        </div>
+        <div class="alloc-row">
+          <div class="alloc-color" style="background:var(--c4)"></div>
+          <div class="alloc-ticker">BTC</div>
+          <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:11.2%;background:var(--c4)"></div></div>
+          <div class="alloc-pct">11.2%</div>
+          <div class="alloc-val">$20,000</div>
+        </div>
+        <div class="alloc-row">
+          <div class="alloc-color" style="background:var(--c5)"></div>
+          <div class="alloc-ticker">Others</div>
+          <div class="alloc-bar-wrap"><div class="alloc-bar" style="width:21.4%;background:var(--c5)"></div></div>
+          <div class="alloc-pct">21.4%</div>
+          <div class="alloc-val">$49,230</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTOR BREAKDOWN -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><span class="material-symbols-outlined">category</span>By Sector</div>
+      </div>
+      <div class="card-body" style="padding:8px 20px 12px;">
+        <div class="sector-row">
+          <div class="sector-color" style="background:var(--c1)"></div>
+          <div class="sector-name">Semiconductors</div>
+          <div class="sector-bar-wrap"><div class="sector-bar" style="width:80%;background:var(--c1)"></div></div>
+          <div class="sector-pct">38.4%</div>
+        </div>
+        <div class="sector-row">
+          <div class="sector-color" style="background:var(--c2)"></div>
+          <div class="sector-name">Software &amp; Cloud</div>
+          <div class="sector-bar-wrap"><div class="sector-bar" style="width:55%;background:var(--c2)"></div></div>
+          <div class="sector-pct">26.3%</div>
+        </div>
+        <div class="sector-row">
+          <div class="sector-color" style="background:var(--c4)"></div>
+          <div class="sector-name">Crypto</div>
+          <div class="sector-bar-wrap"><div class="sector-bar" style="width:24%;background:var(--c4)"></div></div>
+          <div class="sector-pct">11.4%</div>
+        </div>
+        <div class="sector-row">
+          <div class="sector-color" style="background:var(--c3)"></div>
+          <div class="sector-name">Consumer Tech</div>
+          <div class="sector-bar-wrap"><div class="sector-bar" style="width:20%;background:var(--c3)"></div></div>
+          <div class="sector-pct">9.5%</div>
+        </div>
+        <div class="sector-row">
+          <div class="sector-color" style="background:var(--c5)"></div>
+          <div class="sector-name">E-commerce</div>
+          <div class="sector-bar-wrap"><div class="sector-bar" style="width:30%;background:var(--c5)"></div></div>
+          <div class="sector-pct">14.4%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WINNERS/LOSERS + RISK METRICS -->
+  <div class="grid-1-1">
+
+    <!-- WINNERS / LOSERS -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><span class="material-symbols-outlined">leaderboard</span>Performance by Holding</div>
+      </div>
+      <div class="card-body" style="padding:8px 20px 12px;">
+        <div class="performer-row">
+          <div class="perf-ticker">NVDA</div>
+          <div class="perf-name">NVIDIA Corp</div>
+          <div class="perf-ret up">+169.2%</div>
+        </div>
+        <div class="performer-row">
+          <div class="perf-ticker">MSFT</div>
+          <div class="perf-name">Microsoft</div>
+          <div class="perf-ret up">+106.5%</div>
+        </div>
+        <div class="performer-row">
+          <div class="perf-ticker">AMZN</div>
+          <div class="perf-name">Amazon</div>
+          <div class="perf-ret up">+91.6%</div>
+        </div>
+        <div class="performer-row">
+          <div class="perf-ticker">AAPL</div>
+          <div class="perf-name">Apple</div>
+          <div class="perf-ret up">+43.8%</div>
+        </div>
+        <div class="performer-row">
+          <div class="perf-ticker">ETH</div>
+          <div class="perf-name">Ethereum</div>
+          <div class="perf-ret down">-18.4%</div>
+        </div>
+        <div class="performer-row">
+          <div class="perf-ticker">TSLA</div>
+          <div class="perf-name">Tesla</div>
+          <div class="perf-ret down">-6.3%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RISK METRICS -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><span class="material-symbols-outlined">shield</span>Risk Metrics (YTD)</div>
+      </div>
+      <div class="card-body" style="padding:4px 20px 12px;">
+        <div class="risk-metric">
+          <div>
+            <div class="risk-name">Volatility (σ)</div>
+            <div class="risk-desc">Annualized daily std dev</div>
+          </div>
+          <div class="risk-val" style="color:var(--warn)">24.6%</div>
+        </div>
+        <div class="risk-metric">
+          <div>
+            <div class="risk-name">Sharpe Ratio</div>
+            <div class="risk-desc">Risk-adjusted return</div>
+          </div>
+          <div class="risk-val" style="color:var(--gain)">1.42</div>
+        </div>
+        <div class="risk-metric">
+          <div>
+            <div class="risk-name">Max Drawdown</div>
+            <div class="risk-desc">Largest peak-to-trough</div>
+          </div>
+          <div class="risk-val" style="color:var(--loss)">-18.3%</div>
+        </div>
+        <div class="risk-metric">
+          <div>
+            <div class="risk-name">Beta (vs S&amp;P 500)</div>
+            <div class="risk-desc">Market sensitivity</div>
+          </div>
+          <div class="risk-val">1.54</div>
+        </div>
+        <div class="risk-metric">
+          <div>
+            <div class="risk-name">Concentration Risk</div>
+            <div class="risk-desc">Top 3 holdings weight</div>
+          </div>
+          <div class="risk-val" style="color:var(--warn)">67.4%</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+</body>
+</html>

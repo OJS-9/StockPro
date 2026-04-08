@@ -21,6 +21,7 @@ from flask import (
     abort,
 )
 from flask_wtf.csrf import CSRFProtect
+from flask_cors import CORS
 from clerk_backend_api import Clerk as ClerkClient, AuthenticateRequestOptions
 import os
 import re
@@ -36,7 +37,7 @@ import bleach
 import markdown as md_lib
 from markupsafe import Markup
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 from psycopg2.extras import RealDictCursor
 
 from orchestrator_graph import OrchestratorSession, create_session
@@ -80,6 +81,27 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"      # blocks cross-site request f
 app.config["SESSION_COOKIE_SECURE"] = _is_production  # HTTPS-only in prod
 
 csrf = CSRFProtect(app)
+
+# Exempt all /api/* routes from CSRF — authenticated via Clerk Bearer token.
+# Flask-WTF's csrf_protect runs as the LAST before_request hook added by init_app.
+# We replace it with a wrapper that skips /api/ paths.
+def _wrap_api_csrf_exempt():
+    _hooks = app.before_request_funcs.setdefault(None, [])
+    if _hooks:
+        _orig = _hooks[-1]  # The csrf_protect hook just registered
+
+        def _patched():
+            if request.path.startswith('/api/'):
+                return  # Bearer token auth is sufficient; no CSRF needed
+            return _orig()
+
+        _hooks[-1] = _patched
+
+
+_wrap_api_csrf_exempt()
+
+# Allow React dev server (port 3000) to call Flask during development
+CORS(app, origins=["http://localhost:3000"], supports_credentials=True)
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -149,6 +171,14 @@ def pop_status():
         "status_message": session.pop("status_message", None),
         "status_type": session.pop("status_type", "info"),
     }
+
+
+def _wants_json() -> bool:
+    """Return True if the caller wants a JSON response (React SPA or API client)."""
+    return (
+        request.args.get("format") == "json"
+        or "application/json" in request.headers.get("Accept", "")
+    )
 
 
 def _free_tier_quota_message() -> str:
@@ -223,6 +253,8 @@ def login_required(f):
                 get_or_create_session_id()
             return f(*args, **kwargs)
         app.logger.warning("Clerk auth failed: %s", request_state.reason)
+        if _wants_json() or request.headers.get("Authorization"):
+            return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("sign_in"))
 
     return decorated
@@ -612,6 +644,8 @@ def index():
     except Exception as exc:
         app.logger.warning("Clerk auth check on '/' failed: %s", exc, exc_info=True)
 
+    if _wants_json():
+        return jsonify({"authenticated": False})
     return render_template("home_public.html", **pop_status())
 
 
@@ -627,6 +661,12 @@ def chat():
     current_ticker = session.get("current_ticker", "")
     current_trade_type = session.get("current_trade_type", "Investment")
 
+    if _wants_json():
+        return jsonify({
+            "conversation_history": conversation_history,
+            "current_ticker": current_ticker,
+            "current_trade_type": current_trade_type,
+        })
     return render_template(
         "chat.html",
         conversation_history=conversation_history,
@@ -683,11 +723,23 @@ def start_research():
 
 
 @app.route("/continue", methods=["POST"])
+@csrf.exempt
 @login_required
 @limiter.limit(_continue_conversation_rate_limit, key_func=get_remote_address)
 def continue_conversation():
     """Start a conversation turn in a background thread; return SSE session info."""
-    user_input = request.form.get("user_response", "").strip()
+    # Accept JSON (React SPA) or form data (legacy Jinja2 templates)
+    if request.is_json:
+        body = request.get_json(force=True) or {}
+        user_input = (body.get("message") or body.get("user_response") or "").strip()
+        # Allow React to pass report_id to enter report chat mode
+        incoming_report_id = body.get("report_id")
+        if incoming_report_id:
+            session["current_report_id"] = incoming_report_id
+            session["report_chat_mode"] = True
+    else:
+        user_input = request.form.get("user_response", "").strip()
+        incoming_report_id = None
 
     if not user_input:
         return jsonify({"success": False, "error": "⚠️ Please enter a response."}), 400
@@ -809,6 +861,7 @@ def stream_steps(session_id: str):
 
 
 @app.route("/commit_session", methods=["POST"])
+@csrf.exempt
 @login_required
 def commit_session():
     """Persist state from SSE 'done' payload back into the Flask session."""
@@ -893,6 +946,7 @@ def clear_conversation():
 
 
 @app.route("/popup_start", methods=["POST"])
+@csrf.exempt
 @login_required
 @limiter.limit(_popup_start_rate_limit, key_func=get_remote_address)
 def popup_start():
@@ -959,6 +1013,7 @@ def popup_start():
 
 
 @app.route("/start_generation", methods=["POST"])
+@csrf.exempt
 @login_required
 @limiter.limit(_report_gen_rate_limit, key_func=get_remote_address)
 def start_generation():
@@ -1076,20 +1131,42 @@ def position_check(ticker: str):
     """Return user's existing holdings of a ticker across all portfolios."""
     user_id = session.get("user_id")
     if not user_id:
-        return jsonify({"positions": []})
+        return jsonify({"holding": False, "positions": []})
     svc = get_portfolio_service()
-    holdings = svc.get_holdings_for_ticker(user_id=user_id, symbol=ticker.upper())
-    positions = [
-        {
+    symbol = ticker.upper()
+    holdings = svc.get_holdings_for_ticker(user_id=user_id, symbol=symbol)
+    if not holdings:
+        return jsonify({"holding": False, "positions": []})
+
+    # Enrich with live price for market_value and return calculations
+    from data_providers import DataProviderFactory
+    factory = DataProviderFactory()
+    try:
+        price = float(factory.get_current_price(symbol) or 0)
+    except Exception:
+        price = None
+
+    positions = []
+    for h in holdings:
+        qty = float(h["total_quantity"])
+        avg_cost = float(h["average_cost"])
+        cost_basis = float(h["total_cost_basis"])
+        market_value = qty * price if price else None
+        total_return = (market_value - cost_basis) if market_value is not None else None
+        return_pct = (total_return / cost_basis * 100) if (total_return is not None and cost_basis > 0) else None
+        positions.append({
             "portfolio_name": h["portfolio_name"],
             "portfolio_id": h["portfolio_id"],
-            "quantity": float(h["total_quantity"]),
-            "average_cost": float(h["average_cost"]),
-            "total_cost_basis": float(h["total_cost_basis"]),
-        }
-        for h in holdings
-    ]
-    return jsonify({"positions": positions})
+            "quantity": qty,
+            "average_cost": avg_cost,
+            "total_cost_basis": cost_basis,
+            "current_price": price,
+            "market_value": market_value,
+            "total_return": total_return,
+            "return_pct": return_pct,
+        })
+
+    return jsonify({"holding": True, "positions": positions})
 
 
 @app.route("/api/usage", methods=["GET"])
@@ -1133,6 +1210,8 @@ def portfolio():
     portfolio_service = get_portfolio_service()
     data = portfolio_service.get_portfolios_with_summaries(user_id=session["user_id"])
     status = pop_status()
+    if _wants_json():
+        return jsonify({"portfolios": data["portfolios"], "overall": data["overall"]})
     return render_template(
         "portfolio_list.html",
         portfolios=data["portfolios"],
@@ -1206,6 +1285,8 @@ def portfolio_detail(portfolio_id: str):
             portfolio_id, with_prices=False
         )
         status = pop_status()
+        if _wants_json():
+            return jsonify({"portfolio": portfolio_data, "summary": summary, "holdings": summary["holdings"]})
         return render_template(
             "portfolio.html",
             portfolio=portfolio_data,
@@ -1215,6 +1296,8 @@ def portfolio_detail(portfolio_id: str):
         )
     except Exception as e:
         flash_status(f"Error loading portfolio: {str(e)}", "error")
+        if _wants_json():
+            return jsonify({"error": str(e)}), 500
         return render_template(
             "portfolio.html",
             portfolio=portfolio_data,
@@ -1283,6 +1366,8 @@ def add_transaction(portfolio_id: str):
 
     # GET request - show form
     status = pop_status()
+    if _wants_json():
+        return jsonify({"portfolio": portfolio_data})
     return render_template("add_transaction.html", portfolio=portfolio_data, **status)
 
 
@@ -1309,10 +1394,12 @@ def import_csv(portfolio_id: str):
                 raise ValueError("File exceeds 10MB limit")
             file.seek(0)
             csv_content = file.read().decode("utf-8")
+            broker = (request.form.get("broker") or "").strip().lower() or None
             result = portfolio_service.import_csv(
                 portfolio_id=portfolio_id,
                 csv_content=csv_content,
                 filename=file.filename,
+                format_type=broker,
             )
 
             session["import_summary"] = {
@@ -1343,6 +1430,8 @@ def import_csv(portfolio_id: str):
     status = pop_status()
     import_summary = session.pop("import_summary", None)
     import_errors = session.pop("import_errors", None)
+    if _wants_json():
+        return jsonify({"portfolio": portfolio_data, "import_summary": import_summary, "import_errors": import_errors})
     return render_template(
         "import_csv.html",
         portfolio=portfolio_data,
@@ -1395,6 +1484,8 @@ def holding_detail(portfolio_id: str, symbol: str):
 
         status = pop_status()
 
+        if _wants_json():
+            return jsonify({"portfolio": portfolio_data, "holding": holding, "transactions": transactions})
         return render_template(
             "holding_detail.html",
             portfolio=portfolio_data,
@@ -1453,6 +1544,141 @@ def delete_transaction(portfolio_id: str, transaction_id: str):
     return redirect(url_for("portfolio_detail", portfolio_id=portfolio_id))
 
 
+@app.route(
+    "/api/portfolio/<portfolio_id>/transaction/<transaction_id>",
+    methods=["PUT"],
+)
+@login_required
+def api_edit_transaction(portfolio_id: str, transaction_id: str):
+    """Edit a transaction's quantity, price, date, and notes."""
+    from database import get_database_manager
+
+    svc = get_portfolio_service()
+
+    # Verify ownership chain: transaction → holding → portfolio → user
+    txn = svc.get_transaction(transaction_id)
+    if not txn:
+        return jsonify({"success": False, "error": "Transaction not found"}), 404
+    holding = svc.get_holding_by_id(txn["holding_id"])
+    if not holding or holding.get("portfolio_id") != portfolio_id:
+        return jsonify({"success": False, "error": "Not found"}), 404
+    portfolio = svc.get_portfolio(portfolio_id)
+    if not portfolio or portfolio.get("user_id") != session["user_id"]:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        quantity = Decimal(str(data["quantity"])) if "quantity" in data else None
+        price_per_unit = Decimal(str(data["price_per_unit"])) if "price_per_unit" in data else None
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid quantity or price"}), 400
+
+    if quantity is not None and quantity <= 0:
+        return jsonify({"success": False, "error": "quantity must be positive"}), 400
+    if price_per_unit is not None and price_per_unit <= 0:
+        return jsonify({"success": False, "error": "price must be positive"}), 400
+
+    db = get_database_manager()
+    conn = None
+    try:
+        conn = db.get_connection()
+        fields, values = [], []
+        if quantity is not None:
+            fields.append("quantity = %s")
+            values.append(float(quantity))
+        if price_per_unit is not None:
+            fields.append("price_per_unit = %s")
+            values.append(float(price_per_unit))
+        if "transaction_date" in data:
+            fields.append("transaction_date = %s")
+            values.append(data["transaction_date"])
+        if "notes" in data:
+            fields.append("notes = %s")
+            values.append(str(data["notes"])[:500])
+        if not fields:
+            return jsonify({"success": False, "error": "No fields to update"}), 400
+        values.append(transaction_id)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE transactions SET {', '.join(fields)} WHERE transaction_id = %s",
+                values,
+            )
+        conn.commit()
+        # Recalculate holding after edit
+        svc._recalculate_holding(holding["holding_id"])
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db._release(conn)
+
+
+@app.route("/api/portfolio/<portfolio_id>/transaction", methods=["POST"])
+@login_required
+def api_add_transaction(portfolio_id: str):
+    """Add a transaction via JSON (React SPA)."""
+    portfolio_service = get_portfolio_service()
+    portfolio = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio or portfolio.get("user_id") != session["user_id"]:
+        return jsonify({"success": False, "error": "Not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    try:
+        symbol = (data.get("symbol") or "").strip().upper()
+        transaction_type = (data.get("type") or data.get("transaction_type") or "").strip().lower()
+        quantity = Decimal(str(data["shares"])) if "shares" in data else Decimal(str(data.get("quantity", 0)))
+        price = Decimal(str(data.get("price", 0)))
+        date_str = data.get("date", "")
+        notes = data.get("notes", "")
+
+        if not symbol:
+            return jsonify({"success": False, "error": "Symbol is required"}), 400
+        if transaction_type not in ("buy", "sell"):
+            return jsonify({"success": False, "error": "type must be buy or sell"}), 400
+        if quantity <= 0:
+            return jsonify({"success": False, "error": "shares must be positive"}), 400
+        if price <= 0:
+            return jsonify({"success": False, "error": "price must be positive"}), 400
+
+        transaction_date = datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime.utcnow()
+        portfolio_service.add_transaction(
+            portfolio_id=portfolio_id,
+            symbol=symbol,
+            transaction_type=transaction_type,
+            quantity=quantity,
+            price_per_unit=price,
+            transaction_date=transaction_date,
+            notes=notes,
+        )
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route(
+    "/api/portfolio/<portfolio_id>/transaction/<transaction_id>",
+    methods=["DELETE"],
+)
+@login_required
+def api_delete_transaction(portfolio_id: str, transaction_id: str):
+    """Delete a transaction via JSON (React SPA)."""
+    svc = get_portfolio_service()
+    txn = svc.get_transaction(transaction_id)
+    if not txn:
+        return jsonify({"success": False, "error": "Transaction not found"}), 404
+    holding = svc.get_holding_by_id(txn["holding_id"])
+    if not holding or holding.get("portfolio_id") != portfolio_id:
+        return jsonify({"success": False, "error": "Not found"}), 404
+    portfolio = svc.get_portfolio(portfolio_id)
+    if not portfolio or portfolio.get("user_id") != session["user_id"]:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+    if svc.delete_transaction(transaction_id):
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Delete failed"}), 500
+
+
 @app.route("/api/portfolios/prices")
 @login_required
 def portfolios_prices():
@@ -1464,33 +1690,49 @@ def portfolios_prices():
         return float(v) if v is not None else None
 
     result = []
+    total_value = 0.0
+    total_pnl = 0.0
+    total_day_change = 0.0
     for p in portfolios:
         pid = p["portfolio_id"]
         try:
             summary = portfolio_service.get_portfolio_summary(pid, with_prices=True)
-            result.append(
-                {
-                    "portfolio_id": pid,
-                    "total_market_value": to_float(summary.get("total_market_value")),
-                    "total_unrealized_gain": to_float(
-                        summary.get("total_unrealized_gain")
-                    ),
-                    "total_unrealized_gain_pct": to_float(
-                        summary.get("total_unrealized_gain_pct")
-                    ),
-                }
-            )
+            mv = to_float(summary.get("total_market_value")) or 0.0
+            ug = to_float(summary.get("total_unrealized_gain")) or 0.0
+            total_value += mv
+            total_pnl += ug
+            row = {
+                "portfolio_id": pid,
+                "total_market_value": to_float(summary.get("total_market_value")),
+                "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
+                "total_unrealized_gain_pct": to_float(summary.get("total_unrealized_gain_pct")),
+            }
+            # Day change: sum of (day_change_pct * market_value / 100) per holding
+            day_change = 0.0
+            for h in summary.get("holdings", []):
+                h_mv = to_float(h.get("market_value")) or 0.0
+                h_day_pct = to_float(h.get("day_change_pct")) or 0.0
+                day_change += h_mv * h_day_pct / 100.0
+            row["day_change"] = day_change
+            total_day_change += day_change
+            result.append(row)
         except Exception:
-            result.append(
-                {
-                    "portfolio_id": pid,
-                    "total_market_value": None,
-                    "total_unrealized_gain": None,
-                    "total_unrealized_gain_pct": None,
-                }
-            )
+            result.append({
+                "portfolio_id": pid,
+                "total_market_value": None,
+                "total_unrealized_gain": None,
+                "total_unrealized_gain_pct": None,
+                "day_change": None,
+            })
 
-    return jsonify(result)
+    return jsonify({
+        "portfolios": result,
+        "totals": {
+            "total_value": total_value,
+            "total_pnl": total_pnl,
+            "day_change": total_day_change,
+        },
+    })
 
 
 @app.route("/api/portfolio/<portfolio_id>/prices")
@@ -1523,6 +1765,9 @@ def portfolio_prices(portfolio_id):
         holdings_out.append(
             {
                 "symbol": h["symbol"],
+                "name": h.get("name", h["symbol"]),
+                "total_quantity": to_float(h.get("total_quantity")),
+                "average_cost": to_float(h.get("average_cost")),
                 "price_available": h.get("price_available", False),
                 "current_price": to_float(h.get("current_price")),
                 "market_value": to_float(h.get("market_value")),
@@ -1554,13 +1799,23 @@ def portfolio_prices(portfolio_id):
 @app.route("/api/portfolio/<portfolio_id>/history")
 @login_required
 def portfolio_history(portfolio_id):
-    """Return monthly portfolio value history as JSON."""
+    """Return portfolio value history as JSON.
+
+    Query params:
+      range: 1W | 1M | 3M | YTD | 1Y | all  (default: all → monthly)
+    """
     portfolio = get_portfolio_service().get_portfolio(portfolio_id)
     if not portfolio or portfolio.get("user_id") != session["user_id"]:
         return jsonify({"error": "Not found"}), 404
     history_service = get_history_service()
-    data = history_service.get_monthly_values(portfolio_id)
-    return jsonify(data)
+    range_param = request.args.get("range", "all").upper()
+    if range_param == "ALL":
+        range_param = "all"
+    if range_param == "all":
+        data = history_service.get_monthly_values(portfolio_id)
+        return jsonify({"history": data, "granularity": "monthly"})
+    data = history_service.get_values_for_range(portfolio_id, range_param)
+    return jsonify({"history": data, "granularity": "daily"})
 
 
 # ============================================================================
@@ -1568,7 +1823,7 @@ def portfolio_history(portfolio_id):
 # ============================================================================
 
 
-def _alert_row_to_json(row):
+def _alert_row_to_json(row, cache=None):
     if not row:
         return None
     return {
@@ -1578,6 +1833,11 @@ def _alert_row_to_json(row):
         "direction": row["direction"],
         "target_price": (
             float(row["target_price"]) if row.get("target_price") is not None else None
+        ),
+        "current_price": (
+            float(cache.get(row["symbol"], {}).get("price", 0))
+            if cache and cache.get(row["symbol"], {}).get("price") is not None
+            else None
         ),
         "active": bool(row["active"]),
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
@@ -1594,10 +1854,40 @@ def _alert_row_to_json(row):
 @login_required
 def api_list_alerts():
     from database import get_database_manager
+    from datetime import timezone as _tz
 
     db = get_database_manager()
-    rows = db.list_price_alerts_for_user(session["user_id"])
-    return jsonify({"success": True, "alerts": [_alert_row_to_json(r) for r in rows]})
+    uid = session["user_id"]
+    rows = db.list_price_alerts_for_user(uid)
+    symbols = list({r["symbol"] for r in rows})
+    cache = db.get_cached_prices(symbols) if symbols else {}
+    alerts = [_alert_row_to_json(r, cache) for r in rows]
+
+    # Compute stats — triggered = has last_triggered_at, active = active but not triggered
+    triggered_count = sum(1 for r in rows if r.get("last_triggered_at"))
+    active_count = sum(1 for r in rows if r.get("active") and not r.get("last_triggered_at"))
+    paused_count = sum(1 for r in rows if not r.get("active"))
+    # Triggered in last 30 days: count DISTINCT alerts, not notification rows
+    try:
+        cutoff = datetime.now(_tz.utc) - timedelta(days=30)
+        notifs = db.list_price_alert_notifications_for_user(uid, limit=500)
+        triggered_30d = len({
+            n["alert_id"] for n in notifs
+            if n.get("created_at") and n["created_at"].replace(tzinfo=_tz.utc) >= cutoff
+        })
+    except Exception:
+        triggered_30d = 0
+
+    return jsonify({
+        "success": True,
+        "alerts": alerts,
+        "stats": {
+            "active_count": active_count,
+            "paused_count": paused_count,
+            "triggered_count": triggered_count,
+            "triggered_30d_count": triggered_30d,
+        },
+    })
 
 
 @app.route("/api/alerts", methods=["POST"])
@@ -1702,6 +1992,16 @@ def api_list_alert_notifications():
     )
 
 
+@app.route("/api/alerts/notifications/mark-all-read", methods=["POST"])
+@login_required
+def api_mark_all_alert_notifications_read():
+    from database import get_database_manager
+
+    db = get_database_manager()
+    count = db.mark_all_price_alert_notifications_read(session["user_id"])
+    return jsonify({"success": True, "marked": count})
+
+
 @app.route("/api/alerts/notifications/<notification_id>", methods=["PATCH"])
 @login_required
 def api_patch_alert_notification(notification_id):
@@ -1730,6 +2030,179 @@ def api_telegram_connect_token():
     db = get_database_manager()
     token = db.create_telegram_connect_token(session["user_id"], ttl_minutes=10)
     return jsonify({"success": True, "token": token, "ttl_minutes": 10})
+
+
+@app.route("/api/settings", methods=["GET"])
+@login_required
+def api_settings_get():
+    """Return user profile and preferences."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    user = db.get_user_by_id(session["user_id"])
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    # Never return decrypted email in logs — just expose username
+    return jsonify({
+        "success": True,
+        "profile": {
+            "user_id": user["user_id"],
+            "display_name": user.get("username", ""),
+            "is_pro": bool(user.get("is_pro")),
+            "tier": user.get("tier", "free"),
+        },
+        "preferences": user.get("preferences") or {},
+    })
+
+
+@app.route("/api/settings", methods=["PUT"])
+@login_required
+def api_settings_put():
+    """Update user preferences (partial update merged into JSONB)."""
+    from database import get_database_manager
+
+    data = request.get_json(silent=True) or {}
+    display_name = data.pop("display_name", None)
+    if display_name is not None:
+        display_name = str(display_name).strip()[:80]
+
+    db = get_database_manager()
+    try:
+        db.update_user_preferences(
+            user_id=session["user_id"],
+            patch=data,
+            display_name=display_name if display_name else None,
+        )
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/telegram/disconnect", methods=["POST"])
+@login_required
+def api_telegram_disconnect():
+    """Disconnect Telegram integration by clearing the stored chat ID."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    conn = None
+    try:
+        conn = db.get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET telegram_chat_id = NULL WHERE user_id = %s",
+                (session["user_id"],),
+            )
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db._release(conn)
+
+
+@app.route("/api/watchlists/all", methods=["DELETE"])
+@login_required
+def api_delete_all_watchlists():
+    """Delete all watchlists for the current user (danger zone)."""
+    wl_svc = get_watchlist_service()
+    uid = session["user_id"]
+    try:
+        watchlists = wl_svc.db.list_watchlists(uid)
+        for wl in watchlists:
+            wl_svc.delete_watchlist(wl["watchlist_id"], uid)
+        return jsonify({"success": True, "deleted": len(watchlists)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/reports/all", methods=["DELETE"])
+@login_required
+def api_delete_all_reports():
+    """Delete all reports for the current user (danger zone)."""
+    storage = ReportStorage()
+    uid = session["user_id"]
+    try:
+        reports, _ = storage.get_all_reports(user_id=uid, limit=10000, offset=0)
+        for r in reports:
+            storage.delete_report(r["report_id"])
+        return jsonify({"success": True, "deleted": len(reports)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/account", methods=["DELETE"])
+@login_required
+def api_delete_account():
+    """Delete the current user's account and all associated data."""
+    from database import get_database_manager
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    conn = None
+    try:
+        # Delete from Clerk first
+        try:
+            clerk_client.users.delete(user_id=uid)
+        except Exception as e:
+            app.logger.warning("Clerk user delete failed: %s", e)
+
+        # Delete all user data (reports, holdings cascade from portfolio, watchlists, etc.)
+        conn = db.get_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM price_alert_notifications WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM price_alerts WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM ticker_notes WHERE user_id = %s", (uid,))
+            # Reports and chunks cascade
+            cur.execute("DELETE FROM reports WHERE user_id = %s", (uid,))
+            # Watchlist items/sections cascade from watchlists
+            cur.execute("DELETE FROM watchlists WHERE user_id = %s", (uid,))
+            # Holdings/transactions cascade from portfolios
+            cur.execute("DELETE FROM portfolios WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM telegram_connect_tokens WHERE user_id = %s", (uid,))
+            cur.execute("DELETE FROM users WHERE user_id = %s", (uid,))
+        conn.commit()
+        session.clear()
+        return jsonify({"success": True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db._release(conn)
+
+
+@app.route("/api/telegram/test-message", methods=["POST"])
+@login_required
+def api_telegram_test_message():
+    """Send a test message to the user's connected Telegram account."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    user = db.get_user_by_id(session["user_id"])
+    if not user or not user.get("telegram_chat_id"):
+        return jsonify({"success": False, "error": "Telegram not connected"}), 400
+
+    chat_id = user["telegram_chat_id"]
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not bot_token:
+        return jsonify({"success": False, "error": "Telegram bot not configured"}), 500
+
+    try:
+        import telegram as tg
+
+        bot = tg.Bot(token=bot_token)
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            bot.send_message(chat_id=chat_id, text="Test message from StockPro — your alerts are connected!")
+        )
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ============================================================================
@@ -1768,6 +2241,8 @@ def report_history():
         # Calculate pagination info
         total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
 
+        if _wants_json():
+            return jsonify({"reports": reports, "total_count": total_count, "current_page": page, "total_pages": total_pages})
         return render_template(
             "reports.html",
             reports=reports,
@@ -1781,6 +2256,8 @@ def report_history():
             page_range=_page_range(page, total_pages),
         )
     except Exception as e:
+        if _wants_json():
+            return jsonify({"error": str(e)}), 500
         return render_template(
             "reports.html",
             reports=[],
@@ -1796,11 +2273,50 @@ def report_history():
         )
 
 
+_BULLISH_WORDS = frozenset([
+    "surge", "rally", "beat", "record", "profit", "upgrade", "buy",
+    "growth", "strong", "outperform", "bullish", "rises", "gains", "up",
+    "positive", "boost", "increased", "higher", "exceeded",
+])
+_BEARISH_WORDS = frozenset([
+    "drop", "plunge", "miss", "loss", "downgrade", "sell", "decline",
+    "weak", "underperform", "bearish", "falls", "down", "negative",
+    "cut", "lower", "disappointing", "concern", "risk", "layoff", "warning",
+])
+
+
+def _news_sentiment(text: str) -> str:
+    """Simple keyword-based sentiment: bullish / bearish / neutral."""
+    words = (text or "").lower().split()
+    bull = sum(1 for w in words if w.strip(".,!?") in _BULLISH_WORDS)
+    bear = sum(1 for w in words if w.strip(".,!?") in _BEARISH_WORDS)
+    if bull > bear:
+        return "bullish"
+    if bear > bull:
+        return "bearish"
+    return "neutral"
+
+
+def _enrich_news(articles, symbol_filter: str = None):
+    """Add sentiment field to news articles; optionally filter to one symbol."""
+    enriched = []
+    for a in (articles or []):
+        title = (a.get("title") or a.get("headline") or "")
+        if symbol_filter and symbol_filter not in title.upper():
+            continue
+        a = dict(a)
+        a["sentiment"] = _news_sentiment(title + " " + (a.get("summary") or ""))
+        enriched.append(a)
+    return enriched
+
+
 @app.route("/api/news")
 def api_news():
     from news_service import get_briefing
 
-    return jsonify(get_briefing())
+    symbol = (request.args.get("symbol") or "").strip().upper() or None
+    articles = get_briefing()
+    return jsonify(_enrich_news(articles, symbol_filter=symbol))
 
 
 @app.route("/api/news/more")
@@ -1868,6 +2384,8 @@ def view_report(report_id):
         if not report:
             abort(404)
 
+        if _wants_json():
+            return jsonify({"report": report})
         return render_template("report_view.html", report=report)
     except Exception as e:
         app.logger.error(f"Error loading report {report_id}: {e}")
@@ -1985,6 +2503,8 @@ def ticker_detail(symbol: str):
             }
         )
 
+    if _wants_json():
+        return jsonify({"symbol": symbol, "reports": reports, "notes": notes})
     return render_template(
         "ticker.html",
         symbol=symbol,
@@ -2095,6 +2615,8 @@ def watchlist():
                 )
 
         status = pop_status()
+        if _wants_json():
+            return jsonify({"watchlists": watchlists, "active_watchlist": active_watchlist})
         return render_template(
             "watchlist.html",
             watchlists=watchlists,
@@ -2102,6 +2624,8 @@ def watchlist():
             **status,
         )
     except Exception as e:
+        if _wants_json():
+            return jsonify({"error": str(e)}), 500
         return render_template(
             "watchlist.html",
             watchlists=[],
@@ -2388,6 +2912,676 @@ def api_watchlist_earnings_calendar(watchlist_id: str):
             jsonify({"success": False, "error": "Failed to fetch earnings calendar"}),
             500,
         )
+
+
+# ============================================================================
+# Analytics endpoint (Phase 2 React SPA)
+# ============================================================================
+
+
+@app.route("/api/portfolio/<portfolio_id>/analytics")
+@login_required
+def api_portfolio_analytics(portfolio_id: str):
+    """Return analytics data for the portfolio analytics page.
+
+    Query params:
+      range: 1M | 3M | YTD | 1Y | all  (default: 1Y)
+
+    Returns KPIs, allocation, sector breakdown, performance ranking,
+    value history, and risk metrics.
+    """
+    portfolio = get_portfolio_service().get_portfolio(portfolio_id)
+    if not portfolio or portfolio.get("user_id") != session["user_id"]:
+        return jsonify({"success": False, "error": "Not found"}), 404
+
+    range_param = request.args.get("range", "1Y").upper()
+    if range_param == "ALL":
+        range_param = "all"
+
+    svc = get_portfolio_service()
+
+    def _f(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    try:
+        summary = svc.get_portfolio_summary(portfolio_id, with_prices=True)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+    holdings = summary.get("holdings", [])
+
+    # Best / worst performer
+    ranked = sorted(
+        [h for h in holdings if h.get("unrealized_gain_pct") is not None],
+        key=lambda h: float(h.get("unrealized_gain_pct") or 0),
+        reverse=True,
+    )
+    best = ranked[0] if ranked else None
+    worst = ranked[-1] if ranked else None
+
+    kpis = {
+        "total_value": _f(summary.get("total_market_value")),
+        "total_cost_basis": _f(summary.get("total_cost_basis")),
+        "total_return": _f(summary.get("total_unrealized_gain")),
+        "total_return_pct": _f(summary.get("total_unrealized_gain_pct")),
+        "holdings_count": summary.get("holdings_count"),
+        "best_performer": {
+            "symbol": best["symbol"],
+            "return_pct": _f(best.get("unrealized_gain_pct")),
+        } if best else None,
+        "worst_performer": {
+            "symbol": worst["symbol"],
+            "return_pct": _f(worst.get("unrealized_gain_pct")),
+        } if worst else None,
+    }
+
+    # Allocation + sector breakdowns
+    try:
+        breakdowns = svc.get_allocation_breakdowns_from_summary(summary)
+    except Exception:
+        breakdowns = {"sector": [], "market": []}
+
+    # Performance leaderboard (all holdings sorted by return %)
+    leaderboard = [
+        {
+            "symbol": h["symbol"],
+            "asset_type": h.get("asset_type"),
+            "return_pct": _f(h.get("unrealized_gain_pct")),
+            "return_abs": _f(h.get("unrealized_gain")),
+            "market_value": _f(h.get("market_value")),
+            "weight_pct": _f(
+                (float(h.get("market_value") or 0) / float(summary.get("total_market_value") or 1)) * 100
+                if summary.get("total_market_value") else None
+            ),
+        }
+        for h in ranked
+    ]
+
+    # Portfolio value history
+    try:
+        history_data = get_history_service().get_values_for_range(portfolio_id, range_param)
+    except Exception:
+        history_data = []
+
+    # Risk metrics (imported from risk_service if available)
+    risk_metrics = {}
+    try:
+        from portfolio.risk_service import compute_risk_metrics
+        risk_metrics = compute_risk_metrics(portfolio_id, holdings)
+    except ImportError:
+        pass
+    except Exception as e:
+        app.logger.warning("risk metrics failed: %s", e)
+
+    return jsonify({
+        "success": True,
+        "kpis": kpis,
+        "allocation": breakdowns.get("market", []),
+        "sector": breakdowns.get("sector", []),
+        "leaderboard": leaderboard,
+        "history": history_data,
+        "risk_metrics": risk_metrics,
+    })
+
+
+# ============================================================================
+# Ticker data endpoints (Phase 2 React SPA)
+# ============================================================================
+
+_YFINANCE_PERIOD_MAP = {
+    "1D": "1d",
+    "1W": "5d",
+    "1M": "1mo",
+    "3M": "3mo",
+    "YTD": "ytd",
+    "1Y": "1y",
+    "all": "max",
+}
+
+
+@app.route("/api/ticker/<symbol>/history")
+@login_required
+def api_ticker_history(symbol: str):
+    """Return OHLCV price history for a ticker.
+
+    Query params:
+      range: 1D | 1W | 1M | 3M | YTD | 1Y | all  (default: 1M)
+    """
+    import yfinance as yf
+
+    range_param = request.args.get("range", "1M").upper()
+    if range_param == "ALL":
+        range_param = "all"
+    period = _YFINANCE_PERIOD_MAP.get(range_param, "1mo")
+    try:
+        ticker = yf.Ticker(symbol.upper())
+        hist = ticker.history(period=period)
+        if hist.empty:
+            return jsonify({"success": True, "history": []})
+        data = [
+            {"date": str(idx.date()), "close": round(float(row["Close"]), 4)}
+            for idx, row in hist.iterrows()
+        ]
+        return jsonify({"success": True, "history": data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/ticker/<symbol>/fundamentals")
+@login_required
+def api_ticker_fundamentals(symbol: str):
+    """Return key fundamental metrics for a ticker via yfinance."""
+    import yfinance as yf
+
+    def _safe(val):
+        if val is None or val != val:  # NaN check
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return val
+
+    try:
+        info = yf.Ticker(symbol.upper()).info
+        return jsonify({
+            "success": True,
+            "symbol": symbol.upper(),
+            "name": info.get("longName") or info.get("shortName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "market_cap": _safe(info.get("marketCap")),
+            "pe_ratio": _safe(info.get("trailingPE")),
+            "eps": _safe(info.get("trailingEps")),
+            "revenue": _safe(info.get("totalRevenue")),
+            "gross_margin": _safe(info.get("grossMargins")),
+            "week_52_high": _safe(info.get("fiftyTwoWeekHigh")),
+            "week_52_low": _safe(info.get("fiftyTwoWeekLow")),
+            "avg_volume": _safe(info.get("averageVolume")),
+            "beta": _safe(info.get("beta")),
+            "dividend_yield": _safe(info.get("dividendYield")),
+            "current_price": _safe(info.get("currentPrice") or info.get("regularMarketPrice")),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/ticker/search")
+@login_required
+def api_ticker_search():
+    """Validate a ticker symbol and return name + price preview.
+
+    Query params:
+      q: symbol to search (required)
+    """
+    import yfinance as yf
+    from database import get_database_manager
+
+    q = (request.args.get("q") or "").strip().upper()
+    if not q:
+        return jsonify({"success": False, "error": "q is required"}), 400
+
+    # Check price_cache first for a fast response
+    try:
+        db = get_database_manager()
+        cached = db.get_cached_prices([q])
+        if cached and q in cached:
+            c = cached[q]
+            return jsonify({
+                "success": True,
+                "valid": True,
+                "symbol": q,
+                "name": c.get("display_name", q),
+                "price": float(c["price"]) if c.get("price") else None,
+                "change_pct": float(c["change_percent"]) if c.get("change_percent") else None,
+            })
+    except Exception:
+        pass
+
+    # Fallback to yfinance
+    try:
+        info = yf.Ticker(q).info
+        name = info.get("longName") or info.get("shortName") or q
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        change_pct = info.get("regularMarketChangePercent")
+        if not name or name == q:
+            return jsonify({"success": True, "valid": False, "symbol": q})
+        return jsonify({
+            "success": True,
+            "valid": True,
+            "symbol": q,
+            "name": name,
+            "price": float(price) if price else None,
+            "change_pct": float(change_pct) if change_pct else None,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/tickers/recent")
+@login_required
+def api_tickers_recent():
+    """Return the last 5 distinct tickers the user has researched."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    uid = session["user_id"]
+    conn = None
+    try:
+        conn = db.get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (ticker) ticker, created_at
+                FROM reports
+                WHERE user_id = %s
+                ORDER BY ticker, created_at DESC
+                LIMIT 5
+                """,
+                (uid,),
+            )
+            rows = cur.fetchall()
+        tickers = [r[0] for r in rows]
+        return jsonify({"success": True, "tickers": tickers})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db._release(conn)
+
+
+@app.route("/api/report/<report_id>/sections")
+@login_required
+def api_report_sections(report_id: str):
+    """Return ordered list of section names for report TOC and chat topics."""
+    from database import get_database_manager
+
+    storage = ReportStorage()
+    report = storage.get_report(report_id, user_id=session["user_id"])
+    if not report:
+        return jsonify({"success": False, "error": "Not found"}), 404
+
+    db = get_database_manager()
+    conn = None
+    try:
+        conn = db.get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT section, MIN(chunk_index) AS first_idx
+                FROM report_chunks
+                WHERE report_id = %s AND section IS NOT NULL AND section != ''
+                GROUP BY section
+                ORDER BY first_idx ASC
+                """,
+                (report_id,),
+            )
+            rows = cur.fetchall()
+        sections = [r[0] for r in rows]
+        return jsonify({"success": True, "sections": sections})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db._release(conn)
+
+
+@app.route("/api/reports/<report_id>", methods=["DELETE"])
+@login_required
+def api_delete_report(report_id: str):
+    """Delete a single report (ownership verified)."""
+    storage = ReportStorage()
+    report = storage.get_report(report_id, user_id=session["user_id"])
+    if not report:
+        return jsonify({"success": False, "error": "Not found"}), 404
+    try:
+        storage.delete_report(report_id)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/portfolio/<portfolio_id>/transactions")
+@login_required
+def api_portfolio_transactions(portfolio_id: str):
+    """Return recent transactions for a portfolio.
+
+    Query params:
+      limit: max rows to return (default 20)
+    """
+    from database import get_database_manager
+
+    portfolio = get_portfolio_service().get_portfolio(portfolio_id)
+    if not portfolio or portfolio.get("user_id") != session["user_id"]:
+        return jsonify({"success": False, "error": "Not found"}), 404
+
+    try:
+        limit = min(200, max(1, int(request.args.get("limit", 20))))
+    except (TypeError, ValueError):
+        limit = 20
+
+    db = get_database_manager()
+    rows = db.get_all_portfolio_transactions(portfolio_id)
+    # Sort descending by date and slice
+    rows_sorted = sorted(rows, key=lambda r: r.get("transaction_date") or "", reverse=True)[:limit]
+
+    def _row(r):
+        return {
+            "transaction_id": r["transaction_id"],
+            "symbol": r["symbol"],
+            "asset_type": r["asset_type"],
+            "transaction_type": r["transaction_type"],
+            "quantity": float(r["quantity"]),
+            "price_per_unit": float(r["price_per_unit"]),
+            "fees": float(r["fees"]),
+            "transaction_date": r["transaction_date"].isoformat() if r.get("transaction_date") else None,
+            "notes": r.get("notes", ""),
+        }
+
+    return jsonify({"success": True, "transactions": [_row(r) for r in rows_sorted]})
+
+
+@app.route("/api/telegram/status")
+@login_required
+def api_telegram_status():
+    """Return Telegram connection status for the current user."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    user = db.get_user_by_id(session["user_id"])
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    raw = user.get("telegram_chat_id")
+    if raw:
+        try:
+            chat_id_str = str(raw)
+            snippet = chat_id_str[:4] + "…" if len(chat_id_str) > 4 else chat_id_str
+        except Exception:
+            snippet = "****"
+        connected = True
+    else:
+        snippet = None
+        connected = False
+
+    return jsonify({
+        "success": True,
+        "connected": connected,
+        "chat_id_snippet": snippet,
+        "bot_username": os.getenv("TELEGRAM_BOT_USERNAME", "StockProBot"),
+    })
+
+
+@app.route("/api/home")
+@login_required
+def api_home():
+    """Aggregate home dashboard data in a single call."""
+    from database import get_database_manager
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    svc = get_portfolio_service()
+    wl_svc = get_watchlist_service()
+
+    def _safe_float(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    # Portfolio aggregate totals
+    try:
+        portfolios = svc.list_portfolios(user_id=uid)
+        total_value = 0.0
+        total_pnl = 0.0
+        holdings_preview = []
+        for p in portfolios:
+            try:
+                summary = svc.get_portfolio_summary(p["portfolio_id"], with_prices=True)
+                total_value += _safe_float(summary.get("total_market_value")) or 0.0
+                total_pnl += _safe_float(summary.get("total_unrealized_gain")) or 0.0
+                for h in summary.get("holdings", [])[:5]:
+                    holdings_preview.append({
+                        "symbol": h["symbol"],
+                        "portfolio_name": p["name"],
+                        "quantity": _safe_float(h.get("total_quantity")),
+                        "average_cost": _safe_float(h.get("average_cost")),
+                        "market_value": _safe_float(h.get("market_value")),
+                        "unrealized_gain": _safe_float(h.get("unrealized_gain")),
+                        "unrealized_gain_pct": _safe_float(h.get("unrealized_gain_pct")),
+                    })
+            except Exception as _e:
+                app.logger.debug("api_home: portfolio summary error: %s", _e)
+        portfolio_totals = {"total_value": total_value, "total_pnl": total_pnl}
+    except Exception:
+        portfolio_totals = {}
+        holdings_preview = []
+
+    # Recent reports (last 5)
+    try:
+        storage = ReportStorage()
+        reports, _ = storage.get_all_reports(user_id=uid, limit=5, offset=0)
+        for r in reports:
+            if r.get("created_at"):
+                r["created_at"] = r["created_at"].isoformat()
+    except Exception:
+        reports = []
+
+    # Active alerts count
+    try:
+        alert_rows = db.list_price_alerts_for_user(uid)
+        active_alerts_count = sum(1 for r in alert_rows if r.get("active"))
+    except Exception:
+        active_alerts_count = 0
+
+    # Pinned watchlist items with prices
+    try:
+        pinned = wl_svc.get_pinned_tickers(uid)
+        watchlist_preview = []
+        if pinned:
+            from database import get_database_manager as _db
+            cached = db.get_cached_prices([t["symbol"] for t in pinned if t.get("symbol")])
+            for t in pinned:
+                sym = t.get("symbol", "")
+                c = (cached or {}).get(sym, {})
+                watchlist_preview.append({
+                    "symbol": sym,
+                    "name": c.get("display_name", sym),
+                    "price": float(c["price"]) if c.get("price") else None,
+                    "change_pct": float(c["change_percent"]) if c.get("change_percent") else None,
+                })
+    except Exception:
+        watchlist_preview = []
+
+    # News (top 5)
+    try:
+        from news_service import get_briefing
+        news_items = get_briefing()[:5] if get_briefing() else []
+    except Exception:
+        news_items = []
+
+    return jsonify({
+        "success": True,
+        "portfolio_totals": portfolio_totals,
+        "holdings_preview": holdings_preview[:10],
+        "recent_reports": reports,
+        "active_alerts_count": active_alerts_count,
+        "watchlist_preview": watchlist_preview,
+        "news": news_items,
+    })
+
+
+@app.route("/api/portfolio/<portfolio_id>")
+@login_required
+def api_portfolio_detail(portfolio_id: str):
+    """Return portfolio + holdings JSON for React SPA."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
+        return jsonify({"error": "Not found"}), 404
+    try:
+        summary = portfolio_service.get_portfolio_summary(portfolio_id, with_prices=False)
+        return jsonify({"portfolio": portfolio_data, "summary": summary, "holdings": summary["holdings"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/report/<report_id>")
+@login_required
+def api_report_detail(report_id: str):
+    """Return single report JSON for React SPA."""
+    try:
+        storage = ReportStorage()
+        report = storage.get_report(report_id, user_id=session.get("user_id"))
+        if not report:
+            return jsonify({"error": "Not found"}), 404
+        if report.get("created_at") and hasattr(report["created_at"], "isoformat"):
+            report["created_at"] = report["created_at"].isoformat()
+        return jsonify({"report": report})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/watchlists")
+@login_required
+def api_watchlists():
+    """Return all watchlists + active watchlist JSON for React SPA."""
+    try:
+        watchlist_svc = get_watchlist_service()
+        user_id = session["user_id"]
+        watchlists = watchlist_svc.list_watchlists(user_id)
+        if not watchlists:
+            watchlist_svc.get_or_create_default_watchlist(user_id)
+            watchlists = watchlist_svc.list_watchlists(user_id)
+        active_watchlist_id = request.args.get("wl", watchlists[0]["watchlist_id"] if watchlists else None)
+        active_watchlist = None
+        if active_watchlist_id:
+            wl = watchlist_svc.db.get_watchlist(active_watchlist_id)
+            if wl and wl["user_id"] == user_id:
+                active_watchlist = watchlist_svc.get_watchlist_with_items(active_watchlist_id)
+                if active_watchlist:
+                    # Flatten all items (sectioned + unsectioned) into a single list
+                    all_items = list(active_watchlist.get("unsectioned_items", []))
+                    for section in active_watchlist.get("sections", []):
+                        all_items.extend(section.get("section_items", []))
+                    # Normalise field names for React
+                    for item in all_items:
+                        item["change_pct"] = item.pop("change_percent", None)
+                    active_watchlist["items"] = all_items
+        return jsonify({"watchlists": watchlists, "active_watchlist": active_watchlist})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/watchlist/<watchlist_id>/symbol", methods=["POST"])
+@login_required
+def api_watchlist_add_symbol(watchlist_id):
+    """Add a symbol to a watchlist (JSON API for React SPA)."""
+    watchlist_svc = get_watchlist_service()
+    wl = watchlist_svc.db.get_watchlist(watchlist_id)
+    if not wl or wl["user_id"] != session["user_id"]:
+        return jsonify({"error": "Not found"}), 404
+    data = request.get_json(silent=True) or {}
+    symbol = (data.get("symbol") or "").strip().upper()
+    if not symbol:
+        return jsonify({"error": "symbol is required"}), 400
+    try:
+        watchlist_svc.add_symbol(watchlist_id, symbol, None)
+        return jsonify({"success": True, "symbol": symbol})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/watchlist/item/<item_id>", methods=["DELETE"])
+@login_required
+def api_watchlist_remove_item(item_id):
+    """Remove an item from a watchlist (JSON API for React SPA)."""
+    from database import get_database_manager
+    db = get_database_manager()
+    conn = db.get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT wi.watchlist_id, wl.user_id FROM watchlist_items wi "
+                "JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id WHERE wi.item_id = %s",
+                (item_id,),
+            )
+            row = cur.fetchone()
+    finally:
+        db._release(conn)
+    if not row or row["user_id"] != session["user_id"]:
+        return jsonify({"error": "Not found"}), 404
+    get_watchlist_service().remove_symbol(item_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/watchlist/item/<item_id>/pin", methods=["PATCH"])
+@login_required
+def api_watchlist_toggle_pin(item_id):
+    """Toggle pin status of a watchlist item (JSON API for React SPA)."""
+    from database import get_database_manager
+    db = get_database_manager()
+    conn = db.get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT wi.watchlist_id, wi.is_pinned, wl.user_id FROM watchlist_items wi "
+                "JOIN watchlists wl ON wi.watchlist_id = wl.watchlist_id WHERE wi.item_id = %s",
+                (item_id,),
+            )
+            row = cur.fetchone()
+    finally:
+        db._release(conn)
+    if not row or row["user_id"] != session["user_id"]:
+        return jsonify({"error": "Not found"}), 404
+    watchlist_svc = get_watchlist_service()
+    try:
+        if row["is_pinned"]:
+            watchlist_svc.unpin_item(item_id)
+            is_pinned = False
+        else:
+            watchlist_svc.pin_item(session["user_id"], item_id)
+            is_pinned = True
+        return jsonify({"success": True, "is_pinned": is_pinned})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/portfolio/<portfolio_id>/holding/<symbol>")
+@login_required
+def api_holding_detail(portfolio_id: str, symbol: str):
+    """Return holding + transactions JSON for React SPA."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
+        return jsonify({"error": "Not found"}), 404
+    try:
+        holding = portfolio_service.get_holding(portfolio_id, symbol)
+        if not holding:
+            return jsonify({"error": "Holding not found"}), 404
+        transactions = portfolio_service.get_transactions(holding["holding_id"])
+        provider, _ = DataProviderFactory.get_provider_for_symbol(symbol)
+        current_price = provider.get_current_price(symbol) or Decimal("0")
+        holding["current_price"] = float(current_price)
+        holding["market_value"] = float(holding["total_quantity"] * current_price)
+        holding["unrealized_gain"] = float(holding["market_value"] - float(holding["total_cost_basis"]))
+        cost = float(holding["total_cost_basis"])
+        holding["unrealized_gain_pct"] = float(holding["unrealized_gain"] / cost * 100) if cost > 0 else 0.0
+        # Serialise Decimal fields
+        for key in ("total_quantity", "average_cost", "total_cost_basis"):
+            if key in holding and hasattr(holding[key], "__float__"):
+                holding[key] = float(holding[key])
+        for tx in transactions:
+            for k in ("quantity", "price_per_unit", "total_value"):
+                if k in tx and hasattr(tx[k], "__float__"):
+                    tx[k] = float(tx[k])
+            if tx.get("transaction_date") and hasattr(tx["transaction_date"], "isoformat"):
+                tx["transaction_date"] = tx["transaction_date"].isoformat()
+        return jsonify({"portfolio": portfolio_data, "holding": holding, "transactions": transactions})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 try:

@@ -155,10 +155,12 @@ class TestPortfolioApiJson:
                 sess["user_id"] = "me"
             resp = api_client.get("/api/portfolios/prices")
         assert resp.status_code == 200
-        rows = resp.get_json()
+        data = resp.get_json()
+        rows = data["portfolios"]
         assert len(rows) == 1
         assert rows[0]["portfolio_id"] == "p1"
         assert rows[0]["total_market_value"] == 100.0
+        assert "totals" in data
 
     def test_portfolio_history_404_when_not_owner(self, api_client):
         import app as app_module
@@ -191,7 +193,9 @@ class TestPortfolioApiJson:
                     sess["user_id"] = "me"
                 resp = api_client.get("/api/portfolio/p1/history")
         assert resp.status_code == 200
-        assert resp.get_json() == {"months": [], "values": []}
+        data = resp.get_json()
+        assert "history" in data
+        assert "granularity" in data
 
 
 class TestTelegramLinkingApi:
