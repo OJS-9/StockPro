@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
+import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
@@ -83,9 +84,124 @@ function LineChart({ data, dates, gain = true, loading = false }: { data: number
   )
 }
 
+function CashModal({ portfolioId, currentBalance, onClose }: { portfolioId: string; currentBalance: number; onClose: () => void }) {
+  const [action, setAction] = useState<'deposit' | 'withdraw'>('deposit')
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState('')
+  const api = useApiClient()
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const val = parseFloat(amount)
+      if (isNaN(val) || val <= 0) throw new Error('Enter a positive amount')
+      const res = await api.post(`/api/portfolio/${portfolioId}/cash`, { action, amount: val })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'Failed')
+      return data
+    },
+    onSuccess: (data) => {
+      const newBalance = data.cash_balance
+      queryClient.setQueryData(['portfolio-prices', portfolioId], (old: any) =>
+        old ? { ...old, cash_balance: newBalance } : old
+      )
+      queryClient.setQueryData(['portfolio-detail', portfolioId], (old: any) =>
+        old?.summary ? { ...old, summary: { ...old.summary, cash_balance: newBalance } } : old
+      )
+      toast.success(action === 'deposit' ? 'Cash deposited' : 'Cash withdrawn')
+      onClose()
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 32, width: 400, maxWidth: '90vw' }}>
+        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600, marginBottom: 8, letterSpacing: '-0.02em' }}>Deposit / Withdraw</h2>
+        <p style={{ fontSize: 12, color: '#a8a29e', marginBottom: 20 }}>Current balance: <span style={{ fontVariantNumeric: 'tabular-nums', color: '#fafaf9', fontWeight: 600 }}>{fmt(currentBalance)}</span></p>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+          {(['deposit', 'withdraw'] as const).map(a => (
+            <label key={a} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input type="radio" checked={action === a} onChange={() => setAction(a)} style={{ accentColor: '#d6d3d1' }} />
+              <span style={{ fontSize: 13, color: '#fafaf9', textTransform: 'capitalize' }}>{a}</span>
+            </label>
+          ))}
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#a8a29e', marginBottom: 6 }}>Amount ($)</label>
+          <input
+            autoFocus
+            value={amount}
+            onChange={e => { setAmount(e.target.value); setError('') }}
+            onKeyDown={e => e.key === 'Enter' && mutation.mutate()}
+            placeholder="0.00"
+            inputMode="decimal"
+            style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '10px 14px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 14, fontVariantNumeric: 'tabular-nums', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        {error && <p style={{ fontSize: 12, color: '#ef4444', marginBottom: 12 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#d6d3d1', color: '#0c0a09', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          >
+            {mutation.isPending ? 'Saving...' : 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EnableCashBanner({ portfolioId }: { portfolioId: string }) {
+  const api = useApiClient()
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post(`/api/portfolio/${portfolioId}/toggle-cash`, {})
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'Failed')
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(['portfolio-prices', portfolioId], (old: any) =>
+        old ? { ...old, track_cash: true, cash_balance: old.cash_balance ?? 0 } : old
+      )
+      queryClient.setQueryData(['portfolio-detail', portfolioId], (old: any) =>
+        old?.summary ? { ...old, summary: { ...old.summary, track_cash: true } } : old
+      )
+      toast.success('Cash tracking enabled')
+    },
+    onError: () => toast.error('Failed to enable cash tracking'),
+  })
+
+  return (
+    <tr>
+      <td colSpan={7} style={{ padding: '12px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#232120', borderRadius: 8, padding: '10px 16px' }}>
+          <span style={{ fontSize: 13, color: '#a8a29e' }}>Cash tracking is disabled for this portfolio.</span>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#d6d3d1', color: '#0c0a09', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <Icon name="payments" size={14} />
+            {mutation.isPending ? 'Enabling...' : 'Enable Cash Tracking'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 export default function PortfolioDetail() {
   const { id } = useParams()
   const [range, setRange] = useState('1M')
+  const [showCashModal, setShowCashModal] = useState(false)
   const api = useApiClient()
 
   // /api/portfolio/<id>/history returns {history: [{date, value}], granularity}
@@ -145,6 +261,8 @@ export default function PortfolioDetail() {
   const totalValue = pricesData?.total_market_value ?? 0
   const pnl = pricesData?.total_unrealized_gain ?? 0
   const pnlPct = pricesData?.total_unrealized_gain_pct ?? 0
+  const trackCash = pricesData?.track_cash ?? portfolioData?.summary?.track_cash ?? false
+  const cashBalance = pricesData?.cash_balance ?? portfolioData?.summary?.cash_balance ?? 0
   // Chart data: history returns [{date, value}] — extract value and date arrays
   const historyRaw = historyData?.history || []
   const chartData: number[] = historyRaw.map((h: any) => h.value ?? h.close ?? 0).filter((v: number) => v > 0)
@@ -155,6 +273,7 @@ export default function PortfolioDetail() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
+      {showCashModal && <CashModal portfolioId={id!} currentBalance={cashBalance} onClose={() => setShowCashModal(false)} />}
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 48px 80px' }}>
 
         {/* HEADER */}
@@ -168,7 +287,7 @@ export default function PortfolioDetail() {
               <span style={{ fontSize: 13, color: '#fafaf9' }}>{portfolioName}</span>
             </div>
             <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{portfolioName}</h1>
-            <div style={{ fontSize: 13, color: '#a8a29e' }}>{holdings.length} holdings</div>
+            <div style={{ fontSize: 13, color: '#a8a29e' }}>{holdings.length + (trackCash ? 1 : 0)} holdings</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to={`/portfolio/${id}/add`} style={{ background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
@@ -237,6 +356,37 @@ export default function PortfolioDetail() {
                   </tr>
                 </thead>
                 <tbody>
+                  {trackCash ? (
+                    <tr>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', fontSize: 13.5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#a8a29e', flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#fafaf9' }}>CASH</div>
+                            <div style={{ fontSize: 11.5, color: '#a8a29e' }}>Cash</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', color: '#57534e' }}>--</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', color: '#57534e' }}>--</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', color: '#57534e' }}>--</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9', fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                          {fmt(cashBalance)}
+                          <button
+                            onClick={() => setShowCashModal(true)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 11, fontWeight: 500, background: '#232120', border: '1px solid #292524', borderRadius: 6, color: '#a8a29e', cursor: 'pointer' }}
+                          >
+                            <Icon name="swap_vert" size={14} />
+                          </button>
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', color: '#57534e' }}>--</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', color: '#57534e' }}>--</td>
+                    </tr>
+                  ) : (
+                    <EnableCashBanner portfolioId={id!} />
+                  )}
                   {holdings.map((h: any, i: number) => (
                     <tr key={h.symbol}>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', fontSize: 13.5 }}>

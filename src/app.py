@@ -1263,10 +1263,25 @@ def create_portfolio_route():
     return redirect(url_for("portfolio_detail", portfolio_id=portfolio_id))
 
 
-@app.route("/portfolio/<portfolio_id>/cash", methods=["POST"])
+@app.route("/api/portfolio/<portfolio_id>/toggle-cash", methods=["POST"])
+@login_required
+def toggle_cash_tracking(portfolio_id: str):
+    """Enable cash tracking for a portfolio."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
+        return {"ok": False, "error": "Not found"}, 404
+    try:
+        portfolio_service.enable_cash_tracking(portfolio_id)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
+
+@app.route("/api/portfolio/<portfolio_id>/cash", methods=["POST"])
 @login_required
 def update_portfolio_cash(portfolio_id: str):
-    """Update cash balance for a portfolio (JSON body: { \"cash_balance\": number })."""
+    """Update cash balance for a portfolio. Supports deposit, withdraw, or set."""
     portfolio_service = get_portfolio_service()
     portfolio_data = portfolio_service.get_portfolio(portfolio_id)
     if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
@@ -1274,15 +1289,21 @@ def update_portfolio_cash(portfolio_id: str):
     if not portfolio_data.get("track_cash"):
         return {"ok": False, "error": "Portfolio does not track cash"}, 400
     data = request.get_json(silent=True) or {}
+    action = data.get("action", "set")
     try:
-        cash_balance = float(data.get("cash_balance", 0))
-        if cash_balance < 0:
-            return {"ok": False, "error": "Cash balance cannot be negative"}, 400
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "Invalid cash_balance"}, 400
-    try:
-        portfolio_service.update_cash_balance(portfolio_id, cash_balance)
-        return {"ok": True, "cash_balance": cash_balance}
+        amount = float(data.get("amount", data.get("cash_balance", 0)))
+        if action == "deposit":
+            new_balance = portfolio_service.deposit_cash(portfolio_id, amount)
+        elif action == "withdraw":
+            new_balance = portfolio_service.withdraw_cash(portfolio_id, amount)
+        else:
+            if amount < 0:
+                return {"ok": False, "error": "Cash balance cannot be negative"}, 400
+            portfolio_service.update_cash_balance(portfolio_id, amount)
+            new_balance = amount
+        return {"ok": True, "cash_balance": new_balance}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}, 400
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
@@ -1694,6 +1715,31 @@ def api_delete_transaction(portfolio_id: str, transaction_id: str):
     return jsonify({"success": False, "error": "Delete failed"}), 500
 
 
+@app.route("/api/portfolios", methods=["POST"])
+@login_required
+def api_create_portfolio():
+    """Create a new portfolio (JSON API for React SPA)."""
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Portfolio name is required"}), 400
+    track_cash = data.get("track_cash", True)
+    cash_balance = 0.0
+    if track_cash:
+        try:
+            cash_balance = max(0.0, float(data.get("cash_balance", 0)))
+        except (ValueError, TypeError):
+            cash_balance = 0.0
+    portfolio_service = get_portfolio_service()
+    portfolio_id = portfolio_service.create_portfolio(
+        name=name,
+        user_id=session["user_id"],
+        track_cash=track_cash,
+        cash_balance=cash_balance,
+    )
+    return jsonify({"ok": True, "portfolio_id": portfolio_id})
+
+
 @app.route("/api/portfolios/prices")
 @login_required
 def portfolios_prices():
@@ -1801,6 +1847,8 @@ def portfolio_prices(portfolio_id):
             ),
             "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
             "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
+            "track_cash": bool(summary.get("track_cash")),
+            "cash_balance": to_float(summary.get("cash_balance")),
             "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
             "breakdowns": {
                 "sector": breakdowns.get("sector", []),
