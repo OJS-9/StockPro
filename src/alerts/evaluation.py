@@ -95,9 +95,10 @@ def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
         at_alert = (alert.get("asset_type") or "stock").lower()
         if at_cache != at_alert:
             continue
-        # Stock alerts only evaluate during US market hours
+        # Stock alerts only evaluate during US market hours (skip gate with env var)
         if at_alert == "stock" and not _us_market_open():
-            continue
+            if os.getenv("STOCKPRO_ALERT_SKIP_MARKET_HOURS", "").lower() not in ("1", "true", "yes"):
+                continue
         try:
             price = _to_float(row.get("price"))
         except (TypeError, ValueError):

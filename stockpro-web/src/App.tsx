@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import { SignedIn, SignedOut } from '@clerk/clerk-react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useApiClient } from './api/client'
 
@@ -30,7 +30,6 @@ import Settings from './pages/Settings'
  */
 function NotificationListener() {
   const api = useApiClient()
-  const queryClient = useQueryClient()
   const shownIds = useRef<Set<string>>(new Set())
   const baselineTs = useRef<string | null>(null)
   const initialized = useRef(false)
@@ -70,9 +69,6 @@ function NotificationListener() {
             border: '1px solid #292524',
             fontSize: 13,
           },
-        })
-        api.patch(`/api/alerts/notifications/${n.notification_id}`, { read: true }).then(() => {
-          queryClient.invalidateQueries({ queryKey: ['alert-notifications'] })
         })
       })
     }

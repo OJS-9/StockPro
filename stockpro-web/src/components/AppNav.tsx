@@ -46,7 +46,7 @@ export default function AppNav() {
     staleTime: 25_000,
   })
 
-  const notifications: any[] = data?.notifications ?? []
+  const notifications: any[] = (data?.notifications ?? []).filter((n: any) => !n.read_at)
   const unreadCount: number = data?.unread_count ?? 0
 
   // Close panel on click outside
@@ -65,12 +65,27 @@ export default function AppNav() {
   }, [showPanel])
 
   const dismissOne = (notifId: string) => {
+    // Optimistically remove from list
+    queryClient.setQueryData(['alert-notifications'], (old: any) => {
+      if (!old) return old
+      const remaining = old.notifications.filter((n: any) => n.notification_id !== notifId)
+      const wasUnread = old.notifications.find((n: any) => n.notification_id === notifId && !n.read_at)
+      return {
+        notifications: remaining,
+        unread_count: wasUnread ? Math.max(0, (old.unread_count ?? 0) - 1) : old.unread_count,
+      }
+    })
     api.patch(`/api/alerts/notifications/${notifId}`, { read: true }).then(() => {
       queryClient.invalidateQueries({ queryKey: ['alert-notifications'] })
     })
   }
 
   const clearAll = () => {
+    // Optimistically clear list
+    queryClient.setQueryData(['alert-notifications'], () => ({
+      notifications: [],
+      unread_count: 0,
+    }))
     api.post('/api/alerts/notifications/mark-all-read', {}).then(() => {
       queryClient.invalidateQueries({ queryKey: ['alert-notifications'] })
     })
