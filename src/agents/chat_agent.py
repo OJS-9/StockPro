@@ -1,212 +1,281 @@
 """
-RAG-lite chat agent for answering questions about stored reports.
-Merges report_chat_agent.py + conversation_handler_agent.py into one LangChain chain.
+ReAct chat agent for answering questions about stored reports.
+Uses LangGraph create_react_agent with report retrieval, IR search, and yfinance tools.
 """
 
+import json
 import logging
 import os
 from typing import List, Dict, Any, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langgraph.prebuilt import create_react_agent
 from langsmith import traceable
 
 from embedding_service import EmbeddingService
 from vector_search import VectorSearch
+from nimble_client import NimbleClient
+from langchain_tools import create_chat_tools
 from date_utils import get_datetime_context_string
 
 logger = logging.getLogger(__name__)
 
 CHAT_MODEL = os.getenv("CHAT_AGENT_MODEL", "gemini-2.5-flash")
 CHAT_TOP_K = int(os.getenv("CHAT_TOP_K", "5"))
+CHAT_RECURSION_LIMIT = int(os.getenv("CHAT_RECURSION_LIMIT", "10"))
 
 
-def _get_system_instructions() -> str:
+def _get_system_instructions(ticker: str) -> str:
     datetime_context = get_datetime_context_string()
-    return f"""You are a research assistant that answers questions about company research reports.
+    return f"""You are a research assistant that answers questions about the {ticker} research report.
 
 {datetime_context}
 
-**CRITICAL RULES:**
-1. You MUST answer questions using ONLY the information provided in the report excerpts below.
-2. If the information needed to answer the question is NOT in the provided excerpts, say "I don't know from this report" or "This information is not available in the report."
-3. DO NOT use any knowledge outside of the provided report excerpts.
-4. DO NOT make up information or infer details not explicitly stated in the excerpts.
-5. When citing information, reference the section or context from the excerpts.
+You have access to tools for searching the stored report, checking investor relations pages, and pulling earnings data.
 
-**Guidelines:**
+WORKFLOW:
+1. ALWAYS start by calling retrieve_report_chunks to search the stored report.
+2. If the question involves earnings, revenue, guidance, or financial results, also call search_ir_earnings and/or get_earnings_data to cross-verify with live data.
+3. Synthesize information from all sources into a clear answer.
+
+CITATION RULES:
+- Every tool result contains numbered items with an "index" field.
+- ALWAYS cite by placing the index number in square brackets: [1], [2], [3], etc.
+- Every factual claim MUST have at least one citation.
+- You may cite multiple sources for one claim: [1][3].
+- Do NOT skip citations. If you used information from a source, cite it.
+
+GUIDELINES:
 - Be precise and accurate
-- Cite specific information from the excerpts when possible
-- If the question requires information from multiple sections, synthesize across the provided excerpts
+- Cite specific information from the report excerpts when possible
+- If the question requires information from multiple sections, synthesize across sources
+- If report and live data conflict, note the discrepancy and state which is more recent
 - Keep answers concise but complete
-- Excerpts tagged [Report] are from the final synthesized report. Excerpts tagged [Raw Research] contain detailed research notes. Both are valid. Prefer [Report] when sufficient; use [Raw Research] for deeper detail."""
-
-
-def _build_rag_prompt(
-    question: str,
-    chunks: List[Dict[str, Any]],
-    conversation_history: Optional[List[Dict[str, str]]] = None,
-) -> str:
-    prompt_parts = ["Relevant excerpts from the report:", ""]
-
-    for i, chunk in enumerate(chunks, 1):
-        section_info = (
-            f" (Section: {chunk.get('section', 'Unknown')})"
-            if chunk.get("section")
-            else ""
-        )
-        source_label = (
-            " | Raw Research" if chunk.get("chunk_type") == "research" else " | Report"
-        )
-        prompt_parts.append(f"[Excerpt {i}{section_info}{source_label}]")
-        prompt_parts.append(chunk["chunk_text"])
-        prompt_parts.append("")
-
-    prompt_parts.append("---")
-    prompt_parts.append("")
-
-    if conversation_history:
-        prompt_parts.append("Previous conversation:")
-        for turn in conversation_history[-3:]:
-            role = turn.get("role", "user")
-            content = turn.get("content", "")
-            if role in ("user", "assistant"):
-                prompt_parts.append(f"{role.capitalize()}: {content}")
-        prompt_parts.append("")
-
-    prompt_parts.append(f"User question: {question}")
-    prompt_parts.append("")
-    prompt_parts.append(
-        "Answer the question using ONLY the information from the report excerpts above. "
-        "If the information is not available in the excerpts, say so clearly."
-    )
-
-    return "\n".join(prompt_parts)
+- If information is not available from any source, say so clearly"""
 
 
 class ReportChatAgent:
-    """LangChain RAG chain for chatting with stored research reports."""
+    """LangGraph ReAct agent for chatting with stored research reports."""
+
+    FALLBACK_THRESHOLD = float(os.getenv("RESEARCH_FALLBACK_THRESHOLD", "0.45"))
 
     def __init__(self):
         self._embedding_service = EmbeddingService()
         self._vector_search = VectorSearch()
+        self._nimble_client = None
         self._llm = ChatGoogleGenerativeAI(
             model=CHAT_MODEL, temperature=0.7, timeout=90
         )
         self.conversation_history: List[Dict[str, str]] = []
+        self._progress_fn = None
 
-    FALLBACK_THRESHOLD = float(os.getenv("RESEARCH_FALLBACK_THRESHOLD", "0.45"))
+    def set_progress_fn(self, fn):
+        """Set a callback for emitting progress messages (e.g. SSE steps)."""
+        self._progress_fn = fn
 
-    @traceable(run_type="retriever", name="ReportChat Retrieval")
-    def _retrieve_chunks(
-        self,
-        report_id: str,
-        user_question: str,
-        top_k: int = CHAT_TOP_K,
-    ) -> List[Dict[str, Any]]:
-        """Embed query and retrieve relevant chunks via two-phase vector search."""
-        print("[ReportChat] Creating query embedding...")
-        query_embedding = self._embedding_service.create_embedding(user_question)
-        print(f"[ReportChat] Embedding created (dim={len(query_embedding)})")
+    def _get_nimble_client(self) -> Optional[NimbleClient]:
+        if self._nimble_client is None:
+            try:
+                self._nimble_client = NimbleClient()
+            except ValueError:
+                pass
+        return self._nimble_client
 
-        # Phase 1: search report chunks
-        print("[ReportChat] Phase 1: searching report chunks...")
-        report_chunks = self._vector_search.search_chunks(
-            report_id=report_id,
-            query_embedding=query_embedding,
-            top_k=top_k,
-            chunk_type="report",
-        )
-        print(f"[ReportChat] Phase 1: found {len(report_chunks)} report chunks")
+    def _collect_sources(self, messages: list) -> List[Dict[str, Any]]:
+        """Extract source metadata from tool call results in the message history."""
+        sources = []
+        source_index = 1
 
-        # Phase 2: conditionally fetch research chunks if report scores are low
-        best_score = report_chunks[0]["similarity_score"] if report_chunks else 0.0
-        if best_score < self.FALLBACK_THRESHOLD or len(report_chunks) < 2:
-            print(
-                f"[ReportChat] Phase 2: best_score={best_score:.3f} < threshold={self.FALLBACK_THRESHOLD}, fetching research chunks..."
-            )
-            research_chunks = self._vector_search.search_chunks(
-                report_id=report_id,
-                query_embedding=query_embedding,
-                top_k=3,
-                chunk_type="research",
-            )
-            print(f"[ReportChat] Phase 2: found {len(research_chunks)} research chunks")
-            all_chunks = report_chunks + research_chunks
-        else:
-            all_chunks = report_chunks
+        for msg in messages:
+            if not isinstance(msg, ToolMessage):
+                continue
 
-        # Deduplicate and cap
-        seen = set()
-        relevant_chunks = []
-        for c in sorted(all_chunks, key=lambda x: x["similarity_score"], reverse=True):
-            if c["chunk_id"] not in seen:
-                seen.add(c["chunk_id"])
-                relevant_chunks.append(c)
-        relevant_chunks = relevant_chunks[: top_k + 2]
-        print(f"[ReportChat] {len(relevant_chunks)} chunks after dedup/cap")
-        return relevant_chunks
+            tool_name = getattr(msg, "name", "")
+            try:
+                content = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if tool_name == "retrieve_report_chunks" and isinstance(content, list):
+                for chunk in content:
+                    sources.append({
+                        "index": chunk.get("index", source_index),
+                        "chunk_id": chunk.get("chunk_id"),
+                        "section": chunk.get("section"),
+                        "chunk_type": chunk.get("chunk_type", "report"),
+                        "similarity_score": chunk.get("similarity_score"),
+                        "chunk_text": chunk.get("chunk_text", ""),
+                        "url": None,
+                    })
+                    source_index = max(source_index, chunk.get("index", 0)) + 1
+
+            elif tool_name == "search_ir_earnings" and isinstance(content, list):
+                for r in content:
+                    src_type = r.get("source_type", "ir")
+                    sources.append({
+                        "index": r.get("index", source_index),
+                        "chunk_id": None,
+                        "section": r.get("title", "SEC Filing" if src_type == "sec" else "IR Search Result"),
+                        "chunk_type": "sec" if src_type == "sec" else "ir",
+                        "similarity_score": None,
+                        "chunk_text": r.get("snippet", ""),
+                        "url": r.get("url"),
+                    })
+
+            elif tool_name == "get_earnings_data" and isinstance(content, list):
+                for r in content:
+                    if r.get("source_type") == "yfinance":
+                        data = r.get("data", {})
+                        parts = []
+                        eh = data.get("earnings_history", [])
+                        if eh:
+                            for row in eh[:4]:
+                                q = row.get("index", row.get("Quarter", "?"))
+                                actual = row.get("epsActual", row.get("Reported EPS", "?"))
+                                est = row.get("epsEstimate", row.get("EPS Estimate", "?"))
+                                parts.append(f"{q}: EPS {actual} actual vs {est} estimate")
+                        ned = data.get("next_earnings_date")
+                        if ned and ned != "None":
+                            parts.append(f"Next earnings date: {ned}")
+                        eg = data.get("earnings_growth")
+                        if eg is not None:
+                            parts.append(f"Earnings growth: {eg:.1%}" if isinstance(eg, (int, float)) else f"Earnings growth: {eg}")
+                        te = data.get("trailing_eps")
+                        fe = data.get("forward_eps")
+                        if te is not None:
+                            parts.append(f"Trailing EPS: {te}")
+                        if fe is not None:
+                            parts.append(f"Forward EPS: {fe}")
+                        sources.append({
+                            "index": r.get("index", 200),
+                            "chunk_id": None,
+                            "section": "Earnings Data (Yahoo Finance)",
+                            "chunk_type": "yfinance",
+                            "similarity_score": None,
+                            "chunk_text": "\n".join(parts) if parts else json.dumps(data, indent=2),
+                            "url": None,
+                        })
+
+        return sources
 
     @traceable(run_type="chain", name="ReportChat RAG")
     def answer_question(
         self,
         report_id: str,
+        ticker: str,
         user_question: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         top_k: int = CHAT_TOP_K,
-    ) -> str:
-        """Answer a question about a report using RAG-lite retrieval with conditional research fallback."""
+    ) -> Dict[str, Any]:
+        """Answer a question about a report using a ReAct agent with report retrieval, IR search, and yfinance tools."""
         print(
-            f"[ReportChat] answer_question called — report_id={report_id}, question={user_question[:80]!r}"
+            f"[ReportChat] answer_question called -- report_id={report_id}, ticker={ticker}, question={user_question[:80]!r}"
         )
 
-        relevant_chunks = self._retrieve_chunks(report_id, user_question, top_k)
+        tools = create_chat_tools(
+            nimble_client=self._get_nimble_client(),
+            report_id=report_id,
+            ticker=ticker,
+            embedding_service=self._embedding_service,
+            vector_search=self._vector_search,
+            progress_fn=self._progress_fn,
+        )
 
-        if not relevant_chunks:
-            print("[ReportChat] No relevant chunks found — returning fallback message")
-            return (
-                "I couldn't find relevant information in the report to answer your question. "
-                "The report may not contain information about this topic."
-            )
+        system_instructions = _get_system_instructions(ticker)
 
-        prompt = _build_rag_prompt(user_question, relevant_chunks, conversation_history)
-        system_instructions = _get_system_instructions()
+        agent = create_react_agent(
+            self._llm,
+            tools,
+            prompt=system_instructions,
+        )
+
+        # Build message history (last 3 turns)
+        messages = []
+        if conversation_history:
+            for turn in conversation_history[-3:]:
+                role = turn.get("role", "user")
+                content = turn.get("content", "")
+                if role == "user":
+                    messages.append(HumanMessage(content=content[:1000]))
+                elif role == "assistant":
+                    messages.append(AIMessage(content=content[:1000]))
+
+        # Ensure current question is last
+        if not messages or not isinstance(messages[-1], HumanMessage):
+            messages.append(HumanMessage(content=user_question))
+        elif messages[-1].content != user_question:
+            messages.append(HumanMessage(content=user_question))
 
         try:
-            print(f"[ReportChat] Calling LLM ({CHAT_MODEL})...")
-            response = self._llm.invoke(
-                [
-                    SystemMessage(content=system_instructions),
-                    HumanMessage(content=prompt),
-                ]
+            print(f"[ReportChat] Running ReAct agent ({CHAT_MODEL}, recursion_limit={CHAT_RECURSION_LIMIT})...")
+            result = agent.invoke(
+                {"messages": messages},
+                config={"recursion_limit": CHAT_RECURSION_LIMIT},
             )
-            print(
-                f"[ReportChat] LLM response received ({len(response.content or '')} chars)"
-            )
-            return response.content or ""
+
+            # Extract answer from the last non-tool-call AIMessage
+            answer_text = ""
+            for msg in reversed(result["messages"]):
+                if (
+                    isinstance(msg, AIMessage)
+                    and msg.content
+                    and not getattr(msg, "tool_calls", None)
+                ):
+                    content = msg.content
+                    answer_text = (
+                        "\n".join(
+                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            for part in content
+                        )
+                        if isinstance(content, list)
+                        else str(content)
+                    )
+                    break
+
+            # Collect sources from tool call results
+            all_sources = self._collect_sources(result["messages"])
+
+            # Only include sources that were actually cited in the answer
+            import re
+            cited_indices = {int(m) for m in re.findall(r'\[(\d+)\]', answer_text)}
+            sources = [s for s in all_sources if s["index"] in cited_indices]
+
+            # Fallback: if no citations found but report chunks exist, include them anyway
+            if not sources and all_sources:
+                sources = [s for s in all_sources if s["chunk_type"] in ("report", "research")]
+
+            print(f"[ReportChat] Answer: {len(answer_text)} chars, {len(sources)} cited sources (of {len(all_sources)} total)")
+            return {"answer": answer_text, "sources": sources}
+
         except Exception as e:
             error_msg = f"Error generating answer: {e}"
             logger.exception("Chat answer generation failed")
-            return error_msg
+            return {"answer": error_msg, "sources": []}
 
     @traceable(run_type="chain", name="ReportChat Session")
     def chat_with_report(
-        self, report_id: str, question: str, reset_history: bool = False
-    ) -> str:
+        self,
+        report_id: str,
+        ticker: str,
+        question: str,
+        reset_history: bool = False,
+    ) -> Dict[str, Any]:
         """Chat with a report, maintaining conversation history."""
         if reset_history:
             self.conversation_history = []
 
-        answer = self.answer_question(
+        result = self.answer_question(
             report_id=report_id,
+            ticker=ticker,
             user_question=question,
             conversation_history=self.conversation_history,
         )
 
         self.conversation_history.append({"role": "user", "content": question})
-        self.conversation_history.append({"role": "assistant", "content": answer})
+        self.conversation_history.append({"role": "assistant", "content": result["answer"]})
 
-        return answer
+        return result
 
     def reset_conversation(self):
         self.conversation_history = []
