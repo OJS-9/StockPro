@@ -737,6 +737,15 @@ def continue_conversation():
         if incoming_report_id:
             session["current_report_id"] = incoming_report_id
             session["report_chat_mode"] = True
+            # Look up ticker from the report so IR/SEC tools can use it
+            if not session.get("current_ticker"):
+                try:
+                    storage = ReportStorage()
+                    rpt = storage.get_report(incoming_report_id, user_id=session.get("user_id"))
+                    if rpt:
+                        session["current_ticker"] = rpt.get("ticker", "")
+                except Exception:
+                    pass
     else:
         user_input = request.form.get("user_response", "").strip()
         incoming_report_id = None
@@ -753,6 +762,7 @@ def continue_conversation():
     previous_report_id = session.get("current_report_id")
     report_chat_mode = session.get("report_chat_mode", False)
     conversation_history_snapshot = list(session.get("conversation_history", []))
+    session_ticker = session.get("current_ticker")
 
     # Create SSE queue and emitter
     step_q: queue.Queue = queue.Queue()
@@ -767,13 +777,17 @@ def continue_conversation():
             )
             if report_chat_mode and previous_report_id:
                 agent.current_report_id = previous_report_id
+                agent.current_ticker = session_ticker
                 print(
                     f"[Continue] Calling chat_with_report for report {previous_report_id}..."
                 )
-                response = agent.chat_with_report(user_input)
-                print(f"[Continue] chat_with_report returned ({len(response)} chars)")
+                result = agent.chat_with_report(user_input)
+                response = result["answer"]
+                sources = result.get("sources", [])
+                print(f"[Continue] chat_with_report returned ({len(response)} chars, {len(sources)} sources)")
             else:
                 response = agent.continue_conversation(user_input)
+                sources = []
 
             new_history = list(conversation_history_snapshot)
             new_history.append({"role": "user", "content": user_input})
@@ -799,6 +813,7 @@ def continue_conversation():
                     "type": "done",
                     "user_message": user_input,
                     "assistant_message": response,
+                    "sources": sources,
                     "conversation_history": new_history,
                     "report_generated": report_generated,
                     "report_preview": report_preview,

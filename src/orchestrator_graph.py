@@ -229,14 +229,16 @@ class OrchestratorSession:
             logger.exception("Report generation failed")
             return error_msg
 
-    def chat_with_report(self, question: str) -> str:
-        """Chat with the current report using RAG-lite."""
+    def chat_with_report(self, question: str) -> Dict[str, Any]:
+        """Chat with the current report using ReAct agent with live tools."""
         if not self.current_report_id:
-            return "Error: No report available. Please generate a report first."
-        if self._emitter:
-            self._emitter.emit("Searching report...")
+            return {"answer": "Error: No report available. Please generate a report first.", "sources": []}
+        self._chat_agent.set_progress_fn(
+            self._emitter.emit if self._emitter else None
+        )
         return self._chat_agent.chat_with_report(
             report_id=self.current_report_id,
+            ticker=self.current_ticker or "",
             question=question,
         )
 

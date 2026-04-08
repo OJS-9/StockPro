@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import AppNav from '../components/AppNav'
@@ -6,11 +6,22 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
 
+interface Source {
+  index: number
+  chunk_id: string | null
+  section: string | null
+  chunk_type: 'report' | 'research' | 'ir' | 'sec' | 'yfinance'
+  similarity_score: number | null
+  chunk_text: string
+  url?: string | null
+}
+
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   time: string
+  sources?: Source[]
 }
 
 const SUGGESTIONS = [
@@ -19,6 +30,14 @@ const SUGGESTIONS = [
   'What are the biggest risks?',
   'Compare to main competitors',
 ]
+
+const SOURCE_TYPE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  report: { bg: 'rgba(34,197,94,0.08)', color: '#22c55e', label: 'Report' },
+  research: { bg: 'rgba(96,165,250,0.08)', color: '#60a5fa', label: 'Research' },
+  sec: { bg: 'rgba(234,179,8,0.08)', color: '#eab308', label: 'SEC Filing' },
+  ir: { bg: 'rgba(249,115,22,0.08)', color: '#f97316', label: 'IR' },
+  yfinance: { bg: 'rgba(168,85,247,0.08)', color: '#a855f7', label: 'Yahoo Finance' },
+}
 
 function UserInitials() {
   return (
@@ -46,6 +65,169 @@ function TypingDots() {
   )
 }
 
+function CitationBadge({ label, type, onClick }: { label: string; type?: string; onClick: () => void }) {
+  const isTag = type === 'ir' || type === 'yfinance'
+  const styles = type ? SOURCE_TYPE_STYLES[type] : null
+  return (
+    <sup
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: isTag ? 'auto' : 18,
+        height: 16,
+        padding: isTag ? '0 5px' : '0 4px',
+        borderRadius: 4,
+        background: styles?.bg || 'rgba(96,165,250,0.15)',
+        color: styles?.color || '#60a5fa',
+        fontSize: 10,
+        fontWeight: 600,
+        cursor: 'pointer',
+        verticalAlign: 'super',
+        lineHeight: 1,
+        marginLeft: 1,
+        marginRight: 1,
+        transition: 'opacity 0.15s',
+      }}
+    >
+      {label}
+    </sup>
+  )
+}
+
+function SourceCard({
+  source,
+  messageId,
+  isExpanded,
+  isHighlighted,
+  onToggle,
+}: {
+  source: Source
+  messageId: string
+  isExpanded: boolean
+  isHighlighted: boolean
+  onToggle: () => void
+}) {
+  const typeStyle = SOURCE_TYPE_STYLES[source.chunk_type] || SOURCE_TYPE_STYLES.report
+  const preview = source.chunk_text.length > 200 && !isExpanded
+    ? source.chunk_text.slice(0, 200) + '...'
+    : source.chunk_text
+
+  return (
+    <div
+      id={`source-${messageId}-${source.index}`}
+      style={{
+        background: isHighlighted ? 'rgba(96,165,250,0.08)' : '#1c1917',
+        border: `1px solid ${isHighlighted ? 'rgba(96,165,250,0.3)' : '#292524'}`,
+        borderRadius: 8,
+        padding: '10px 12px',
+        transition: 'background 0.3s, border-color 0.3s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{
+          fontSize: 10, fontWeight: 700, color: '#60a5fa',
+          background: 'rgba(96,165,250,0.12)', borderRadius: 3,
+          padding: '1px 5px', lineHeight: '16px',
+        }}>
+          {source.chunk_type === 'ir' ? `IR` : source.chunk_type === 'yfinance' ? 'YF' : source.index}
+        </span>
+        {source.section && (
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#d6d3d1' }}>
+            {source.section}
+          </span>
+        )}
+        <span style={{
+          fontSize: 10, fontWeight: 500, padding: '1px 6px',
+          borderRadius: 999, border: `1px solid ${typeStyle.color}20`,
+          background: typeStyle.bg, color: typeStyle.color,
+        }}>
+          {typeStyle.label}
+        </span>
+        {source.url && (
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#a8a29e', display: 'flex', marginLeft: 'auto' }}
+            title="Open source"
+          >
+            <Icon name="open_in_new" size={13} />
+          </a>
+        )}
+      </div>
+      <div style={{ fontSize: 12.5, color: '#a8a29e', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+        {preview}
+      </div>
+      {source.chunk_text.length > 200 && (
+        <button
+          onClick={onToggle}
+          style={{
+            background: 'none', border: 'none', color: '#60a5fa',
+            fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: '4px 0 0',
+          }}
+        >
+          {isExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function SourcesPanel({
+  sources,
+  messageId,
+  isOpen,
+  onToggle,
+  expandedChunks,
+  onToggleChunk,
+  highlightedSource,
+}: {
+  sources: Source[]
+  messageId: string
+  isOpen: boolean
+  onToggle: () => void
+  expandedChunks: Set<string>
+  onToggleChunk: (key: string) => void
+  highlightedSource: string | null
+}) {
+  if (sources.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 6, maxWidth: 680 }}>
+      <button
+        onClick={onToggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'none', border: 'none', color: '#a8a29e',
+          fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '4px 0',
+        }}
+      >
+        <Icon name={isOpen ? 'expand_less' : 'expand_more'} size={16} />
+        Sources ({sources.length})
+      </button>
+      {isOpen && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+          {sources.map(source => {
+            const key = `${messageId}-${source.index}`
+            return (
+              <SourceCard
+                key={key}
+                source={source}
+                messageId={messageId}
+                isExpanded={expandedChunks.has(key)}
+                isHighlighted={highlightedSource === key}
+                onToggle={() => onToggleChunk(key)}
+              />
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Chat() {
   const { reportId } = useParams()
   const api = useApiClient()
@@ -54,6 +236,9 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [stepText, setStepText] = useState('')
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set())
+  const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set())
+  const [highlightedSource, setHighlightedSource] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { data: reportData } = useQuery({
@@ -103,6 +288,102 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, stepText])
+
+  const handleCitationClick = useCallback((messageId: string, sourceIndex: number, sources: Source[]) => {
+    // Expand sources panel for this message
+    setExpandedSources(prev => {
+      const next = new Set(prev)
+      next.add(messageId)
+      return next
+    })
+
+    // Highlight the source card briefly
+    const key = `${messageId}-${sourceIndex}`
+    setHighlightedSource(key)
+    setTimeout(() => setHighlightedSource(null), 1500)
+
+    // Scroll to the source card
+    setTimeout(() => {
+      const el = document.getElementById(`source-${key}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 50)
+  }, [])
+
+  const renderContentWithCitations = (text: string, sources: Source[] | undefined, messageId: string) => {
+    if (!sources || sources.length === 0) {
+      return renderContent(text)
+    }
+
+    // Build a set of valid source indices for validation
+    const validIndices = new Set(sources.map(s => s.index))
+
+    // Split on citation patterns: [1], [2], [IR], [YF]
+    const parts = text.split(/(\[\d+\]|\[IR\]|\[YF\])/g)
+
+    return (
+      <span>
+        {parts.map((part, i) => {
+          // Check for numbered citation [1], [2], [100], [200], etc.
+          const numMatch = part.match(/^\[(\d+)\]$/)
+          if (numMatch) {
+            const idx = parseInt(numMatch[1], 10)
+            if (validIndices.has(idx)) {
+              // Show friendly label for IR (100+) and YF (200+) sources
+              const source = sources.find(s => s.index === idx)
+              const type = source?.chunk_type
+              const label = type === 'ir' ? 'IR' : type === 'sec' ? 'SEC' : type === 'yfinance' ? 'YF' : String(idx)
+              return (
+                <CitationBadge
+                  key={i}
+                  label={label}
+                  type={type}
+                  onClick={() => handleCitationClick(messageId, idx, sources)}
+                />
+              )
+            }
+          }
+
+          // Check for [IR] tag
+          if (part === '[IR]') {
+            const irSource = sources.find(s => s.chunk_type === 'ir')
+            if (irSource) {
+              return (
+                <CitationBadge
+                  key={i}
+                  label="IR"
+                  type="ir"
+                  onClick={() => handleCitationClick(messageId, irSource.index, sources)}
+                />
+              )
+            }
+          }
+
+          // Check for [YF] tag
+          if (part === '[YF]') {
+            const yfSource = sources.find(s => s.chunk_type === 'yfinance')
+            if (yfSource) {
+              return (
+                <CitationBadge
+                  key={i}
+                  label="YF"
+                  type="yfinance"
+                  onClick={() => handleCitationClick(messageId, yfSource.index, sources)}
+                />
+              )
+            }
+          }
+
+          // Regular text — apply basic markdown formatting
+          if (!part) return null
+          const html = part
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#fafaf9">$1</strong>')
+            .replace(/\n/g, '<br/>')
+          return <span key={i} dangerouslySetInnerHTML={{ __html: html }} />
+        })}
+      </span>
+    )
+  }
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isStreaming) return
@@ -155,6 +436,7 @@ export default function Chat() {
               id: (Date.now() + 1).toString(),
               role: 'assistant',
               content: data.assistant_message || '',
+              sources: data.sources || [],
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             }])
 
@@ -212,7 +494,7 @@ export default function Chat() {
     }
   }
 
-  // Render markdown bold + line breaks
+  // Render markdown bold + line breaks (used for messages without sources)
   const renderContent = (text: string) => {
     const html = text
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -279,7 +561,12 @@ export default function Chat() {
               </div>
             </div>
             <button
-              onClick={() => setMessages(rawReport ? [{ id: 'init-' + Date.now(), role: 'assistant', content: `I've loaded the research report for **${report.symbol}** (${report.type}). Feel free to ask me any questions!`, time: 'Just now' }] : [])}
+              onClick={() => {
+                setMessages(rawReport ? [{ id: 'init-' + Date.now(), role: 'assistant', content: `I've loaded the research report for **${report.symbol}** (${report.type}). Feel free to ask me any questions!`, time: 'Just now' }] : [])
+                setExpandedSources(new Set())
+                setExpandedChunks(new Set())
+                setHighlightedSource(null)
+              }}
               style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               title="Clear chat"
             >
@@ -290,17 +577,45 @@ export default function Chat() {
           {/* MESSAGES */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '28px 28px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             {messages.map((msg) => (
-              <div key={msg.id} style={{ display: 'flex', gap: 12, maxWidth: 680, alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
-                {msg.role === 'assistant' ? <AIAvatar /> : <UserInitials />}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 600, color: '#a8a29e', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
-                    {msg.role === 'assistant' ? 'StockPro AI' : 'You'}
+              <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 0, maxWidth: 680, alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 12, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+                  {msg.role === 'assistant' ? <AIAvatar /> : <UserInitials />}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 600, color: '#a8a29e', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
+                      {msg.role === 'assistant' ? 'StockPro AI' : 'You'}
+                    </div>
+                    <div style={{ padding: '14px 18px', borderRadius: msg.role === 'assistant' ? '4px 14px 14px 14px' : '14px 4px 14px 14px', fontSize: 14, lineHeight: 1.7, background: msg.role === 'assistant' ? '#1c1917' : '#d6d3d1', border: msg.role === 'assistant' ? '1px solid #292524' : 'none', color: msg.role === 'assistant' ? 'rgba(250,250,249,0.85)' : '#0c0a09', fontWeight: msg.role === 'user' ? 500 : 400 }}>
+                      {msg.role === 'assistant' && msg.sources && msg.sources.length > 0
+                        ? renderContentWithCitations(msg.content, msg.sources, msg.id)
+                        : renderContent(msg.content)
+                      }
+                    </div>
+                    <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2, textAlign: msg.role === 'user' ? 'right' : 'left' }}>{msg.time}</div>
                   </div>
-                  <div style={{ padding: '14px 18px', borderRadius: msg.role === 'assistant' ? '4px 14px 14px 14px' : '14px 4px 14px 14px', fontSize: 14, lineHeight: 1.7, background: msg.role === 'assistant' ? '#1c1917' : '#d6d3d1', border: msg.role === 'assistant' ? '1px solid #292524' : 'none', color: msg.role === 'assistant' ? 'rgba(250,250,249,0.85)' : '#0c0a09', fontWeight: msg.role === 'user' ? 500 : 400 }}>
-                    {renderContent(msg.content)}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2, textAlign: msg.role === 'user' ? 'right' : 'left' }}>{msg.time}</div>
                 </div>
+                {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
+                  <div style={{ marginLeft: 44 }}>
+                    <SourcesPanel
+                      sources={msg.sources}
+                      messageId={msg.id}
+                      isOpen={expandedSources.has(msg.id)}
+                      onToggle={() => setExpandedSources(prev => {
+                        const next = new Set(prev)
+                        if (next.has(msg.id)) next.delete(msg.id)
+                        else next.add(msg.id)
+                        return next
+                      })}
+                      expandedChunks={expandedChunks}
+                      onToggleChunk={(key) => setExpandedChunks(prev => {
+                        const next = new Set(prev)
+                        if (next.has(key)) next.delete(key)
+                        else next.add(key)
+                        return next
+                      })}
+                      highlightedSource={highlightedSource}
+                    />
+                  </div>
+                )}
               </div>
             ))}
 

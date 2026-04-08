@@ -511,6 +511,63 @@ def create_yfinance_tools() -> List[StructuredTool]:
     ]
 
 
+def create_sec_edgar_tool() -> StructuredTool:
+    """Create a StructuredTool for searching SEC EDGAR filings by ticker."""
+    from pydantic import BaseModel, Field
+    from typing import Literal
+
+    class SECEdgarArgs(BaseModel):
+        symbol: str = Field(description="Stock ticker symbol, e.g. AAPL, TSLA, MSFT.")
+        form_types: str = Field(
+            default="10-K,10-Q,8-K",
+            description=(
+                "Comma-separated SEC form types to search. "
+                "Common types: 10-K (annual report), 10-Q (quarterly report), "
+                "8-K (current report/earnings). Default: '10-K,10-Q,8-K'."
+            ),
+        )
+        max_results: int = Field(
+            default=5, description="Maximum number of filings to return (default 5)."
+        )
+
+    def sec_edgar_filings(symbol: str, form_types: str = "10-K,10-Q,8-K", max_results: int = 5) -> str:
+        """Fetch recent SEC filings for a company using CIK lookup."""
+        try:
+            from sec_edgar import get_recent_filings
+
+            types_list = [ft.strip() for ft in form_types.split(",") if ft.strip()]
+            filings = get_recent_filings(symbol, form_types=types_list, max_results=max_results)
+
+            if not filings:
+                return json.dumps({"message": f"No SEC filings found for {symbol}", "results": []})
+
+            results = []
+            for f in filings:
+                results.append({
+                    "form_type": f["form_type"],
+                    "filing_date": f["filing_date"],
+                    "period": f["period"],
+                    "description": f["description"],
+                    "url": f["url"],
+                    "company": f.get("company_name", symbol),
+                })
+            return json.dumps(results, indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"SEC EDGAR lookup failed: {e}"})
+
+    return StructuredTool.from_function(
+        func=sec_edgar_filings,
+        name="sec_edgar_filings",
+        description=(
+            "Search SEC EDGAR for official company filings by ticker symbol. "
+            "Returns recent 10-K (annual), 10-Q (quarterly), and 8-K (current/earnings) reports "
+            "with direct links to the filing documents. Use for earnings data, financial statements, "
+            "and official company disclosures."
+        ),
+        args_schema=SECEdgarArgs,
+    )
+
+
 def create_all_tools(
     mcp_client: Optional[MCPClient],
     nimble_client: Optional[NimbleClient] = None,
@@ -530,5 +587,201 @@ def create_all_tools(
 
     if nimble_client:
         tools.extend(create_nimble_tools(nimble_client))
+
+    tools.append(create_sec_edgar_tool())
+
+    return tools
+
+
+def create_chat_tools(
+    nimble_client,
+    report_id: str,
+    ticker: str,
+    embedding_service,
+    vector_search,
+    progress_fn=None,
+) -> List[StructuredTool]:
+    """Create tools for the report chat ReAct agent."""
+    from pydantic import BaseModel, Field
+
+    FALLBACK_THRESHOLD = 0.45
+
+    class RetrieveArgs(BaseModel):
+        query: str = Field(description="Search query to find relevant report sections.")
+        top_k: int = Field(default=5, description="Number of chunks to retrieve.")
+
+    def retrieve_report_chunks(query: str, top_k: int = 5) -> str:
+        if progress_fn:
+            progress_fn("Searching report...")
+        try:
+            query_embedding = embedding_service.create_embedding(query)
+            report_chunks = vector_search.search_chunks(
+                report_id=report_id,
+                query_embedding=query_embedding,
+                top_k=top_k,
+                chunk_type="report",
+            )
+            best_score = report_chunks[0]["similarity_score"] if report_chunks else 0.0
+            if best_score < FALLBACK_THRESHOLD or len(report_chunks) < 2:
+                research_chunks = vector_search.search_chunks(
+                    report_id=report_id,
+                    query_embedding=query_embedding,
+                    top_k=3,
+                    chunk_type="research",
+                )
+                all_chunks = report_chunks + research_chunks
+            else:
+                all_chunks = report_chunks
+            seen = set()
+            results = []
+            for c in sorted(all_chunks, key=lambda x: x["similarity_score"], reverse=True):
+                if c["chunk_id"] not in seen:
+                    seen.add(c["chunk_id"])
+                    results.append({
+                        "index": len(results) + 1,
+                        "chunk_id": c["chunk_id"],
+                        "section": c.get("section"),
+                        "chunk_type": c.get("chunk_type", "report"),
+                        "similarity_score": round(c["similarity_score"], 4),
+                        "chunk_text": c["chunk_text"],
+                    })
+            results = results[:top_k + 2]
+            return json.dumps(results, indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"Report chunk retrieval failed: {e}"})
+
+    class IRSearchArgs(BaseModel):
+        query: str = Field(
+            description="Specific earnings/IR topic, e.g. 'Q1 2026 earnings results', 'revenue guidance', 'earnings call transcript'. Do NOT include the ticker or company name -- those are added automatically."
+        )
+
+    def search_ir_earnings(query: str) -> str:
+        if progress_fn:
+            progress_fn("Searching SEC filings...")
+        try:
+            import re as _re
+            from sec_edgar import get_recent_filings, get_company_name
+
+            # Phase 1: SEC EDGAR via CIK lookup (most reliable)
+            sec_filings = get_recent_filings(ticker, form_types=["10-K", "10-Q", "8-K"], max_results=5)
+            sec_results = []
+            for f in sec_filings:
+                sec_results.append({
+                    "source_type": "sec",
+                    "title": f"{f['company_name']} - {f['form_type']} ({f['period'] or f['filing_date']})",
+                    "snippet": f"Filed {f['filing_date']}. Period: {f['period']}. {f['description']}",
+                    "url": f["url"],
+                    "file_type": f["form_type"],
+                })
+
+            # Phase 2: If SEC returned < 2, fall back to Nimble web search
+            nimble_results = []
+            if len(sec_results) < 2 and nimble_client:
+                if progress_fn:
+                    progress_fn("Searching investor relations news...")
+
+                company_name = get_company_name(ticker) or ticker
+                clean_name = _re.sub(r'[\s,]*(Inc\.?|Corp\.?|Ltd\.?|LLC|PLC|Co\.?|Group|Holdings?)[\s,]*$', '', company_name, flags=_re.IGNORECASE).strip().rstrip(',')
+                ticker_lower = ticker.lower()
+                name_lower = clean_name.lower()
+
+                search_query = f'"{clean_name}" ({ticker}) {query} earnings OR "investor relations" OR "quarterly results" OR 10-K OR 10-Q'
+                result = nimble_client.search(search_query, num_results=10, topic="general", time_range="month")
+
+                for r in result.get("results", []):
+                    title = (r.get("title", "") or "").lower()
+                    snippet = (r.get("snippet", "") or r.get("description", "") or "").lower()
+                    text = title + " " + snippet
+                    if ticker_lower in text or name_lower in text:
+                        nimble_results.append({
+                            "source_type": "ir",
+                            "title": r.get("title", ""),
+                            "snippet": r.get("snippet", r.get("description", "")),
+                            "url": r.get("url", r.get("link", "")),
+                        })
+                    if len(nimble_results) >= 3:
+                        break
+
+            # Merge: SEC filings first, then Nimble
+            all_results = sec_results + nimble_results
+
+            # Return indexed (100+ range)
+            indexed = []
+            for i, r in enumerate(all_results[:5], start=100):
+                indexed.append({
+                    "index": i,
+                    "source_type": r.get("source_type", "ir"),
+                    "title": r.get("title", ""),
+                    "snippet": r.get("snippet", ""),
+                    "url": r.get("url", ""),
+                    "file_type": r.get("file_type"),
+                })
+            return json.dumps(indexed, indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"IR search failed: {e}"})
+
+    def get_earnings_data() -> str:
+        if progress_fn:
+            progress_fn("Pulling earnings data...")
+        try:
+            import yfinance as yf
+            t = yf.Ticker(ticker)
+            info = t.info or {}
+            data = {
+                "earnings_history": _df_to_records(t.earnings_history, max_rows=8, transpose=False),
+                "next_earnings_date": str(
+                    t.calendar.get("Earnings Date", [None])[0] if t.calendar else None
+                ),
+                "earnings_growth": info.get("earningsGrowth"),
+                "earnings_quarterly_growth": info.get("earningsQuarterlyGrowth"),
+                "trailing_eps": info.get("trailingEps"),
+                "forward_eps": info.get("forwardEps"),
+            }
+            # Wrap in indexed format so agent can cite by number (200+ range)
+            result = [{
+                "index": 200,
+                "source_type": "yfinance",
+                "data": _sanitize_nan(data),
+            }]
+            return json.dumps(result, indent=2, default=str)
+        except Exception as e:
+            return json.dumps({"error": f"Earnings data failed: {e}"})
+
+    tools = [
+        StructuredTool.from_function(
+            func=retrieve_report_chunks,
+            name="retrieve_report_chunks",
+            description=(
+                "Search the stored research report for relevant sections. "
+                "ALWAYS call this first to ground your answer in the report. "
+                "Returns numbered chunks with section names and text."
+            ),
+            args_schema=RetrieveArgs,
+        ),
+        StructuredTool.from_function(
+            func=get_earnings_data,
+            name="get_earnings_data",
+            description=(
+                "Pull structured earnings data from Yahoo Finance: EPS history (actual vs estimates), "
+                "next earnings date, growth rates. Use for specific numerical comparisons."
+            ),
+        ),
+    ]
+
+    if nimble_client:
+        tools.append(
+            StructuredTool.from_function(
+                func=search_ir_earnings,
+                name="search_ir_earnings",
+                description=(
+                    "Search SEC EDGAR filings (10-K, 10-Q, 8-K) and investor relations news "
+                    "for the company's official earnings, guidance, and financial announcements. "
+                    "The ticker and company name are added automatically -- only pass the topic "
+                    "(e.g. 'Q1 2026 earnings', 'annual report', 'revenue guidance'). "
+                    "Use when the question involves earnings, revenue, guidance, or financial results."
+                ),
+                args_schema=IRSearchArgs,
+            )
+        )
 
     return tools
