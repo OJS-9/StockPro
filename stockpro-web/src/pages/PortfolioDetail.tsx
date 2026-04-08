@@ -6,17 +6,22 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+const fmtCompact = (n: number) => {
+  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
+  return `$${n.toFixed(0)}`
+}
 
 const RANGES = ['1W', '1M', '3M', 'YTD', '1Y']
 
-function LineChart({ data, gain = true, loading = false }: { data: number[]; gain?: boolean; loading?: boolean }) {
+function LineChart({ data, dates, gain = true, loading = false }: { data: number[]; dates?: string[]; gain?: boolean; loading?: boolean }) {
   if (loading) return (
-    <div style={{ height: 120, background: '#232120', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ height: 160, background: '#232120', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: 12, color: '#a8a29e' }}>Loading chart...</div>
     </div>
   )
   if (!data || data.length < 2) return (
-    <div style={{ height: 120, background: '#232120', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ height: 160, background: '#232120', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: 12, color: '#a8a29e' }}>No chart data for this range</div>
     </div>
   )
@@ -25,23 +30,54 @@ function LineChart({ data, gain = true, loading = false }: { data: number[]; gai
   const max = Math.max(...data)
   const range = max - min || 1
   const w = 600
-  const h = 120
-  const pad = 8
+  const h = 160
+  const padLeft = 60; const padRight = 12; const padTop = 8; const padBottom = 28
+
   const pts = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * (w - pad * 2)
-    const y = h - pad - ((v - min) / range) * (h - pad * 2)
+    const x = padLeft + (i / (data.length - 1)) * (w - padLeft - padRight)
+    const y = padTop + (1 - (v - min) / range) * (h - padTop - padBottom)
     return `${x},${y}`
   }).join(' ')
-  const lastX = pad + ((data.length - 1) / (data.length - 1)) * (w - pad * 2)
+  const lastX = padLeft + ((data.length - 1) / (data.length - 1)) * (w - padLeft - padRight)
+
+  // Y-axis: 4 ticks
+  const yTicks = [0, 1, 2, 3].map(i => {
+    const val = min + (range * i) / 3
+    const y = padTop + (1 - i / 3) * (h - padTop - padBottom)
+    return { val, y }
+  })
+
+  // X-axis: ~5 labels
+  const xLabels: { label: string; x: number }[] = []
+  if (dates && dates.length > 1) {
+    const step = Math.max(1, Math.floor((dates.length - 1) / 4))
+    for (let i = 0; i < dates.length; i += step) {
+      const x = padLeft + (i / (dates.length - 1)) * (w - padLeft - padRight)
+      const d = new Date(dates[i])
+      xLabels.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), x })
+    }
+  }
+
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" fill="none" style={{ width: '100%', height: 120 }}>
+    <svg viewBox={`0 0 ${w} ${h}`} fill="none" style={{ width: '100%', height: 160 }}>
       <defs>
         <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.2" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon points={`${pad},${h - pad} ${pts} ${lastX},${h - pad}`} fill="url(#chartGrad)" />
+      {/* Grid lines + Y labels */}
+      {yTicks.map(({ val, y }) => (
+        <g key={val}>
+          <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke="#292524" strokeWidth="1" />
+          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, sans-serif">{fmtCompact(val)}</text>
+        </g>
+      ))}
+      {/* X labels */}
+      {xLabels.map(({ label, x }) => (
+        <text key={label + x} x={x} y={h - 4} fill="#78716c" fontSize="10" textAnchor="middle" fontFamily="Inter, sans-serif">{label}</text>
+      ))}
+      <polygon points={`${padLeft},${h - padBottom} ${pts} ${lastX},${h - padBottom}`} fill="url(#chartGrad)" />
       <polyline points={pts} stroke={color} strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
@@ -109,8 +145,10 @@ export default function PortfolioDetail() {
   const totalValue = pricesData?.total_market_value ?? 0
   const pnl = pricesData?.total_unrealized_gain ?? 0
   const pnlPct = pricesData?.total_unrealized_gain_pct ?? 0
-  // Chart data: history returns [{date, value}] — extract value array
-  const chartData: number[] = (historyData?.history || []).map((h: any) => h.value ?? h.close ?? 0).filter((v: number) => v > 0)
+  // Chart data: history returns [{date, value}] — extract value and date arrays
+  const historyRaw = historyData?.history || []
+  const chartData: number[] = historyRaw.map((h: any) => h.value ?? h.close ?? 0).filter((v: number) => v > 0)
+  const chartDates: string[] = historyRaw.map((h: any) => h.date).filter(Boolean)
 
   const dotColors = ['#60a5fa', '#a78bfa', '#22c55e', '#f59e0b', '#f472b6']
 
@@ -178,7 +216,7 @@ export default function PortfolioDetail() {
                 </div>
               </div>
               <div style={{ padding: '20px 24px' }}>
-                <LineChart data={chartData} gain={pnl >= 0} loading={historyLoading} />
+                <LineChart data={chartData} dates={chartDates} gain={pnl >= 0} loading={historyLoading} />
               </div>
             </div>
 
