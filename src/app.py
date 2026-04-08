@@ -1701,44 +1701,52 @@ def portfolios_prices():
     portfolio_service = get_portfolio_service()
     portfolios = portfolio_service.list_portfolios(user_id=session["user_id"])
 
+    from concurrent.futures import ThreadPoolExecutor
+
     def to_float(v):
         return float(v) if v is not None else None
 
-    result = []
-    total_value = 0.0
-    total_pnl = 0.0
-    total_day_change = 0.0
-    for p in portfolios:
-        pid = p["portfolio_id"]
+    def _fetch_summary(pid):
         try:
             summary = portfolio_service.get_portfolio_summary(pid, with_prices=True)
             mv = to_float(summary.get("total_market_value")) or 0.0
             ug = to_float(summary.get("total_unrealized_gain")) or 0.0
-            total_value += mv
-            total_pnl += ug
             row = {
                 "portfolio_id": pid,
                 "total_market_value": to_float(summary.get("total_market_value")),
                 "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
                 "total_unrealized_gain_pct": to_float(summary.get("total_unrealized_gain_pct")),
             }
-            # Day change: sum of (day_change_pct * market_value / 100) per holding
             day_change = 0.0
             for h in summary.get("holdings", []):
                 h_mv = to_float(h.get("market_value")) or 0.0
                 h_day_pct = to_float(h.get("day_change_pct")) or 0.0
                 day_change += h_mv * h_day_pct / 100.0
             row["day_change"] = day_change
-            total_day_change += day_change
-            result.append(row)
+            return row, mv, ug, day_change
         except Exception:
-            result.append({
+            return {
                 "portfolio_id": pid,
                 "total_market_value": None,
                 "total_unrealized_gain": None,
                 "total_unrealized_gain_pct": None,
                 "day_change": None,
-            })
+            }, 0.0, 0.0, 0.0
+
+    pids = [p["portfolio_id"] for p in portfolios]
+    with ThreadPoolExecutor(max_workers=min(len(pids), 5)) as pool:
+        futures = {pid: pool.submit(_fetch_summary, pid) for pid in pids}
+
+    result = []
+    total_value = 0.0
+    total_pnl = 0.0
+    total_day_change = 0.0
+    for pid in pids:
+        row, mv, ug, dc = futures[pid].result()
+        result.append(row)
+        total_value += mv
+        total_pnl += ug
+        total_day_change += dc
 
     return jsonify({
         "portfolios": result,
@@ -3352,19 +3360,40 @@ def api_home():
         holdings_preview = []
         for p in portfolios:
             try:
-                summary = svc.get_portfolio_summary(p["portfolio_id"], with_prices=True)
-                total_value += _safe_float(summary.get("total_market_value")) or 0.0
-                total_pnl += _safe_float(summary.get("total_unrealized_gain")) or 0.0
+                summary = svc.get_portfolio_summary(p["portfolio_id"], with_prices=False)
+                # Overlay cached prices for instant response
+                symbols = [h["symbol"] for h in summary.get("holdings", []) if h.get("symbol")]
+                cached = db.get_cached_prices(symbols) if symbols else {}
+                p_total_value = 0.0
+                p_total_pnl = 0.0
                 for h in summary.get("holdings", [])[:5]:
+                    sym = h["symbol"]
+                    cp = cached.get(sym)
+                    current_price = _safe_float(cp.get("price")) if cp else None
+                    qty = _safe_float(h.get("total_quantity")) or 0
+                    avg_cost = _safe_float(h.get("average_cost")) or 0
+                    if current_price is not None:
+                        mv = current_price * qty
+                        ug = mv - (avg_cost * qty)
+                        ug_pct = (ug / (avg_cost * qty) * 100) if avg_cost * qty else 0
+                    else:
+                        mv = None
+                        ug = None
+                        ug_pct = None
+                    if mv is not None:
+                        p_total_value += mv
+                        p_total_pnl += ug
                     holdings_preview.append({
-                        "symbol": h["symbol"],
+                        "symbol": sym,
                         "portfolio_name": p["name"],
-                        "quantity": _safe_float(h.get("total_quantity")),
-                        "average_cost": _safe_float(h.get("average_cost")),
-                        "market_value": _safe_float(h.get("market_value")),
-                        "unrealized_gain": _safe_float(h.get("unrealized_gain")),
-                        "unrealized_gain_pct": _safe_float(h.get("unrealized_gain_pct")),
+                        "quantity": qty,
+                        "average_cost": avg_cost,
+                        "market_value": mv,
+                        "unrealized_gain": ug,
+                        "unrealized_gain_pct": ug_pct,
                     })
+                total_value += p_total_value
+                total_pnl += p_total_pnl
             except Exception as _e:
                 app.logger.debug("api_home: portfolio summary error: %s", _e)
         portfolio_totals = {"total_value": total_value, "total_pnl": total_pnl}
@@ -3411,7 +3440,8 @@ def api_home():
     # News (top 5)
     try:
         from news_service import get_briefing
-        news_items = get_briefing()[:5] if get_briefing() else []
+        briefing = get_briefing()
+        news_items = briefing[:5] if briefing else []
     except Exception:
         news_items = []
 

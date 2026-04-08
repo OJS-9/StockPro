@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -109,7 +110,7 @@ export default function PortfolioDetail() {
   })
 
   // /portfolio/<id>?format=json returns {portfolio, summary, holdings}
-  const { data: portfolioData } = useQuery({
+  const { data: portfolioData, isLoading: portfolioLoading } = useQuery({
     queryKey: ['portfolio-detail', id],
     queryFn: async () => {
       const res = await api.get(`/api/portfolio/${id}`)
@@ -157,6 +158,15 @@ export default function PortfolioDetail() {
       <AppNav />
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 48px 80px' }}>
 
+        {portfolioLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <Skeleton height={32} width={200} />
+            <Skeleton height={200} />
+            <Skeleton height={300} />
+          </div>
+        )}
+
+        {!portfolioLoading && <>
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
@@ -301,6 +311,7 @@ export default function PortfolioDetail() {
             </div>
           </div>
         </div>
+        </>}
       </main>
     </div>
   )

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -16,7 +17,7 @@ export default function Alerts() {
   // API create fields: symbol, direction (above|below), target_price, asset_type (stock|crypto)
   const [newAlert, setNewAlert] = useState({ symbol: '', direction: 'above', target: '', asset_type: 'stock' })
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['alerts'],
     queryFn: async () => {
       const res = await api.get('/api/alerts')
@@ -24,6 +25,7 @@ export default function Alerts() {
       return res.json()
     },
     refetchInterval: 30_000,
+    staleTime: 25_000,
   })
 
   const toggleMutation = useMutation({
@@ -109,6 +111,19 @@ export default function Alerts() {
         </div>
 
         {/* STATS */}
+        {isLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: '16px 18px' }}>
+                  <Skeleton height={14} width={60} />
+                  <Skeleton height={28} width={40} borderRadius={6} />
+                </div>
+              ))}
+            </div>
+            {[1, 2, 3].map(i => <Skeleton key={i} height={64} borderRadius={14} />)}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32 }}>
           {[
             { label: 'Active', val: activeCount, color: '#22c55e' as string },

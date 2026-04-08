@@ -35,15 +35,9 @@ export default function AppNav() {
   const bellRef = useRef<HTMLButtonElement>(null)
 
   // Read notification data from shared query (NotificationListener in App.tsx handles toasts)
-  const { data } = useQuery({
+  // Reads from shared cache maintained by NotificationListener in App.tsx
+  const { data } = useQuery<{ notifications: any[]; unread_count: number }>({
     queryKey: ['alert-notifications'],
-    queryFn: async () => {
-      const res = await api.get('/api/alerts/notifications?limit=20')
-      if (!res.ok) return { notifications: [], unread_count: 0 }
-      return res.json()
-    },
-    refetchInterval: 30_000,
-    staleTime: 25_000,
   })
 
   const notifications: any[] = (data?.notifications ?? []).filter((n: any) => !n.read_at)

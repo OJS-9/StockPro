@@ -11,7 +11,7 @@ const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 if (!CLERK_KEY) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY')
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000 } },
+  defaultOptions: { queries: { staleTime: 120_000 } },
 })
 
 createRoot(document.getElementById('root')!).render(

@@ -6,6 +6,7 @@ Results are cached in memory with a 15-minute TTL per cache slot.
 
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
 
 CACHE_TTL = 15 * 60  # 15 minutes
@@ -46,11 +47,13 @@ def _refresh_primary() -> None:
     except Exception:
         return
 
-    bloomberg_results = client.run_agent(BLOOMBERG_AGENT, {"query": SEARCH_QUERY})
-    morningstar_results = client.run_agent(
-        MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY}
-    )
-    wsj_results = client.run_agent(WSJ_AGENT, {"feed_name": WSJ_PIPELINE})
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_bloomberg = pool.submit(client.run_agent, BLOOMBERG_AGENT, {"query": SEARCH_QUERY})
+        f_morningstar = pool.submit(client.run_agent, MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY})
+        f_wsj = pool.submit(client.run_agent, WSJ_AGENT, {"feed_name": WSJ_PIPELINE})
+        bloomberg_results = f_bloomberg.result()
+        morningstar_results = f_morningstar.result()
+        wsj_results = f_wsj.result()
 
     # Sort each source by image presence before interleaving, so image articles
     # lead within each source without collapsing all no-image sources to the end.

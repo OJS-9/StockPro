@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 
 const fmt = (n: number | null | undefined) =>
@@ -93,7 +94,7 @@ export default function Watchlist() {
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['watchlists'],
     queryFn: async () => {
       const res = await api.get('/api/watchlists')
@@ -141,6 +142,18 @@ export default function Watchlist() {
           </div>
         </div>
 
+        {isLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[1, 2].map(i => (
+              <div key={i} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20 }}>
+                <Skeleton height={20} width={140} />
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {[1, 2, 3].map(j => <Skeleton key={j} height={44} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {watchlists.map((wl: any) => (
             <div key={wl.id} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
