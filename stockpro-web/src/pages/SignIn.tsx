@@ -89,7 +89,7 @@ export default function SignIn() {
           appearance={{
             variables: {
               colorBackground: '#1c1917',
-              colorInputBackground: '#1c1917',
+              colorInputBackground: '#292524',
               colorInputText: '#fafaf9',
               colorText: '#fafaf9',
               colorTextSecondary: '#a8a29e',
@@ -105,6 +105,31 @@ export default function SignIn() {
                 background: '#d6d3d1',
                 color: '#0c0a09',
                 fontWeight: 600,
+              },
+              socialButtonsBlockButton: {
+                background: '#292524',
+                border: '1px solid #44403c',
+                color: '#fafaf9',
+              },
+              socialButtonsBlockButtonText: {
+                color: '#fafaf9',
+              },
+              formFieldInput: {
+                border: '1px solid #44403c',
+                background: '#292524',
+                color: '#fafaf9',
+              },
+              footerActionLink: {
+                color: '#d6d3d1',
+              },
+              footerActionText: {
+                color: '#a8a29e',
+              },
+              dividerLine: {
+                background: '#44403c',
+              },
+              dividerText: {
+                color: '#a8a29e',
               },
             },
           }}
