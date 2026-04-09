@@ -36,6 +36,7 @@ export default function Home() {
   const api = useApiClient()
   const navigate = useNavigate()
   const [ticker, setTicker] = useState('')
+  const [changeMode, setChangeMode] = useState<'D' | 'W'>('D')
 
   const { data, isLoading } = useQuery({
     queryKey: ['home'],
@@ -67,6 +68,15 @@ export default function Home() {
   const recentTickers: string[] = Array.from(
     new Set((recentReports as any[]).map((r: any) => r.ticker || r.symbol).filter(Boolean))
   ).slice(0, 3) as string[]
+
+  if (isLoading) {
+    return (
+      <div style={{ background: '#0c0a09', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div style={{ fontSize: 28, fontFamily: 'Nunito, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
+        <div style={{ width: 32, height: 32, border: '3px solid #292524', borderTopColor: '#d6d3d1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      </div>
+    )
+  }
 
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
@@ -128,39 +138,84 @@ export default function Home() {
                 {totals.total_value != null ? fmt(totals.total_value) : '$0'}
               </div>
             )}
-            {!isLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: '#22c55e' }}>
-                <Icon name="trending_up" size={15} />
-                +$1,204.20 (+0.85%) today
+            {!isLoading && totals.day_change != null && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: totals.day_change >= 0 ? '#22c55e' : '#ef4444' }}>
+                <Icon name={totals.day_change >= 0 ? 'trending_up' : 'trending_down'} size={15} />
+                {totals.day_change >= 0 ? '+' : ''}{fmt(totals.day_change)} ({totals.day_change_pct >= 0 ? '+' : ''}{totals.day_change_pct?.toFixed(2)}%) today
               </div>
             )}
             <div style={{ position: 'absolute', bottom: 0, right: 0, width: 120, height: 60, opacity: 0.35 }}>
               <Sparkline gain />
             </div>
           </div>
-          {[
-            { label: 'Unrealized P&L', val: totals.total_pnl, subColor: '#22c55e', subIcon: 'arrow_upward', sub: 'All time return', meta: '' },
-            { label: "Day's Change", val: null, rawVal: totals.day_change != null ? fmt(totals.day_change) : '-', subColor: '#22c55e', subIcon: 'arrow_upward', sub: 'Today vs close', meta: '' },
-            { label: 'Active Alerts', val: null, rawVal: alertsCount ?? 0, subColor: '#f59e0b', subIcon: 'warning', sub: 'Price alerts watching', meta: '' },
-          ].map(({ label, val, rawVal, subColor, subIcon, sub, meta }) => (
-            <div key={label} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
-              {isLoading ? <Skeleton h={32} /> : (
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: rawVal !== undefined ? '#fafaf9' : '#22c55e' }}>
-                  {rawVal !== undefined ? rawVal : (val != null ? fmt(val) : '$0')}
-                </div>
-              )}
-              {!isLoading && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: subColor }}>
-                    <Icon name={subIcon} size={15} />
-                    {sub}
+          {/* Unrealized P&L */}
+          <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
+            <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>Unrealized P&L</div>
+            {isLoading ? <Skeleton h={32} /> : (
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                {totals.total_pnl != null ? fmt(totals.total_pnl) : '$0'}
+              </div>
+            )}
+            {!isLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                <Icon name={(totals.total_pnl ?? 0) >= 0 ? 'arrow_upward' : 'arrow_downward'} size={15} />
+                All time return
+              </div>
+            )}
+          </div>
+          {/* Day's / Week's Change */}
+          {(() => {
+            const dayVal = totals.day_change ?? 0
+            const dayPct = totals.day_change_pct ?? 0
+            const displayVal = changeMode === 'W' ? dayVal * 5 : dayVal
+            const displayPct = changeMode === 'W' ? dayPct * 5 : dayPct
+            const changeColor = displayVal >= 0 ? '#22c55e' : '#ef4444'
+            return (
+              <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e' }}>
+                    {changeMode === 'D' ? "Day's Change" : "Week's Change"}
                   </div>
-                  <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 4 }}>{meta}</div>
-                </>
-              )}
-            </div>
-          ))}
+                  <div style={{ display: 'flex', gap: 2, background: '#292524', borderRadius: 6, padding: 2 }}>
+                    {(['D', 'W'] as const).map(m => (
+                      <button key={m} onClick={() => setChangeMode(m)}
+                        style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, border: 'none', cursor: 'pointer',
+                          background: changeMode === m ? '#d6d3d1' : 'transparent',
+                          color: changeMode === m ? '#0c0a09' : '#78716c' }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {isLoading ? <Skeleton h={32} /> : (
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
+                    {displayVal !== 0 ? `${displayVal >= 0 ? '+' : ''}${fmt(displayVal)}` : '-'}
+                  </div>
+                )}
+                {!isLoading && displayVal !== 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: changeColor }}>
+                    <Icon name={displayVal >= 0 ? 'arrow_upward' : 'arrow_downward'} size={15} />
+                    {displayPct >= 0 ? '+' : ''}{displayPct.toFixed(2)}% {changeMode === 'D' ? 'today' : 'this week'}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+          {/* Active Alerts */}
+          <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
+            <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>Active Alerts</div>
+            {isLoading ? <Skeleton h={32} /> : (
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
+                {alertsCount ?? 0}
+              </div>
+            )}
+            {!isLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: '#f59e0b' }}>
+                <Icon name="warning" size={15} />
+                Price alerts watching
+              </div>
+            )}
+          </div>
         </div>
 
         {/* MAIN GRID */}

@@ -197,14 +197,21 @@ class PortfolioService:
 
         pcs = get_price_cache_service()
 
-        # Fetch prices for symbols completely absent from cache
-        missing_pairs = [(s, "stock") for s in stock_symbols if s not in cached] + [
-            (s, "crypto") for s in crypto_symbols if s not in cached
-        ]
-        if missing_pairs:
-            fetched = pcs.refresh(missing_pairs, force=True)
-            for sym, data in fetched.items():
-                price_map[sym] = data["price"]
+        # Fetch prices for symbols completely absent from cache (parallel by asset type)
+        missing_stocks = [(s, "stock") for s in stock_symbols if s not in cached]
+        missing_crypto = [(s, "crypto") for s in crypto_symbols if s not in cached]
+        if missing_stocks or missing_crypto:
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _fetch(pairs):
+                return pcs.refresh(pairs, force=True) if pairs else {}
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                fut_s = pool.submit(_fetch, missing_stocks)
+                fut_c = pool.submit(_fetch, missing_crypto)
+                for result in (fut_s.result(), fut_c.result()):
+                    for sym, data in result.items():
+                        price_map[sym] = data["price"]
 
         # Background-refresh stale cached prices (fire and forget — next call will be fresh)
         stale_pairs = [

@@ -126,6 +126,11 @@ def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
                 nid, alert["user_id"], alert["alert_id"], sym, body
             )
             _send_telegram_alert_if_connected(db, alert["user_id"], sym, body)
+            # One-shot: deactivate alert after successful trigger
+            try:
+                db.set_price_alert_active(alert["alert_id"], alert["user_id"], False)
+            except Exception:
+                logger.exception("failed to deactivate alert %s after trigger", alert.get("alert_id"))
             fired += 1
         except Exception:
             logger.exception(

@@ -86,8 +86,14 @@ function DataPrefetcher() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
+    const fetchJson = async (url: string) => {
+      const res = await api.get(url)
+      if (!res.ok) throw new Error('Failed')
+      return res.json()
+    }
+
     const pages = [
-      { key: ['home'], url: '/api/home' },
+      { key: ['home'], url: '/api/home?refresh_news=1' },
       { key: ['portfolios'], url: '/api/portfolios/prices' },
       { key: ['watchlists'], url: '/api/watchlists' },
       { key: ['reports'], url: '/api/reports' },
@@ -96,12 +102,31 @@ function DataPrefetcher() {
     pages.forEach(({ key, url }) => {
       queryClient.prefetchQuery({
         queryKey: key,
-        queryFn: async () => {
-          const res = await api.get(url)
-          if (!res.ok) throw new Error('Failed')
-          return res.json()
-        },
+        queryFn: () => fetchJson(url),
         staleTime: 120_000,
+      })
+    })
+
+    // Prefetch portfolios list, then seed each portfolio's price cache
+    // so detail pages render instantly without extra API calls
+    queryClient.prefetchQuery({
+      queryKey: ['portfolios'],
+      queryFn: () => fetchJson('/api/portfolios/prices'),
+      staleTime: 120_000,
+    }).then(() => {
+      const cached = queryClient.getQueryData<any>(['portfolios'])
+      const portfolios = cached?.portfolios || []
+      portfolios.forEach((p: any) => {
+        const pid = p.portfolio_id || p.id
+        if (!pid) return
+        queryClient.setQueryData(['portfolio-prices', String(pid)], {
+          holdings: p.holdings,
+          total_market_value: p.total_market_value,
+          total_unrealized_gain: p.total_unrealized_gain,
+          total_unrealized_gain_pct: p.total_unrealized_gain_pct,
+          stock_allocation_pct: p.stock_allocation_pct,
+          crypto_allocation_pct: p.crypto_allocation_pct,
+        })
       })
     })
   }, [])
@@ -113,7 +138,12 @@ export default function App() {
   return (
     <>
     <SignedIn><NotificationListener /><DataPrefetcher /></SignedIn>
-    <Suspense fallback={<div style={{ background: '#0c0a09', minHeight: '100vh' }} />}>
+    <Suspense fallback={
+      <div style={{ background: '#0c0a09', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div style={{ fontSize: 28, fontFamily: 'Nunito, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
+        <div style={{ width: 32, height: 32, border: '3px solid #292524', borderTopColor: '#d6d3d1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      </div>
+    }>
     <Routes>
       {/* Root: landing for unauthenticated, redirect to /home for signed in */}
       <Route

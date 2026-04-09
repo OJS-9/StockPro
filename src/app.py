@@ -1716,12 +1716,27 @@ def portfolios_prices():
                 "total_market_value": to_float(summary.get("total_market_value")),
                 "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
                 "total_unrealized_gain_pct": to_float(summary.get("total_unrealized_gain_pct")),
+                "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
+                "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
             }
+            holdings_out = []
             day_change = 0.0
             for h in summary.get("holdings", []):
                 h_mv = to_float(h.get("market_value")) or 0.0
                 h_day_pct = to_float(h.get("day_change_pct")) or 0.0
                 day_change += h_mv * h_day_pct / 100.0
+                holdings_out.append({
+                    "symbol": h["symbol"],
+                    "name": h.get("name", h["symbol"]),
+                    "total_quantity": to_float(h.get("total_quantity")),
+                    "average_cost": to_float(h.get("average_cost")),
+                    "price_available": h.get("price_available", False),
+                    "current_price": to_float(h.get("current_price")),
+                    "market_value": to_float(h.get("market_value")),
+                    "unrealized_gain": to_float(h.get("unrealized_gain")),
+                    "unrealized_gain_pct": to_float(h.get("unrealized_gain_pct")),
+                })
+            row["holdings"] = holdings_out
             row["day_change"] = day_change
             return row, mv, ug, day_change
         except Exception:
@@ -3357,6 +3372,7 @@ def api_home():
         portfolios = svc.list_portfolios(user_id=uid)
         total_value = 0.0
         total_pnl = 0.0
+        day_change = 0.0
         holdings_preview = []
         for p in portfolios:
             try:
@@ -3364,9 +3380,27 @@ def api_home():
                 # Overlay cached prices for instant response
                 symbols = [h["symbol"] for h in summary.get("holdings", []) if h.get("symbol")]
                 cached = db.get_cached_prices(symbols) if symbols else {}
+                all_holdings = summary.get("holdings", [])
                 p_total_value = 0.0
                 p_total_pnl = 0.0
-                for h in summary.get("holdings", [])[:5]:
+                # Calculate totals from ALL holdings
+                for h in all_holdings:
+                    sym = h["symbol"]
+                    cp = cached.get(sym)
+                    current_price = _safe_float(cp.get("price")) if cp else None
+                    qty = _safe_float(h.get("total_quantity")) or 0
+                    avg_cost = _safe_float(h.get("average_cost")) or 0
+                    if current_price is not None:
+                        mv = current_price * qty
+                        ug = mv - (avg_cost * qty)
+                        p_total_value += mv
+                        p_total_pnl += ug
+                        # Day change from cached change_percent
+                        chg_pct = _safe_float(cp.get("change_percent")) if cp else None
+                        if chg_pct:
+                            day_change += qty * current_price * (chg_pct / 100)
+                # Preview: only first 5 for display
+                for h in all_holdings[:5]:
                     sym = h["symbol"]
                     cp = cached.get(sym)
                     current_price = _safe_float(cp.get("price")) if cp else None
@@ -3380,9 +3414,6 @@ def api_home():
                         mv = None
                         ug = None
                         ug_pct = None
-                    if mv is not None:
-                        p_total_value += mv
-                        p_total_pnl += ug
                     holdings_preview.append({
                         "symbol": sym,
                         "portfolio_name": p["name"],
@@ -3396,7 +3427,12 @@ def api_home():
                 total_pnl += p_total_pnl
             except Exception as _e:
                 app.logger.debug("api_home: portfolio summary error: %s", _e)
-        portfolio_totals = {"total_value": total_value, "total_pnl": total_pnl}
+        portfolio_totals = {
+            "total_value": total_value,
+            "total_pnl": total_pnl,
+            "day_change": day_change,
+            "day_change_pct": (day_change / total_value * 100) if total_value else 0,
+        }
     except Exception:
         portfolio_totals = {}
         holdings_preview = []
@@ -3414,7 +3450,7 @@ def api_home():
     # Active alerts count
     try:
         alert_rows = db.list_price_alerts_for_user(uid)
-        active_alerts_count = sum(1 for r in alert_rows if r.get("active"))
+        active_alerts_count = sum(1 for r in alert_rows if r.get("active") and not r.get("last_triggered_at"))
     except Exception:
         active_alerts_count = 0
 
@@ -3437,9 +3473,11 @@ def api_home():
     except Exception:
         watchlist_preview = []
 
-    # News (top 5)
+    # News (top 5) — force refresh on first load after login
     try:
-        from news_service import get_briefing
+        from news_service import get_briefing, force_refresh
+        if request.args.get("refresh_news"):
+            force_refresh()
         briefing = get_briefing()
         news_items = briefing[:5] if briefing else []
     except Exception:
