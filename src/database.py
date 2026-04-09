@@ -32,8 +32,8 @@ class DatabaseManager:
 
         try:
             self._pool = psycopg2.pool.ThreadedConnectionPool(
-                1,
-                5,
+                2,
+                15,
                 dsn=database_url,
                 connect_timeout=10,
                 options="-c statement_timeout=30000",
