@@ -59,7 +59,38 @@ Rules:
 - Order subjects by research importance for this specific situation.
 - Focus hints should be specific to user concerns; leave as "" when no particular focus applies.
 - trade_context is prose written for a synthesis agent, not bullet points.
-- reasoning is for logging only — be candid about your choices."""
+- reasoning is for logging only — be candid about your choices.
+
+<examples>
+Example 1 — Day Trade for TSLA, user concerned about earnings reaction:
+{{
+  "selected_subject_ids": ["news_catalysts", "technical_price_action", "valuation_metrics"],
+  "subject_focus": {{
+    "news_catalysts": "Focus on post-earnings price reaction and any new guidance from yesterday's call",
+    "technical_price_action": "Key intraday support/resistance levels and options flow around current price",
+    "valuation_metrics": ""
+  }},
+  "trade_context": "User is evaluating a day trade on TSLA following an earnings report. Primary concern is the post-earnings price reaction and whether intraday momentum supports a long entry.",
+  "reasoning": "Earnings just happened so news_catalysts is top priority. Technical levels matter most for day trade entry/exit. Valuation is secondary but included for context."
+}}
+
+Example 2 — Investment for AAPL, user focused on AI growth:
+{{
+  "selected_subject_ids": ["growth_drivers", "financial_health", "competitive_position", "valuation_metrics", "risk_factors", "management_quality", "sector_macro", "news_catalysts"],
+  "subject_focus": {{
+    "growth_drivers": "Focus on Apple Intelligence adoption rates, AI feature roadmap, and Services revenue acceleration",
+    "financial_health": "Highlight free cash flow trends and capital allocation toward AI/R&D",
+    "competitive_position": "Compare Apple's AI strategy vs Google, Samsung, and Microsoft in consumer devices",
+    "valuation_metrics": "Assess whether current premium is justified by AI-driven growth narrative",
+    "risk_factors": "Evaluate China regulatory risk and AI chip supply constraints",
+    "management_quality": "",
+    "sector_macro": "",
+    "news_catalysts": ""
+  }},
+  "trade_context": "User is considering a long-term investment in AAPL, specifically interested in whether Apple's AI push will drive the next growth phase. They want deep coverage of AI strategy and competitive positioning.",
+  "reasoning": "User's AI focus means growth_drivers and competitive_position are highest priority. Financial health and valuation ground the thesis in data. Risk factors cover China and supply chain concerns the user should know about."
+}}
+</examples>"""
 
 
 def _build_user_prompt(

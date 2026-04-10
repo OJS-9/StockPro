@@ -169,8 +169,9 @@ class ReportChatAgent:
         top_k: int = CHAT_TOP_K,
     ) -> Dict[str, Any]:
         """Answer a question about a report using a ReAct agent with report retrieval, IR search, and yfinance tools."""
-        print(
-            f"[ReportChat] answer_question called -- report_id={report_id}, ticker={ticker}, question={user_question[:80]!r}"
+        logger.debug(
+            "answer_question called -- report_id=%s, ticker=%s, question=%r",
+            report_id, ticker, user_question[:80],
         )
 
         tools = create_chat_tools(
@@ -208,7 +209,7 @@ class ReportChatAgent:
             messages.append(HumanMessage(content=user_question))
 
         try:
-            print(f"[ReportChat] Running ReAct agent ({CHAT_MODEL}, recursion_limit={CHAT_RECURSION_LIMIT})...")
+            logger.debug("Running ReAct agent (%s, recursion_limit=%s)", CHAT_MODEL, CHAT_RECURSION_LIMIT)
             result = agent.invoke(
                 {"messages": messages},
                 config={"recursion_limit": CHAT_RECURSION_LIMIT},
@@ -245,7 +246,7 @@ class ReportChatAgent:
             if not sources and all_sources:
                 sources = [s for s in all_sources if s["chunk_type"] in ("report", "research")]
 
-            print(f"[ReportChat] Answer: {len(answer_text)} chars, {len(sources)} cited sources (of {len(all_sources)} total)")
+            logger.debug("Answer: %s chars, %s cited sources (of %s total)", len(answer_text), len(sources), len(all_sources))
             return {"answer": answer_text, "sources": sources}
 
         except Exception as e:
