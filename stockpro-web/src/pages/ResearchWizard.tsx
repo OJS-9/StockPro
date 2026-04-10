@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
+import { useLanguage } from '../LanguageContext'
 
 const TRADE_TYPES = [
-  { id: 'day', icon: 'bolt', iconStyle: 'bull', name: 'Day Trade', desc: 'Short-term intraday focus: momentum, technicals, and entry/exit levels.' },
-  { id: 'swing', icon: 'show_chart', iconStyle: 'neutral', name: 'Swing Trade', desc: 'Multi-day to multi-week holds: catalysts, technical setups, and near-term drivers.' },
-  { id: 'investment', icon: 'library_books', iconStyle: 'full', name: 'Investment', desc: 'Long-term fundamental analysis: valuation, competitive moat, and growth thesis.' },
+  { id: 'day', icon: 'bolt', iconStyle: 'bull', name: 'Day Trade', nameKey: 'research.dayTrade', descKey: 'research.dayTradeDesc' },
+  { id: 'swing', icon: 'show_chart', iconStyle: 'neutral', name: 'Swing Trade', nameKey: 'research.swingTrade', descKey: 'research.swingTradeDesc' },
+  { id: 'investment', icon: 'library_books', iconStyle: 'full', name: 'Investment', nameKey: 'research.investment', descKey: 'research.investmentDesc' },
 ]
 
 const POSITION_GOALS: Record<string, string[]> = {
@@ -29,8 +31,6 @@ const iconColor: Record<string, string> = {
   neutral: '#d6d3d1',
   full: '#60a5fa',
 }
-
-const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
 type Phase = 'setup' | 'position' | 'loading' | 'subjects' | 'questions' | 'generating'
 
@@ -58,6 +58,9 @@ export default function ResearchWizard() {
   const [tradeType, setTradeType] = useState<string | null>(null)
   const [tickerInfo, setTickerInfo] = useState<any>(null)
   const [phase, setPhase] = useState<Phase>('setup')
+  const { t } = useTranslation()
+  const { lang } = useLanguage()
+  const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
 
   // Position pre-screen state
   const [positionData, setPositionData] = useState<any>(null)
@@ -86,13 +89,13 @@ export default function ResearchWizard() {
 
   useEffect(() => {
     if (!ticker || ticker.length < 1) { setTickerInfo(null); return }
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const res = await api.get(`/api/ticker/search?q=${ticker.toUpperCase()}`)
         if (res.ok) setTickerInfo(await res.json())
       } catch {}
     }, 400)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [ticker])
 
   // Call /popup_start and advance to subjects or questions phase
@@ -100,10 +103,11 @@ export default function ResearchWizard() {
     setPhase('loading')
     try {
       const token = await getToken()
-      const tradeTypeFull = TRADE_TYPES.find(t => t.id === tradeType)?.name || tradeType || ''
+      // Always send English name to the API regardless of display language
+      const tradeTypeFullForApi = TRADE_TYPES.find(tt => tt.id === tradeType)?.name || tradeType || ''
       const formData = new FormData()
       formData.append('ticker', ticker.toUpperCase())
-      formData.append('trade_type', tradeTypeFull)
+      formData.append('trade_type', tradeTypeFullForApi)
       if (posSummary) formData.append('position_summary', posSummary)
       if (posGoal) formData.append('position_goal', posGoal)
 
@@ -209,8 +213,9 @@ export default function ResearchWizard() {
 
   const step = !ticker.trim() ? 1 : !tradeType ? 2 : 3
 
-  const tradeTypeFull = TRADE_TYPES.find(t => t.id === tradeType)?.name || 'Investment'
-  const goalOptions = POSITION_GOALS[tradeTypeFull] || POSITION_GOALS['Investment']
+  const tradeTypeEntry = TRADE_TYPES.find(tt => tt.id === tradeType)
+  const tradeTypeFull = tradeTypeEntry ? t(tradeTypeEntry.nameKey) : 'Investment'
+  const goalOptions = POSITION_GOALS[tradeTypeEntry?.name || 'Investment'] || POSITION_GOALS['Investment']
 
   const isModalOpen = phase === 'position' || phase === 'loading' || phase === 'subjects' || phase === 'questions'
 
@@ -222,9 +227,9 @@ export default function ResearchWizard() {
         {/* STEP INDICATOR */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 48 }}>
           {[
-            { n: 1, label: 'Ticker' },
-            { n: 2, label: 'Research type' },
-            { n: 3, label: 'Launch' },
+            { n: 1, label: t('research.step1') },
+            { n: 2, label: t('research.step2') },
+            { n: 3, label: t('research.step3') },
           ].map(({ n, label }, i) => {
             const done = step > n
             const active = step === n
@@ -246,14 +251,14 @@ export default function ResearchWizard() {
         <div style={{ marginBottom: 40 }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="search" size={14} />
-            Step 1 — Ticker
+            {t('research.step1Label')}
           </div>
           <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 60, marginBottom: 16 }}>
             <Icon name="query_stats" size={22} />
             <input
               value={ticker}
               onChange={e => setTicker(e.target.value.toUpperCase())}
-              placeholder="Enter a ticker symbol..."
+              placeholder={t('research.enterTicker')}
               style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600, color: '#fafaf9', letterSpacing: '0.02em' }}
             />
             {tickerInfo && (
@@ -270,10 +275,10 @@ export default function ResearchWizard() {
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: '#a8a29e' }}>Recent:</span>
-            {recentTickers.map((t: string) => (
-              <button key={t} onClick={() => setTicker(t)} style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, border: '1px solid #292524', background: ticker === t ? '#232120' : '#1c1917', color: ticker === t ? '#fafaf9' : '#a8a29e', cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
-                {t}
+            <span style={{ fontSize: 12, color: '#a8a29e' }}>{t('research.recent')}</span>
+            {recentTickers.map((tt: string) => (
+              <button key={tt} onClick={() => setTicker(tt)} style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, border: '1px solid #292524', background: ticker === tt ? '#232120' : '#1c1917', color: ticker === tt ? '#fafaf9' : '#a8a29e', cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
+                {tt}
               </button>
             ))}
           </div>
@@ -283,23 +288,23 @@ export default function ResearchWizard() {
         <div style={{ marginBottom: 40, opacity: !ticker.trim() ? 0.5 : 1, pointerEvents: !ticker.trim() ? 'none' : 'auto' }}>
           <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="psychology" size={14} />
-            Step 2 — Trade type
+            {t('research.step2Label')}
           </div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>What's your trade type?</h2>
-          <p style={{ fontSize: 14, color: '#a8a29e', marginBottom: 28 }}>The AI will frame the analysis for your intended holding period.</p>
+          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{t('research.whatsYourTradeType')}</h2>
+          <p style={{ fontSize: 14, color: '#a8a29e', marginBottom: 28 }}>{t('research.tradeTypeDesc')}</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {TRADE_TYPES.map(({ id, icon, iconStyle, name, desc }) => (
+            {TRADE_TYPES.map(({ id, icon, iconStyle, nameKey, descKey }) => (
               <div key={id} onClick={() => setTradeType(id)} style={{ background: '#1c1917', border: `2px solid ${tradeType === id ? '#d6d3d1' : '#292524'}`, borderRadius: 14, padding: 20, cursor: 'pointer', position: 'relative' }}>
                 {tradeType === id && (
-                  <div style={{ position: 'absolute', top: 12, right: 12, width: 18, height: 18, borderRadius: '50%', background: '#d6d3d1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ position: 'absolute', top: 12, insetInlineEnd: 12, width: 18, height: 18, borderRadius: '50%', background: '#d6d3d1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="check" size={12} filled />
                   </div>
                 )}
                 <div style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg[iconStyle] }}>
                   <span style={{ color: iconColor[iconStyle] }}><Icon name={icon} size={22} /></span>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{name}</div>
-                <div style={{ fontSize: 12.5, color: '#a8a29e', lineHeight: 1.55 }}>{desc}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t(nameKey)}</div>
+                <div style={{ fontSize: 12.5, color: '#a8a29e', lineHeight: 1.55 }}>{t(descKey)}</div>
               </div>
             ))}
           </div>
@@ -309,14 +314,18 @@ export default function ResearchWizard() {
         <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, opacity: canLaunch ? 1 : 0.5 }}>
           <div>
             <h3 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 600, marginBottom: 6 }}>
-              {phase === 'generating' ? `Generating report for ${ticker}...` : canLaunch ? `Ready to research ${ticker}` : 'Complete the steps above'}
+              {phase === 'generating'
+                ? t('research.generatingReport', { ticker })
+                : canLaunch
+                  ? t('research.readyToResearch', { ticker })
+                  : t('research.completeSteps')}
             </h3>
             <p style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.5 }}>
-              {tradeType ? tradeTypeFull : 'Select a trade type'} &middot; Full AI research pipeline
+              {tradeType ? tradeTypeFull : t('research.selectTradeType')} &middot; {t('research.fullPipeline')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#a8a29e', marginTop: 10 }}>
               <Icon name="schedule" size={15} />
-              Estimated time: 2-4 minutes
+              {t('research.estimatedTime')}
             </div>
           </div>
           <button
@@ -325,7 +334,7 @@ export default function ResearchWizard() {
             style={{ background: canLaunch && phase === 'setup' ? '#d6d3d1' : '#292524', color: canLaunch && phase === 'setup' ? '#0c0a09' : '#a8a29e', fontSize: 15, fontWeight: 700, padding: '14px 28px', borderRadius: 10, border: 'none', cursor: canLaunch && phase === 'setup' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', fontFamily: 'Nunito, sans-serif', flexShrink: 0 }}
           >
             <Icon name="auto_awesome" size={20} filled />
-            {phase === 'generating' ? 'Generating...' : launchMutation.isPending ? 'Checking...' : 'Launch Research'}
+            {phase === 'generating' ? t('research.generating') : launchMutation.isPending ? t('research.checking') : t('research.launchResearch')}
           </button>
         </div>
       </main>
@@ -340,8 +349,8 @@ export default function ResearchWizard() {
               <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(214,211,209,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="autorenew" size={24} />
               </div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>Preparing research session...</div>
-              <div style={{ fontSize: 13, color: '#a8a29e' }}>This takes a few seconds</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{t('research.preparingSession')}</div>
+              <div style={{ fontSize: 13, color: '#a8a29e' }}>{t('research.fewSeconds')}</div>
             </div>
           )}
 
@@ -356,9 +365,9 @@ export default function ResearchWizard() {
                     </div>
                     <div>
                       <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700 }}>
-                        You hold <span style={{ fontFamily: 'monospace' }}>{ticker}</span>
+                        {t('research.youHold')} <span style={{ fontFamily: 'monospace' }}>{ticker}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>Include your position in the research report?</div>
+                      <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>{t('research.includePosition')}</div>
                     </div>
                   </div>
 
@@ -385,13 +394,13 @@ export default function ResearchWizard() {
                       }}
                       style={{ flex: 2, padding: '12px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}
                     >
-                      Yes, consider my position
+                      {t('research.yesConsider')}
                     </button>
                     <button
                       onClick={() => callPopupStart('', '')}
                       style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}
                     >
-                      Skip
+                      {t('research.skip')}
                     </button>
                   </div>
                 </>
@@ -402,8 +411,8 @@ export default function ResearchWizard() {
                       <Icon name="flag" size={20} />
                     </div>
                     <div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700 }}>What's your goal?</div>
-                      <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>This will guide the report's position-aware framing.</div>
+                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700 }}>{t('research.whatsYourGoal')}</div>
+                      <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>{t('research.goalDesc')}</div>
                     </div>
                   </div>
 
@@ -412,7 +421,7 @@ export default function ResearchWizard() {
                       <button
                         key={goal}
                         onClick={() => callPopupStart(positionSummary, goal)}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 16px', borderRadius: 10, border: '1px solid #292524', background: 'transparent', color: '#fafaf9', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s' }}
+                        style={{ display: 'block', width: '100%', textAlign: 'start', padding: '12px 16px', borderRadius: 10, border: '1px solid #292524', background: 'transparent', color: '#fafaf9', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s' }}
                       >
                         {goal}
                       </button>
@@ -423,7 +432,7 @@ export default function ResearchWizard() {
                     onClick={() => setPositionStep(1)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: '#a8a29e', fontSize: 13, cursor: 'pointer', padding: 0 }}
                   >
-                    <Icon name="arrow_back" size={15} /> Back
+                    <Icon name="arrow_back" size={15} /> {t('research.back')}
                   </button>
                 </>
               )}
@@ -434,12 +443,12 @@ export default function ResearchWizard() {
           {phase === 'subjects' && popupData && (
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 18, padding: 32, maxWidth: 540, width: '100%', boxShadow: '0 24px 60px rgba(0,0,0,0.6)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 17, fontWeight: 700 }}>Select research topics</div>
+                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 17, fontWeight: 700 }}>{t('research.selectTopics')}</div>
                 <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a8a29e' }}>Step 1 of 2</span>
               </div>
-              <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 16 }}>Choose which areas to include in the analysis.</div>
+              <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 16 }}>{t('research.chooseAreas')}</div>
 
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, marginBottom: 16 }}>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingInlineEnd: 4, marginBottom: 16 }}>
                 {popupData.subjects.map((s) => {
                   const checked = selectedSubjectIds.includes(s.id)
                   return (
@@ -459,13 +468,13 @@ export default function ResearchWizard() {
               <div style={{ borderTop: '1px solid #292524', paddingTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <button onClick={() => setSelectedSubjectIds(popupData.subjects.map(s => s.id))} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: 13, cursor: 'pointer', padding: 0 }}>
-                    Select all
+                    {t('research.selectAll')}
                   </button>
                   <button onClick={() => setSelectedSubjectIds([])} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: 13, cursor: 'pointer', padding: 0 }}>
-                    Deselect all
+                    {t('research.deselectAll')}
                   </button>
                   <button onClick={() => { setSelectedSubjectIds([]); setPhase('questions') }} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: 13, cursor: 'pointer', padding: 0 }}>
-                    Skip
+                    {t('research.skip')}
                   </button>
                 </div>
                 <button
@@ -478,7 +487,7 @@ export default function ResearchWizard() {
                   }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}
                 >
-                  Next <Icon name="arrow_forward" size={16} />
+                  {t('research.next')} <Icon name="arrow_forward" size={16} />
                 </button>
               </div>
             </div>
@@ -492,15 +501,15 @@ export default function ResearchWizard() {
                   <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(214,211,209,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="psychology" size={18} />
                   </div>
-                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 17, fontWeight: 700 }}>A few quick questions</div>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 17, fontWeight: 700 }}>{t('research.quickQuestions')}</div>
                 </div>
                 {popupData.subjects.length > 0 && (
                   <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a8a29e' }}>Step 2 of 2</span>
                 )}
               </div>
-              <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 20 }}>Help the AI tailor the research for {ticker}.</div>
+              <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 20 }}>{t('research.helpAiTailor', { ticker })}</div>
 
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 22, marginBottom: 16, paddingRight: 4 }}>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 22, marginBottom: 16, paddingInlineEnd: 4 }}>
                 {popupData.questions.map((q, qi) => (
                   <div key={qi}>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 10, lineHeight: 1.4 }}>{q.question}</div>
@@ -515,7 +524,7 @@ export default function ResearchWizard() {
                               next[qi] = opt
                               setAnswers(next)
                             }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, border: `1px solid ${selected ? '#d6d3d1' : '#292524'}`, background: selected ? 'rgba(214,211,209,0.06)' : 'transparent', color: selected ? '#fafaf9' : '#a8a29e', fontSize: 13, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, border: `1px solid ${selected ? '#d6d3d1' : '#292524'}`, background: selected ? 'rgba(214,211,209,0.06)' : 'transparent', color: selected ? '#fafaf9' : '#a8a29e', fontSize: 13, cursor: 'pointer', textAlign: 'start', transition: 'all 0.15s' }}
                           >
                             <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${selected ? '#d6d3d1' : '#57534e'}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#d6d3d1' }} />}
@@ -542,14 +551,14 @@ export default function ResearchWizard() {
                   }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, cursor: 'pointer', padding: '10px 16px', borderRadius: 10 }}
                 >
-                  <Icon name="arrow_back" size={15} /> Back
+                  <Icon name="arrow_back" size={15} /> {t('research.back')}
                 </button>
                 <button
                   onClick={() => callStartGeneration(popupData, selectedSubjectIds, answers)}
                   style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
                   <Icon name="auto_awesome" size={18} filled />
-                  Generate Report
+                  {t('research.generateReport')}
                 </button>
               </div>
             </div>

@@ -36,6 +36,7 @@ class OrchestratorSession:
     def __init__(self, user_id: Optional[int] = None):
         self.user_id = user_id
         self.username: Optional[str] = None
+        self.language: Optional[str] = None
         self.current_ticker: Optional[str] = None
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
@@ -121,6 +122,7 @@ class OrchestratorSession:
                     parent_config=config,
                     username=session.username,
                     progress_fn=session._progress_fn,
+                    language=session.language,
                 )
                 session.current_report_id = result.get("report_id", "")
                 session.last_report_text = result.get("report_text", "")
@@ -220,6 +222,7 @@ class OrchestratorSession:
                 spend_budget_usd=spend_budget_usd,
                 username=self.username,
                 progress_fn=self._progress_fn,
+                language=self.language,
             )
             self.current_report_id = result.get("report_id", "")
             self.last_report_text = result.get("report_text", "")
@@ -240,6 +243,7 @@ class OrchestratorSession:
             report_id=self.current_report_id,
             ticker=self.current_ticker or "",
             question=question,
+            language=self.language,
         )
 
     def reset_conversation(self):

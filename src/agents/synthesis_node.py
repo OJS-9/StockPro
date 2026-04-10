@@ -71,7 +71,7 @@ _TRADE_TYPE_FRAMING = {
 
 
 def _get_synthesis_instructions(
-    ticker: str, trade_type: str, plan: ResearchPlan
+    ticker: str, trade_type: str, plan: ResearchPlan, language: Optional[str] = None
 ) -> str:
     from date_utils import get_datetime_context_string
 
@@ -93,7 +93,7 @@ The user has an existing position in {ticker}. Follow these rules strictly:
   "this factor is worth monitoring if your goal is [goal]".
 - Let the data speak — present facts and observations, not instructions.
 """
-    return f"""You are a senior equity research analyst synthesizing specialized research findings into {framing} for {ticker}.
+    instructions = f"""You are a senior equity research analyst synthesizing specialized research findings into {framing} for {ticker}.
 
 {datetime_context}
 {trade_context_block}{position_rules}
@@ -116,6 +116,15 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
 - Cite all sources from the research outputs
 - If information is missing for a section, note it clearly
 - Ensure the report is comprehensive and fully utilizes all research findings"""
+
+    if language == "he":
+        instructions += """
+
+IMPORTANT: Write your ENTIRE response in Hebrew. All section headings, analysis, \
+and conclusions must be in Hebrew. Keep ticker symbols, company names, and numerical \
+data in their original form (e.g., AAPL, $150.23). Keep the END_OF_REPORT marker in English."""
+
+    return instructions
 
 
 def _build_report_sections(
@@ -386,11 +395,12 @@ def synthesis_node(state: dict) -> dict:
         ticker,
     )
 
+    language = state.get("language")
     failed_subjects = state.get("failed_subjects", [])
     synthesis_prompt = _build_synthesis_prompt(
         ticker, trade_type, research_outputs, plan, failed_subjects
     )
-    system_instructions = _get_synthesis_instructions(ticker, trade_type, plan)
+    system_instructions = _get_synthesis_instructions(ticker, trade_type, plan, language=language)
 
     llm = ChatGoogleGenerativeAI(
         model=SYNTHESIS_MODEL,

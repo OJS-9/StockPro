@@ -140,7 +140,7 @@ export default function HoldingDetail() {
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>Market Value</div>
                     <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
+                  <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444' }}>
                       {gain ? '+' : ''}{fmt(holding.pnl)}
                     </div>
@@ -173,7 +173,7 @@ export default function HoldingDetail() {
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{t.type} {t.shares} shares</div>
                       <div style={{ fontSize: 12, color: '#a8a29e' }}>@ {fmt(t.price)} each &nbsp;&middot;&nbsp; {t.date}</div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'end' }}>
                       <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13, fontWeight: 500 }}>{fmt(t.total || t.shares * t.price)}</div>
                     </div>
                     <button

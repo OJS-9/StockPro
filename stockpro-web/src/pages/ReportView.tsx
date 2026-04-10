@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
+import { useLanguage } from '../LanguageContext'
 
 const tocIcons: Record<string, string> = {
   'Executive Summary': 'summarize',
@@ -22,6 +24,8 @@ export default function ReportView() {
   const api = useApiClient()
   const [activeSection, setActiveSection] = useState(0)
   const contentRef = useRef<HTMLDivElement>(null)
+  const { t } = useTranslation()
+  const { lang } = useLanguage()
 
   // /report/<id>?format=json returns {report: {report_id, ticker, trade_type, report_text, created_at, ...}}
   const { data } = useQuery({
@@ -43,6 +47,8 @@ export default function ReportView() {
     },
   })
 
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
+
   // API report shape: report_id, ticker, trade_type, report_text, created_at
   const rawReport = data?.report || data
   const report = rawReport ? {
@@ -50,7 +56,7 @@ export default function ReportView() {
     symbol: rawReport.ticker || rawReport.symbol || '?',
     title: rawReport.title || `${rawReport.ticker || ''} Research Report`,
     type: rawReport.trade_type || rawReport.type || '',
-    created_at: rawReport.created_at ? new Date(rawReport.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+    created_at: rawReport.created_at ? new Date(rawReport.created_at).toLocaleDateString(locale, { month: 'long', day: 'numeric', year: 'numeric' }) : '',
     word_count: rawReport.report_text ? Math.round(rawReport.report_text.split(/\s+/).length) : 0,
     report_text: rawReport.report_text || '',
   } : { id, symbol: '', title: '', type: '', created_at: '', word_count: 0, report_text: '' }
@@ -94,9 +100,9 @@ export default function ReportView() {
       <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
 
         {/* LEFT TOC */}
-        <aside style={{ width: 232, flexShrink: 0, borderRight: '1px solid #292524', padding: '28px 16px', overflowY: 'auto', background: '#0c0a09', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <aside style={{ width: 232, flexShrink: 0, borderInlineEnd: '1px solid #292524', padding: '28px 16px', overflowY: 'auto', background: '#0c0a09', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', paddingLeft: 12, marginBottom: 8 }}>Contents</div>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', paddingInlineStart: 12, marginBottom: 8 }}>{t('reportView.contents')}</div>
             {sections.map((s: any, i: number) => {
               const icon = tocIcons[s.title] || 'article'
               return (
@@ -114,7 +120,7 @@ export default function ReportView() {
           </div>
           <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid #292524' }}>
             {[
-              { icon: 'description', text: `${report.word_count || 5400} words` },
+              { icon: 'description', text: t('reportView.words', { count: report.word_count || 5400 }) },
               { icon: 'schedule', text: report.created_at },
             ].map(({ icon, text }) => (
               <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#a8a29e', padding: '6px 12px' }}>
@@ -140,8 +146,8 @@ export default function ReportView() {
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               {[
-                { icon: 'share', label: 'Share' },
-                { icon: 'download', label: 'Export PDF' },
+                { icon: 'share', label: t('reportView.share') },
+                { icon: 'download', label: t('reportView.exportPdf') },
               ].map(({ icon, label }) => (
                 <button key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>
                   <Icon name={icon} size={15} /> {label}
@@ -151,7 +157,7 @@ export default function ReportView() {
                 to={`/chat/${id}`}
                 style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
               >
-                <Icon name="forum" size={16} /> Chat with AI
+                <Icon name="forum" size={16} /> {t('reportView.chatWithAi')}
               </Link>
             </div>
           </div>
@@ -159,7 +165,7 @@ export default function ReportView() {
           {/* CONTENT */}
           <div ref={contentRef} style={{ padding: '40px 48px 100px', maxWidth: 740 }}>
             <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
-              {report.title || `${report.symbol} Research Report`}
+              {report.title || `${report.symbol} ${t('reportView.researchReport')}`}
             </h1>
 
             {report.report_text ? (
@@ -175,7 +181,7 @@ export default function ReportView() {
                     .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#fafaf9;font-weight:600">$1</strong>')
                     .replace(/\*(.+?)\*/g, '<em>$1</em>')
                     .replace(/^[-*]\s+(.+)$/gm, '<li style="margin-bottom:6px">$1</li>')
-                    .replace(/(<li.*<\/li>\n?)+/g, '<ul style="padding-left:20px;margin:12px 0">$&</ul>')
+                    .replace(/(<li.*<\/li>\n?)+/g, '<ul style="padding-inline-start:20px;margin:12px 0">$&</ul>')
                     .replace(/\n\n/g, '</p><p style="margin:0 0 14px">')
                     .replace(/^(?!<[h|ul|li])(.+)$/gm, (m: string) => m.startsWith('<') ? m : `<p style="margin:0 0 14px">${m}</p>`)
                   return html

@@ -8,7 +8,7 @@ export default function SignUp() {
       <div
         style={{
           background: '#1c1917',
-          borderRight: '1px solid #292524',
+          borderInlineEnd: '1px solid #292524',
           padding: 48,
           display: 'flex',
           flexDirection: 'column',
@@ -21,7 +21,7 @@ export default function SignUp() {
           style={{
             position: 'absolute',
             top: -120,
-            right: -120,
+            insetInlineEnd: -120,
             width: 440,
             height: 440,
             borderRadius: '50%',

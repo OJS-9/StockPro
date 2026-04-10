@@ -758,6 +758,15 @@ def continue_conversation():
     agent.user_id = session.get("user_id")
     agent.username = session.get("username")
 
+    # Set user language preference for Hebrew chat/report generation
+    try:
+        from database import get_database_manager
+        _db = get_database_manager()
+        _user = _db.get_user_by_id(session.get("user_id"))
+        agent.language = (_user.get("preferences") or {}).get("language", "en") if _user else "en"
+    except Exception:
+        agent.language = "en"
+
     # Snapshot mutable session state so the background thread can read it safely
     previous_report_id = session.get("current_report_id")
     report_chat_mode = session.get("report_chat_mode", False)
@@ -1047,6 +1056,15 @@ def start_generation():
     agent = initialize_session(session_id)
     agent.user_id = session.get("user_id")
     agent.username = session.get("username")
+
+    # Set user language preference for Hebrew report generation
+    try:
+        from database import get_database_manager
+        _db = get_database_manager()
+        _user = _db.get_user_by_id(session.get("user_id"))
+        agent.language = (_user.get("preferences") or {}).get("language", "en") if _user else "en"
+    except Exception:
+        agent.language = "en"
 
     # Snapshot budget input for the background thread.
     from spend_budget import get_spend_budget_usd

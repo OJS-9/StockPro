@@ -93,7 +93,7 @@ export default function ImportCSV() {
                 <thead>
                   <tr>
                     {Object.keys(preview[0]).map(h => (
-                      <th key={h} style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #292524' }}>{h}</th>
+                      <th key={h} style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', textAlign: 'start', padding: '10px 16px', borderBottom: '1px solid #292524' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>

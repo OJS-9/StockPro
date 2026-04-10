@@ -115,7 +115,7 @@ export default function AddTransaction() {
                   {form.shares} shares @ {form.price ? `$${parseFloat(form.price).toFixed(2)}` : '$0.00'} each
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: 'end' }}>
                 <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 600 }}>{fmt(total)}</div>
                 <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2 }}>Total {form.type === 'BUY' ? 'cost' : 'proceeds'}</div>
               </div>

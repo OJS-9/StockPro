@@ -2,32 +2,37 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useUser } from '@clerk/clerk-react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
+import { useLanguage } from '../LanguageContext'
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer', display: 'inline-block' }}>
       <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
       <div style={{ position: 'absolute', inset: 0, background: checked ? '#22c55e' : '#232120', border: `1px solid ${checked ? '#22c55e' : '#292524'}`, borderRadius: 100, transition: 'background 0.2s, border-color 0.2s' }} />
-      <div style={{ position: 'absolute', top: 3, left: checked ? 23 : 3, width: 16, height: 16, background: checked ? '#fff' : '#a8a29e', borderRadius: '50%', transition: 'left 0.2s, background 0.2s' }} />
+      <div style={{ position: 'absolute', top: 3, insetInlineStart: checked ? 23 : 3, width: 16, height: 16, background: checked ? '#fff' : '#a8a29e', borderRadius: '50%', transition: 'inset-inline-start 0.2s, background 0.2s' }} />
     </label>
   )
 }
 
 const NAV_ITEMS = [
-  { id: 'profile', icon: 'person', label: 'Profile' },
-  { id: 'notifications', icon: 'notifications', label: 'Notifications' },
-  { id: 'research', icon: 'query_stats', label: 'Research defaults' },
-  { id: 'telegram', icon: 'send', label: 'Telegram' },
-  { id: 'plan', icon: 'card_membership', label: 'Plan' },
-  { id: 'danger', icon: 'warning', label: 'Danger zone' },
+  { id: 'profile', icon: 'person', tKey: 'settings.profile' },
+  { id: 'language', icon: 'translate', tKey: 'settings.language' },
+  { id: 'notifications', icon: 'notifications', tKey: 'settings.notifications' },
+  { id: 'research', icon: 'query_stats', tKey: 'settings.researchDefaults' },
+  { id: 'telegram', icon: 'send', tKey: 'settings.telegram' },
+  { id: 'plan', icon: 'card_membership', tKey: 'settings.plan' },
+  { id: 'danger', icon: 'warning', tKey: 'settings.dangerZone' },
 ]
 
 export default function Settings() {
   const { user } = useUser()
   const api = useApiClient()
+  const { lang, setLang } = useLanguage()
+  const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState('profile')
   const [hasChanges, setHasChanges] = useState(false)
 
@@ -71,7 +76,7 @@ export default function Settings() {
       if (!res.ok) throw new Error('Failed')
     },
     onSuccess: () => {
-      toast.success('Settings saved')
+      toast.success(t('settings.saveChanges'))
       setHasChanges(false)
     },
     onError: () => toast.error('Failed to save'),
@@ -109,16 +114,16 @@ export default function Settings() {
 
         {/* SIDEBAR NAV */}
         <div style={{ position: 'sticky', top: 80 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', marginBottom: 12, padding: '0 10px' }}>Settings</div>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', marginBottom: 12, padding: '0 10px' }}>{t('settings.settings')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {NAV_ITEMS.map(({ id, icon, label }) => (
+            {NAV_ITEMS.map(({ id, icon, tKey }) => (
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 9, color: activeSection === id ? '#fafaf9' : '#a8a29e', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', background: activeSection === id ? 'rgba(214,211,209,0.07)' : 'transparent', border: 'none', textAlign: 'left', transition: 'all 0.15s' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 9, color: activeSection === id ? '#fafaf9' : '#a8a29e', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', background: activeSection === id ? 'rgba(214,211,209,0.07)' : 'transparent', border: 'none', textAlign: 'start', transition: 'all 0.15s' }}
               >
                 <Icon name={icon} size={17} />
-                {label}
+                {t(tKey)}
               </button>
             ))}
           </div>
@@ -127,9 +132,9 @@ export default function Settings() {
         {/* CONTENT */}
         <div style={{ minWidth: 0 }}>
           <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>
-            {NAV_ITEMS.find(n => n.id === activeSection)?.label || 'Settings'}
+            {t(NAV_ITEMS.find(n => n.id === activeSection)?.tKey || 'settings.settings')}
           </h1>
-          <p style={{ fontSize: 13, color: '#a8a29e', marginBottom: 36 }}>Manage your StockPro account preferences.</p>
+          <p style={{ fontSize: 13, color: '#a8a29e', marginBottom: 36 }}>{t('settings.managePrefs')}</p>
 
           {/* PROFILE */}
           {activeSection === 'profile' && (
@@ -146,20 +151,20 @@ export default function Settings() {
                     <div style={{ fontSize: 13, color: '#a8a29e' }}>{user?.primaryEmailAddress?.emailAddress}</div>
                   </div>
                   <button style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: 'rgba(250,250,249,0.65)', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}>
-                    Edit profile
+                    {t('settings.editProfile')}
                   </button>
                 </div>
                 <div style={settingRowStyle}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>Display name</div>
-                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>How your name appears in the app</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.displayName')}</div>
+                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t('settings.displayNameDesc')}</div>
                   </div>
                   <input defaultValue={`${user?.firstName || ''} ${user?.lastName || ''}`.trim()} style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '7px 12px', outline: 'none', width: 180 }} />
                 </div>
                 <div style={{ ...settingRowStyle, borderBottom: 'none' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>Timezone</div>
-                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>Used for alert scheduling and reports</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.timezone')}</div>
+                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t('settings.timezoneDesc')}</div>
                   </div>
                   <select defaultValue="America/New_York" style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '7px 28px 7px 10px', outline: 'none' }}>
                     <option value="America/New_York">Eastern Time</option>
@@ -173,21 +178,59 @@ export default function Settings() {
             </div>
           )}
 
+          {/* LANGUAGE */}
+          {activeSection === 'language' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {([
+                  { code: 'en' as const, name: 'English', native: 'English' },
+                  { code: 'he' as const, name: 'Hebrew', native: '\u05E2\u05D1\u05E8\u05D9\u05EA' },
+                ] as const).map(({ code, name, native }) => (
+                  <button
+                    key={code}
+                    onClick={() => setLang(code)}
+                    style={{
+                      position: 'relative',
+                      background: '#1c1917',
+                      border: `1px solid ${lang === code ? '#d6d3d1' : '#292524'}`,
+                      borderRadius: 14,
+                      padding: '20px',
+                      cursor: 'pointer',
+                      textAlign: 'start',
+                      transition: 'border-color 0.15s',
+                    }}
+                  >
+                    {lang === code && (
+                      <div style={{ position: 'absolute', top: 12, insetInlineEnd: 12 }}>
+                        <Icon name="check_circle" size={20} filled />
+                      </div>
+                    )}
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#fafaf9', marginBottom: 4 }}>{name}</div>
+                    <div style={{ fontSize: 13, color: '#a8a29e' }}>{native}</div>
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: 12.5, color: '#57534e', margin: 0 }}>
+                {t('settings.languageChangeDesc')}
+              </p>
+            </div>
+          )}
+
           {/* NOTIFICATIONS */}
           {activeSection === 'notifications' && (
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
               {[
-                { key: 'price_alerts_telegram', name: 'Price alerts via Telegram', desc: 'Get notified when price alerts trigger on Telegram' },
-                { key: 'price_alerts_email', name: 'Price alerts via email', desc: 'Get notified when price alerts trigger via email' },
-                { key: 'weekly_summary', name: 'Weekly portfolio summary', desc: 'Receive a weekly P&L and portfolio overview' },
-                { key: 'earnings_reminders', name: 'Earnings reminders', desc: 'Get reminded about upcoming earnings for watchlist stocks' },
-                { key: 'research_complete', name: 'Research complete', desc: 'Notify when an AI research report is finished' },
-                { key: 'marketing', name: 'Product updates', desc: 'News about new features and improvements' },
-              ].map(({ key, name, desc }, i, arr) => (
+                { key: 'price_alerts_telegram', nameKey: 'settings.priceAlertsTelegram', descKey: 'settings.priceAlertsTelegramDesc' },
+                { key: 'price_alerts_email', nameKey: 'settings.priceAlertsEmail', descKey: 'settings.priceAlertsEmailDesc' },
+                { key: 'weekly_summary', nameKey: 'settings.weeklySummary', descKey: 'settings.weeklySummaryDesc' },
+                { key: 'earnings_reminders', nameKey: 'settings.earningsReminders', descKey: 'settings.earningsRemindersDesc' },
+                { key: 'research_complete', nameKey: 'settings.researchComplete', descKey: 'settings.researchCompleteDesc' },
+                { key: 'marketing', nameKey: 'settings.productUpdates', descKey: 'settings.productUpdatesDesc' },
+              ].map(({ key, nameKey, descKey }, i, arr) => (
                 <div key={key} style={{ ...settingRowStyle, borderBottom: i < arr.length - 1 ? '1px solid #292524' : 'none' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{name}</div>
-                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{desc}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t(nameKey)}</div>
+                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t(descKey)}</div>
                   </div>
                   <Toggle checked={notifs[key as keyof typeof notifs]} onChange={(v) => updateNotif(key, v)} />
                 </div>
@@ -200,8 +243,8 @@ export default function Settings() {
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
               <div style={settingRowStyle}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>Default trade type</div>
-                  <div style={{ fontSize: 12.5, color: '#a8a29e' }}>Pre-select this option when starting new research</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.defaultTradeType')}</div>
+                  <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t('settings.defaultTradeTypeDesc')}</div>
                 </div>
                 <select value={researchDefaults.default_trade_type} onChange={e => { setResearchDefaults(d => ({ ...d, default_trade_type: e.target.value })); setHasChanges(true) }} style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '7px 28px 7px 10px', outline: 'none' }}>
                   <option>Day Trade</option>
@@ -210,14 +253,14 @@ export default function Settings() {
                 </select>
               </div>
               {[
-                { key: 'include_technicals', name: 'Include technical analysis', desc: 'Chart patterns, support/resistance levels' },
-                { key: 'include_news', name: 'Include news analysis', desc: 'Recent news and sentiment analysis' },
-                { key: 'include_risks', name: 'Include risk analysis', desc: 'Risk factors and downside scenarios' },
-              ].map(({ key, name, desc }, i) => (
+                { key: 'include_technicals', nameKey: 'settings.includeTechnicals', descKey: 'settings.includeTechnicalsDesc' },
+                { key: 'include_news', nameKey: 'settings.includeNews', descKey: 'settings.includeNewsDesc' },
+                { key: 'include_risks', nameKey: 'settings.includeRisks', descKey: 'settings.includeRisksDesc' },
+              ].map(({ key, nameKey, descKey }, i) => (
                 <div key={key} style={{ ...settingRowStyle, borderBottom: i < 2 ? '1px solid #292524' : 'none' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{name}</div>
-                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{desc}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t(nameKey)}</div>
+                    <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t(descKey)}</div>
                   </div>
                   <Toggle checked={researchDefaults[key as keyof typeof researchDefaults] as boolean} onChange={(v) => { setResearchDefaults(d => ({ ...d, [key]: v })); setHasChanges(true) }} />
                 </div>
@@ -233,23 +276,23 @@ export default function Settings() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="#26a8da"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z" /></svg>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>Telegram</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.telegram')}</div>
                   <div style={{ fontSize: 12.5, color: '#a8a29e' }}>
-                    {telegramConnected ? `Connected as @${telegramUsername}` : 'Connect to receive real-time price alerts and summaries'}
+                    {telegramConnected ? `Connected as @${telegramUsername}` : t('settings.telegramDesc')}
                   </div>
                 </div>
                 {telegramConnected ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 100, background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}>
-                      <Icon name="check_circle" size={13} filled /> Connected
+                      <Icon name="check_circle" size={13} filled /> {t('settings.connected')}
                     </span>
                     <button onClick={() => disconnectTelegramMutation.mutate()} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: 'rgba(250,250,249,0.65)', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}>
-                      Disconnect
+                      {t('settings.disconnect')}
                     </button>
                   </div>
                 ) : (
                   <button style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: '#232120', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-                    Connect Telegram
+                    {t('settings.connectTelegram')}
                   </button>
                 )}
               </div>
@@ -260,17 +303,17 @@ export default function Settings() {
           {activeSection === 'danger' && (
             <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, overflow: 'hidden' }}>
               {[
-                { name: 'Clear all reports', desc: 'Delete all AI research reports. This cannot be undone.', btnLabel: 'Clear reports' },
-                { name: 'Delete all portfolios', desc: 'Remove all portfolios and transaction history permanently.', btnLabel: 'Delete portfolios' },
-                { name: 'Delete account', desc: 'Permanently delete your account and all associated data.', btnLabel: 'Delete account' },
-              ].map(({ name, desc, btnLabel }, i, arr) => (
-                <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: i < arr.length - 1 ? '1px solid rgba(239,68,68,0.15)' : 'none', gap: 24 }}>
+                { nameKey: 'settings.clearReports', descKey: 'settings.clearReportsDesc', btnKey: 'settings.clearReportsBtn' },
+                { nameKey: 'settings.deletePortfolios', descKey: 'settings.deletePortfoliosDesc', btnKey: 'settings.deletePortfoliosBtn' },
+                { nameKey: 'settings.deleteAccount', descKey: 'settings.deleteAccountDesc', btnKey: 'settings.deleteAccountBtn' },
+              ].map(({ nameKey, descKey, btnKey }, i, arr) => (
+                <div key={nameKey} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: i < arr.length - 1 ? '1px solid rgba(239,68,68,0.15)' : 'none', gap: 24 }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: '#ef4444', marginBottom: 2 }}>{name}</div>
-                    <div style={{ fontSize: 12.5, color: 'rgba(239,68,68,0.65)' }}>{desc}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#ef4444', marginBottom: 2 }}>{t(nameKey)}</div>
+                    <div style={{ fontSize: 12.5, color: 'rgba(239,68,68,0.65)' }}>{t(descKey)}</div>
                   </div>
-                  <button onClick={() => confirm(`Are you sure you want to ${btnLabel.toLowerCase()}?`)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    {btnLabel}
+                  <button onClick={() => confirm(`Are you sure you want to ${t(btnKey).toLowerCase()}?`)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {t(btnKey)}
                   </button>
                 </div>
               ))}
@@ -282,12 +325,12 @@ export default function Settings() {
       {/* SAVE BANNER */}
       {hasChanges && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 24px', background: 'rgba(12,10,9,0.96)', backdropFilter: 'blur(16px)', borderTop: '1px solid #292524' }}>
-          <span style={{ fontSize: 13, color: '#a8a29e' }}>You have <strong style={{ color: '#fafaf9', fontWeight: 500 }}>unsaved changes</strong></span>
+          <span style={{ fontSize: 13, color: '#a8a29e' }}>{t('settings.unsavedChanges')} <strong style={{ color: '#fafaf9', fontWeight: 500 }}>{t('settings.unsavedChangesStrong')}</strong></span>
           <button onClick={() => setHasChanges(false)} style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', fontSize: 13.5, fontWeight: 500, cursor: 'pointer' }}>
-            Discard
+            {t('settings.discard')}
           </button>
           <button onClick={() => saveMutation.mutate()} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
-            {saveMutation.isPending ? 'Saving...' : 'Save changes'}
+            {saveMutation.isPending ? t('settings.saving') : t('settings.saveChanges')}
           </button>
         </div>
       )}

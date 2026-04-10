@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
@@ -23,13 +24,6 @@ interface Message {
   time: string
   sources?: Source[]
 }
-
-const SUGGESTIONS = [
-  "What's the key growth driver?",
-  'Explain the valuation multiples',
-  'What are the biggest risks?',
-  'Compare to main competitors',
-]
 
 const SOURCE_TYPE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   report: { bg: 'rgba(34,197,94,0.08)', color: '#22c55e', label: 'Report' },
@@ -86,8 +80,8 @@ function CitationBadge({ label, type, onClick }: { label: string; type?: string;
         cursor: 'pointer',
         verticalAlign: 'super',
         lineHeight: 1,
-        marginLeft: 1,
-        marginRight: 1,
+        marginInlineStart: 1,
+        marginInlineEnd: 1,
         transition: 'opacity 0.15s',
       }}
     >
@@ -109,6 +103,7 @@ function SourceCard({
   isHighlighted: boolean
   onToggle: () => void
 }) {
+  const { t } = useTranslation()
   const typeStyle = SOURCE_TYPE_STYLES[source.chunk_type] || SOURCE_TYPE_STYLES.report
   const preview = source.chunk_text.length > 200 && !isExpanded
     ? source.chunk_text.slice(0, 200) + '...'
@@ -150,7 +145,7 @@ function SourceCard({
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: '#a8a29e', display: 'flex', marginLeft: 'auto' }}
+            style={{ color: '#a8a29e', display: 'flex', marginInlineStart: 'auto' }}
             title="Open source"
           >
             <Icon name="open_in_new" size={13} />
@@ -168,7 +163,7 @@ function SourceCard({
             fontSize: 11, fontWeight: 500, cursor: 'pointer', padding: '4px 0 0',
           }}
         >
-          {isExpanded ? 'Show less' : 'Show more'}
+          {isExpanded ? t('chat.showLess') : t('chat.showMore')}
         </button>
       )}
     </div>
@@ -192,6 +187,7 @@ function SourcesPanel({
   onToggleChunk: (key: string) => void
   highlightedSource: string | null
 }) {
+  const { t } = useTranslation()
   if (sources.length === 0) return null
 
   return (
@@ -205,7 +201,7 @@ function SourcesPanel({
         }}
       >
         <Icon name={isOpen ? 'expand_less' : 'expand_more'} size={16} />
-        Sources ({sources.length})
+        {t('chat.sources', { count: sources.length })}
       </button>
       {isOpen && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
@@ -240,6 +236,14 @@ export default function Chat() {
   const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set())
   const [highlightedSource, setHighlightedSource] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { t } = useTranslation()
+
+  const SUGGESTIONS = [
+    t('chat.suggestion1'),
+    t('chat.suggestion2'),
+    t('chat.suggestion3'),
+    t('chat.suggestion4'),
+  ]
 
   const { data: reportData } = useQuery({
     queryKey: ['report', reportId],
@@ -266,7 +270,7 @@ export default function Chat() {
         id: 'init',
         role: 'assistant',
         content: `I've loaded the research report for **${report.symbol}** (${report.type}). Feel free to ask me any questions about this analysis!`,
-        time: 'Just now',
+        time: t('chat.justNow'),
       }])
     }
   }, [rawReport])
@@ -397,7 +401,7 @@ export default function Chat() {
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setIsStreaming(true)
-    setStepText('Thinking...')
+    setStepText(t('chat.thinking'))
 
     try {
       const token = await getToken()
@@ -426,7 +430,7 @@ export default function Chat() {
 
           if (data.type === 'step') {
             // Progress update while agent is running
-            setStepText(data.message || 'Thinking...')
+            setStepText(data.message || t('chat.thinking'))
 
           } else if (data.type === 'done') {
             eventSource.close()
@@ -464,8 +468,8 @@ export default function Chat() {
             setMessages(prev => [...prev, {
               id: Date.now().toString(),
               role: 'assistant',
-              content: data.message || 'An error occurred. Please try again.',
-              time: 'Just now',
+              content: data.message || t('chat.errorOccurred'),
+              time: t('chat.justNow'),
             }])
           }
         } catch {}
@@ -478,8 +482,8 @@ export default function Chat() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'assistant',
-          content: 'Connection lost. Please try again.',
-          time: 'Just now',
+          content: t('chat.connectionLost'),
+          time: t('chat.justNow'),
         }])
       }
     } catch {
@@ -488,8 +492,8 @@ export default function Chat() {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'Network error. Please check your connection and try again.',
-        time: 'Just now',
+        content: t('chat.networkError'),
+        time: t('chat.justNow'),
       }])
     }
   }
@@ -510,9 +514,9 @@ export default function Chat() {
       <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
 
         {/* CONTEXT PANEL */}
-        <aside style={{ width: 280, flexShrink: 0, borderRight: '1px solid #292524', display: 'flex', flexDirection: 'column', background: '#0c0a09', overflow: 'hidden' }}>
+        <aside style={{ width: 280, flexShrink: 0, borderInlineEnd: '1px solid #292524', display: 'flex', flexDirection: 'column', background: '#0c0a09', overflow: 'hidden' }}>
           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #292524' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 12 }}>Report context</div>
+            <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 12 }}>{t('chat.reportContext')}</div>
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 10, padding: 14 }}>
               <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {report.symbol || '...'}
@@ -530,13 +534,13 @@ export default function Chat() {
                 style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, border: '1px solid #292524', color: '#a8a29e', fontSize: 12, fontWeight: 500, padding: '7px 12px', borderRadius: 7, textDecoration: 'none', background: 'transparent' }}
               >
                 <Icon name="open_in_new" size={14} />
-                View full report
+                {t('chat.viewFullReport')}
               </Link>
             </div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 10 }}>Ask about</div>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 10 }}>{t('chat.askAbout')}</div>
             {topicChips.map((label) => (
               <div
                 key={label}
@@ -556,19 +560,19 @@ export default function Chat() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <AIAvatar />
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>StockPro AI</div>
-                <div style={{ fontSize: 12, color: '#a8a29e' }}>Grounded in report analysis</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{t('chat.stockproAi')}</div>
+                <div style={{ fontSize: 12, color: '#a8a29e' }}>{t('chat.groundedInReport')}</div>
               </div>
             </div>
             <button
               onClick={() => {
-                setMessages(rawReport ? [{ id: 'init-' + Date.now(), role: 'assistant', content: `I've loaded the research report for **${report.symbol}** (${report.type}). Feel free to ask me any questions!`, time: 'Just now' }] : [])
+                setMessages(rawReport ? [{ id: 'init-' + Date.now(), role: 'assistant', content: `I've loaded the research report for **${report.symbol}** (${report.type}). Feel free to ask me any questions!`, time: t('chat.justNow') }] : [])
                 setExpandedSources(new Set())
                 setExpandedChunks(new Set())
                 setHighlightedSource(null)
               }}
               style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              title="Clear chat"
+              title={t('chat.clearChat')}
             >
               <Icon name="delete" size={15} />
             </button>
@@ -581,8 +585,8 @@ export default function Chat() {
                 <div style={{ display: 'flex', gap: 12, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
                   {msg.role === 'assistant' ? <AIAvatar /> : <UserInitials />}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 600, color: '#a8a29e', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
-                      {msg.role === 'assistant' ? 'StockPro AI' : 'You'}
+                    <div style={{ fontSize: 11.5, fontWeight: 600, color: '#a8a29e', textAlign: msg.role === 'user' ? 'end' : 'start' }}>
+                      {msg.role === 'assistant' ? t('chat.stockproAi') : t('chat.you')}
                     </div>
                     <div style={{ padding: '14px 18px', borderRadius: msg.role === 'assistant' ? '4px 14px 14px 14px' : '14px 4px 14px 14px', fontSize: 14, lineHeight: 1.7, background: msg.role === 'assistant' ? '#1c1917' : '#d6d3d1', border: msg.role === 'assistant' ? '1px solid #292524' : 'none', color: msg.role === 'assistant' ? 'rgba(250,250,249,0.85)' : '#0c0a09', fontWeight: msg.role === 'user' ? 500 : 400 }}>
                       {msg.role === 'assistant' && msg.sources && msg.sources.length > 0
@@ -590,11 +594,11 @@ export default function Chat() {
                         : renderContent(msg.content)
                       }
                     </div>
-                    <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2, textAlign: msg.role === 'user' ? 'right' : 'left' }}>{msg.time}</div>
+                    <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2, textAlign: msg.role === 'user' ? 'end' : 'start' }}>{msg.time}</div>
                   </div>
                 </div>
                 {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
-                  <div style={{ marginLeft: 44 }}>
+                  <div style={{ marginInlineStart: 44 }}>
                     <SourcesPanel
                       sources={msg.sources}
                       messageId={msg.id}
@@ -624,7 +628,7 @@ export default function Chat() {
               <div style={{ display: 'flex', gap: 12, maxWidth: 680, alignSelf: 'flex-start' }}>
                 <AIAvatar />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 600, color: '#a8a29e' }}>StockPro AI</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: '#a8a29e' }}>{t('chat.stockproAi')}</div>
                   <div style={{ padding: '14px 18px', borderRadius: '4px 14px 14px 14px', background: '#1c1917', border: '1px solid #292524' }}>
                     {stepText && (
                       <div style={{ fontSize: 12, color: '#a8a29e', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -663,7 +667,7 @@ export default function Chat() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
-                placeholder="Ask anything about this report..."
+                placeholder={t('chat.askAnything')}
                 rows={1}
                 disabled={isStreaming}
                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#fafaf9', minHeight: 24, maxHeight: 120, lineHeight: 1.6 }}

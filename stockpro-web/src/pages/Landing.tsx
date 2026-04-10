@@ -39,7 +39,7 @@ export default function Landing() {
         <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>
           StockPro
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 40, marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 40, marginInlineStart: 'auto' }}>
           <div style={{ display: 'flex', gap: 32 }}>
             {['Features', 'How it works', 'Pricing'].map(l => (
               <a key={l} href={`#${l.toLowerCase().replace(' ', '-')}`} style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 14, fontWeight: 500, transition: 'color 0.15s' }}>
@@ -65,7 +65,7 @@ export default function Landing() {
           <Icon name="auto_awesome" filled size={14} />
           Powered by Gemini AI + LangGraph
         </div>
-        <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 60, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 24, maxWidth: 760, marginLeft: 'auto', marginRight: 'auto' }}>
+        <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 60, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 24, maxWidth: 760, marginInlineStart: 'auto', marginInlineEnd: 'auto' }}>
           Institutional-grade research for{' '}
           <em style={{ fontStyle: 'normal', color: '#22c55e' }}>every investor</em>
         </h1>
@@ -138,7 +138,7 @@ export default function Landing() {
                 <div style={{ fontSize: 11, color: subColor, marginTop: 4 }}>{sub}</div>
               </div>
             ))}
-            <div style={{ gridColumn: '1 / -1', background: '#232120', border: '1px solid #292524', borderRadius: 12, padding: 20, textAlign: 'left' }}>
+            <div style={{ gridColumn: '1 / -1', background: '#232120', border: '1px solid #292524', borderRadius: 12, padding: 20, textAlign: 'start' }}>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#22c55e', marginBottom: 8 }}>AI Research &middot; NVDA &middot; Long thesis</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>NVIDIA: Datacenter moat and AI infrastructure dominance</div>
               <div style={{ fontSize: 12, color: '#a8a29e', lineHeight: 1.6 }}>NVIDIA holds an estimated 80-90% share of the AI training accelerator market through CUDA ecosystem lock-in, H100/H200 demand backlog of 12+ months, and NVLink fabric advantages that competitors cannot replicate in the near term...</div>
