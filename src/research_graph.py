@@ -58,7 +58,7 @@ class ResearchState(TypedDict):
     actual_input_tokens: Annotated[int, operator.add]  # summed across all nodes
     actual_output_tokens: Annotated[int, operator.add]  # summed across all nodes
     actual_cost_usd: Optional[float]  # computed in storage_node
-    language: Optional[str]  # user language preference ('en' or 'he')
+    language: Optional[str]  # "he" for Hebrew, None/en for English
 
 
 _MAX_SUBJECTS = int(os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
