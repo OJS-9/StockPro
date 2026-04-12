@@ -139,6 +139,28 @@ class DatabaseManager:
                         END IF;
                     END $$
                 """)
+                # disabled flag for admin to suspend accounts
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'disabled'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN disabled BOOLEAN DEFAULT FALSE;
+                        END IF;
+                    END $$
+                """)
+                # last_active_at timestamp updated on each authenticated request
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'last_active_at'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN last_active_at TIMESTAMP;
+                        END IF;
+                    END $$
+                """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
                 )
@@ -1044,6 +1066,156 @@ class DatabaseManager:
                 return self._decrypt_user_row(cur.fetchone())
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to get user: {e}")
+        finally:
+            self._release(conn)
+
+    def update_last_active(self, user_id: str):
+        """Touch last_active_at for the given user."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET last_active_at = NOW() WHERE user_id = %s",
+                    (user_id,),
+                )
+            conn.commit()
+        except psycopg2.Error:
+            if conn:
+                conn.rollback()
+        finally:
+            self._release(conn)
+
+    # ── Admin queries ──────────────────────────────────────────────
+
+    def admin_get_dashboard(self) -> Dict[str, Any]:
+        """Return KPI data for the admin dashboard."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT COUNT(*) AS total FROM users")
+                total_users = cur.fetchone()["total"]
+
+                cur.execute(
+                    "SELECT COUNT(*) AS total FROM reports WHERE created_at >= CURRENT_DATE"
+                )
+                reports_today = cur.fetchone()["total"]
+
+                # Recent signups (last 10)
+                cur.execute(
+                    """SELECT user_id, username, email, tier, created_at
+                       FROM users ORDER BY created_at DESC LIMIT 10"""
+                )
+                recent_signups = []
+                for row in cur.fetchall():
+                    r = dict(row)
+                    if r.get("email"):
+                        r["email"] = decrypt(r["email"])
+                    recent_signups.append(r)
+
+                # Recent reports (last 10)
+                cur.execute(
+                    """SELECT r.report_id, r.ticker, r.trade_type, r.created_at,
+                              u.username
+                       FROM reports r
+                       LEFT JOIN users u ON r.user_id = u.user_id
+                       ORDER BY r.created_at DESC LIMIT 10"""
+                )
+                recent_reports = [dict(row) for row in cur.fetchall()]
+
+            return {
+                "total_users": total_users,
+                "reports_today": reports_today,
+                "revenue_mtd": 0,
+                "recent_signups": recent_signups,
+                "recent_reports": recent_reports,
+            }
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Admin dashboard query failed: {e}")
+        finally:
+            self._release(conn)
+
+    def admin_get_users(
+        self, search: str = "", page: int = 1, per_page: int = 20,
+        sort: str = "created_at", order: str = "desc"
+    ) -> Dict[str, Any]:
+        """Paginated user list for admin panel."""
+        allowed_sort = {"created_at", "username", "tier", "last_active_at"}
+        if sort not in allowed_sort:
+            sort = "created_at"
+        if order not in ("asc", "desc"):
+            order = "desc"
+        offset = (page - 1) * per_page
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                where = ""
+                params: list = []
+                if search:
+                    where = "WHERE username ILIKE %s"
+                    params.append(f"%{search}%")
+
+                cur.execute(f"SELECT COUNT(*) AS total FROM users {where}", params)
+                total = cur.fetchone()["total"]
+
+                cur.execute(
+                    f"""SELECT user_id, username, email, tier,
+                               COALESCE(is_pro, FALSE) AS is_pro,
+                               COALESCE(disabled, FALSE) AS disabled,
+                               last_active_at, created_at
+                        FROM users {where}
+                        ORDER BY {sort} {order} NULLS LAST
+                        LIMIT %s OFFSET %s""",
+                    params + [per_page, offset],
+                )
+                users = []
+                for row in cur.fetchall():
+                    r = dict(row)
+                    if r.get("email"):
+                        r["email"] = decrypt(r["email"])
+                    users.append(r)
+
+            return {
+                "users": users,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "pages": max(1, -(-total // per_page)),
+            }
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Admin users query failed: {e}")
+        finally:
+            self._release(conn)
+
+    def admin_update_user(self, user_id: str, updates: Dict[str, Any]) -> bool:
+        """Update user fields (disabled, tier). Returns True if a row was updated."""
+        allowed = {"disabled", "tier"}
+        sets = []
+        params = []
+        for key, val in updates.items():
+            if key in allowed:
+                sets.append(f"{key} = %s")
+                params.append(val)
+        if not sets:
+            return False
+        params.append(user_id)
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE users SET {', '.join(sets)} WHERE user_id = %s",
+                    params,
+                )
+                updated = cur.rowcount > 0
+            conn.commit()
+            return updated
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Admin update user failed: {e}")
         finally:
             self._release(conn)
 

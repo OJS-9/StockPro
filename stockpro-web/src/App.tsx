@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { useApiClient } from './api/client'
 
 // Eager: small pages needed immediately
+import AdminGuard from './components/AdminGuard'
 import Landing from './pages/Landing'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
@@ -26,6 +27,9 @@ const Watchlist = lazy(() => import('./pages/Watchlist'))
 const Alerts = lazy(() => import('./pages/Alerts'))
 const TickerPage = lazy(() => import('./pages/TickerPage'))
 const Settings = lazy(() => import('./pages/Settings'))
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
+const AdminUsers = lazy(() => import('./pages/admin/Users'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -299,6 +303,24 @@ export default function App() {
           </SignedIn>
         }
       />
+
+      {/* Admin panel */}
+      <Route
+        path="/admin"
+        element={
+          <SignedIn>
+            <AdminGuard>
+              <AdminLayout />
+            </AdminGuard>
+          </SignedIn>
+        }
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="stats" element={<div style={{ color: '#78716c' }}>Stats -- coming in PR2</div>} />
+        <Route path="logs" element={<div style={{ color: '#78716c' }}>Logs -- coming in PR2</div>} />
+        <Route path="config" element={<div style={{ color: '#78716c' }}>Config -- coming in PR2</div>} />
+      </Route>
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

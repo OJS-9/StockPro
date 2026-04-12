@@ -251,12 +251,46 @@ def login_required(f):
                     target=_warm_portfolio_cache, args=(clerk_user_id,), daemon=True
                 ).start()
                 get_or_create_session_id()
+            # Update last_active_at (fire-and-forget, non-blocking)
+            _uid = session.get("user_id")
+            if _uid:
+                try:
+                    from database import get_database_manager as _get_db
+                    _db = _get_db()
+                    _db.update_last_active(_uid)
+                except Exception:
+                    pass  # non-critical
             return f(*args, **kwargs)
         app.logger.warning("Clerk auth failed: %s", request_state.reason)
         if _wants_json() or request.headers.get("Authorization"):
             return jsonify({"error": "Unauthorized"}), 401
         return redirect(url_for("sign_in"))
 
+    return decorated
+
+
+def admin_required(f):
+    """Decorator for admin-only API endpoints. Verifies Clerk JWT and checks
+    publicMetadata.role == 'admin'. Returns 403 if not admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        request_state = clerk_client.authenticate_request(
+            request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
+        )
+        if not request_state.is_authenticated:
+            return jsonify({"error": "Unauthorized"}), 401
+        clerk_user_id = request_state.payload["sub"]
+        # Fetch full Clerk user to check publicMetadata
+        try:
+            clerk_user = clerk_client.users.get(user_id=clerk_user_id)
+            metadata = clerk_user.public_metadata or {}
+            if metadata.get("role") != "admin":
+                return jsonify({"error": "Forbidden"}), 403
+        except Exception:
+            return jsonify({"error": "Forbidden"}), 403
+        # Attach admin user id for use in endpoint
+        request.admin_user_id = clerk_user_id
+        return f(*args, **kwargs)
     return decorated
 
 
@@ -3673,6 +3707,79 @@ try:
     register_ws_routes(app)
 except ImportError as e:
     app.logger.warning("WebSocket /ws/prices not registered: %s", e)
+
+
+# ── Admin API ──────────────────────────────────────────────────────
+
+@app.route("/api/admin/dashboard")
+@admin_required
+def api_admin_dashboard():
+    """KPI cards + recent lists for the admin dashboard."""
+    from database import get_database_manager
+    db = get_database_manager()
+    data = db.admin_get_dashboard()
+    # Serialize datetimes
+    for item in data.get("recent_signups", []):
+        if item.get("created_at") and hasattr(item["created_at"], "isoformat"):
+            item["created_at"] = item["created_at"].isoformat()
+    for item in data.get("recent_reports", []):
+        if item.get("created_at") and hasattr(item["created_at"], "isoformat"):
+            item["created_at"] = item["created_at"].isoformat()
+    return jsonify(data)
+
+
+@app.route("/api/admin/users")
+@admin_required
+def api_admin_users():
+    """Paginated user list with search and sort."""
+    from database import get_database_manager
+    db = get_database_manager()
+    search = request.args.get("search", "")
+    page = int(request.args.get("page", 1))
+    sort = request.args.get("sort", "created_at")
+    order = request.args.get("order", "desc")
+    data = db.admin_get_users(search=search, page=page, sort=sort, order=order)
+    # Serialize datetimes
+    for u in data.get("users", []):
+        for dt_field in ("created_at", "last_active_at"):
+            if u.get(dt_field) and hasattr(u[dt_field], "isoformat"):
+                u[dt_field] = u[dt_field].isoformat()
+    return jsonify(data)
+
+
+@app.route("/api/admin/users/<user_id>", methods=["PATCH"])
+@admin_required
+def api_admin_update_user(user_id):
+    """Update user fields (disable/enable, change tier)."""
+    from database import get_database_manager
+    db = get_database_manager()
+    body = request.get_json(silent=True) or {}
+    updates = {}
+    if "disabled" in body:
+        updates["disabled"] = bool(body["disabled"])
+    if "tier" in body:
+        updates["tier"] = str(body["tier"])
+    if not updates:
+        return jsonify({"error": "No valid fields to update"}), 400
+    updated = db.admin_update_user(user_id, updates)
+    if not updated:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/users/<user_id>/impersonate", methods=["POST"])
+@admin_required
+def api_admin_impersonate(user_id):
+    """Create a Clerk impersonation session for the target user."""
+    try:
+        # Clerk Backend API: create an actor token for impersonation
+        result = clerk_client.actor_tokens.create(
+            request_body={"user_id": user_id, "actor": {"sub": request.admin_user_id}}
+        )
+        return jsonify({"token": result.token, "url": result.url})
+    except Exception as e:
+        app.logger.error("Impersonation failed for %s: %s", user_id, e)
+        return jsonify({"error": "Impersonation failed"}), 500
 
 
 def main():
