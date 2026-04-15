@@ -193,8 +193,28 @@ def storage_node(state: ResearchState) -> dict:
         research_outputs = state.get("research_outputs", {})
         if research_outputs:
             storage.store_research_chunks(report_id, research_outputs)
+
+        # Log research completion event for admin stats
+        try:
+            from database import get_database_manager
+            _db = get_database_manager()
+            _db.admin_log_event("research_complete", user_id, {
+                "ticker": ticker, "report_id": report_id, "status": "success",
+                "duration_s": None,  # TODO: instrument timing if needed
+                "is_partial": is_partial_report,
+            })
+        except Exception:
+            pass
     except Exception as e:
         logger.warning("Storage failed (report still available): %s", e)
+        try:
+            from database import get_database_manager
+            _db = get_database_manager()
+            _db.admin_log_event("research_complete", user_id, {
+                "ticker": ticker, "status": "error", "error": str(e)[:200],
+            })
+        except Exception:
+            pass
 
     return {"report_id": report_id}
 

@@ -131,6 +131,13 @@ def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
                 db.set_price_alert_active(alert["alert_id"], alert["user_id"], False)
             except Exception:
                 logger.exception("failed to deactivate alert %s after trigger", alert.get("alert_id"))
+            try:
+                db.admin_log_event("alert_triggered", alert["user_id"], {
+                    "symbol": sym, "alert_id": alert["alert_id"], "direction": direction,
+                    "target": float(target), "price": float(price),
+                })
+            except Exception:
+                pass
             fired += 1
         except Exception:
             logger.exception(

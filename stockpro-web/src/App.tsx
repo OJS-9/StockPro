@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { useApiClient } from './api/client'
 
 // Eager: small pages needed immediately
+import AdminGuard from './components/AdminGuard'
 import Landing from './pages/Landing'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
@@ -26,6 +27,12 @@ const Watchlist = lazy(() => import('./pages/Watchlist'))
 const Alerts = lazy(() => import('./pages/Alerts'))
 const TickerPage = lazy(() => import('./pages/TickerPage'))
 const Settings = lazy(() => import('./pages/Settings'))
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
+const AdminUsers = lazy(() => import('./pages/admin/Users'))
+const AdminStats = lazy(() => import('./pages/admin/Stats'))
+const AdminLogs = lazy(() => import('./pages/admin/Logs'))
+const AdminConfig = lazy(() => import('./pages/admin/Config'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -299,6 +306,24 @@ export default function App() {
           </SignedIn>
         }
       />
+
+      {/* Admin panel */}
+      <Route
+        path="/admin"
+        element={
+          <SignedIn>
+            <AdminGuard>
+              <AdminLayout />
+            </AdminGuard>
+          </SignedIn>
+        }
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="stats" element={<AdminStats />} />
+        <Route path="logs" element={<AdminLogs />} />
+        <Route path="config" element={<AdminConfig />} />
+      </Route>
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

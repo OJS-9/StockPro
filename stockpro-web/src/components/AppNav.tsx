@@ -4,6 +4,7 @@ import { useUser, useClerk } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Icon from './Icon'
 import { useApiClient } from '../api/client'
+import { useAdmin } from '../hooks/useAdmin'
 
 const navLinks = [
   { to: '/home', icon: 'dashboard', label: 'Dashboard' },
@@ -91,6 +92,8 @@ export default function AppNav() {
     })
   }
 
+  const { isAdmin } = useAdmin()
+
   const initials = user
     ? ((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')).toUpperCase() || user.emailAddresses[0]?.emailAddress?.[0]?.toUpperCase() || 'U'
     : 'U'
@@ -157,6 +160,27 @@ export default function AppNav() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {isAdmin && (
+          <Link to="/admin" style={{ textDecoration: 'none' }}>
+            <button
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 8,
+                border: '1px solid #292524',
+                background: location.pathname.startsWith('/admin') ? 'rgba(214,211,209,0.07)' : 'transparent',
+                color: location.pathname.startsWith('/admin') ? '#fafaf9' : '#a8a29e',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Admin Panel"
+            >
+              <Icon name="admin_panel_settings" size={18} />
+            </button>
+          </Link>
+        )}
         <Link to="/research" style={{ textDecoration: 'none' }}>
           <button
             style={{
