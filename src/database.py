@@ -2164,7 +2164,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     UPDATE price_alerts
-                    SET last_triggered_at = NOW()
+                    SET last_triggered_at = NOW(), active = FALSE
                     WHERE alert_id = %s
                     """,
                     (alert_id,),
