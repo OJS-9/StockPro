@@ -30,6 +30,9 @@ const Settings = lazy(() => import('./pages/Settings'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
+const AdminStats = lazy(() => import('./pages/admin/Stats'))
+const AdminLogs = lazy(() => import('./pages/admin/Logs'))
+const AdminConfig = lazy(() => import('./pages/admin/Config'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -317,9 +320,9 @@ export default function App() {
       >
         <Route index element={<AdminDashboard />} />
         <Route path="users" element={<AdminUsers />} />
-        <Route path="stats" element={<div style={{ color: '#78716c' }}>Stats -- coming in PR2</div>} />
-        <Route path="logs" element={<div style={{ color: '#78716c' }}>Logs -- coming in PR2</div>} />
-        <Route path="config" element={<div style={{ color: '#78716c' }}>Config -- coming in PR2</div>} />
+        <Route path="stats" element={<AdminStats />} />
+        <Route path="logs" element={<AdminLogs />} />
+        <Route path="config" element={<AdminConfig />} />
       </Route>
 
       {/* Catch-all */}

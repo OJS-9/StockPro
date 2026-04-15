@@ -3782,6 +3782,94 @@ def api_admin_impersonate(user_id):
         return jsonify({"error": "Impersonation failed"}), 500
 
 
+# ── Admin Phase 2: Stats, Logs, Config ──────────────────────────────
+
+@app.route("/api/admin/stats")
+@admin_required
+def api_admin_stats():
+    """Aggregated stats for the admin Stats tab."""
+    from database import get_database_manager
+    db = get_database_manager()
+    data = db.admin_get_stats()
+    # Serialize date objects
+    for item in data.get("reports_per_day", []):
+        if item.get("day") and hasattr(item["day"], "isoformat"):
+            item["day"] = item["day"].isoformat()
+    for item in data.get("signups_per_day", []):
+        if item.get("day") and hasattr(item["day"], "isoformat"):
+            item["day"] = item["day"].isoformat()
+    return jsonify(data)
+
+
+@app.route("/api/admin/events")
+@admin_required
+def api_admin_events():
+    """Paginated event log with optional filters."""
+    from database import get_database_manager
+    db = get_database_manager()
+    event_type = request.args.get("event_type", "")
+    user_id = request.args.get("user_id", "")
+    page = int(request.args.get("page", 1))
+    data = db.admin_get_events(event_type=event_type, user_id=user_id, page=page)
+    for ev in data.get("events", []):
+        if ev.get("created_at") and hasattr(ev["created_at"], "isoformat"):
+            ev["created_at"] = ev["created_at"].isoformat()
+    return jsonify(data)
+
+
+@app.route("/api/admin/events/types")
+@admin_required
+def api_admin_event_types():
+    """Distinct event types for filter dropdown."""
+    from database import get_database_manager
+    db = get_database_manager()
+    return jsonify({"types": db.admin_get_event_types()})
+
+
+@app.route("/api/admin/config")
+@admin_required
+def api_admin_config_get():
+    """Return all config key-value pairs."""
+    from database import get_database_manager
+    db = get_database_manager()
+    data = db.config_get_all()
+    for entry in data.values():
+        if entry.get("updated_at") and hasattr(entry["updated_at"], "isoformat"):
+            entry["updated_at"] = entry["updated_at"].isoformat()
+    return jsonify(data)
+
+
+@app.route("/api/admin/config", methods=["PUT"])
+@admin_required
+def api_admin_config_set():
+    """Upsert a config key-value pair."""
+    from database import get_database_manager
+    db = get_database_manager()
+    body = request.get_json(silent=True) or {}
+    key = body.get("key")
+    value = body.get("value")
+    if not key:
+        return jsonify({"error": "Missing key"}), 400
+    db.config_set(key, value)
+    db.admin_log_event("config_changed", getattr(request, "admin_user_id", None), {
+        "key": key, "value": value,
+    })
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/config/<key>", methods=["DELETE"])
+@admin_required
+def api_admin_config_delete(key):
+    """Delete a config key."""
+    from database import get_database_manager
+    db = get_database_manager()
+    deleted = db.config_delete(key)
+    if not deleted:
+        return jsonify({"error": "Key not found"}), 404
+    db.admin_log_event("config_deleted", getattr(request, "admin_user_id", None), {"key": key})
+    return jsonify({"ok": True})
+
+
 def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
