@@ -72,9 +72,9 @@ export default function SignUp() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
         <ClerkSignUp
           routing="path"
-          path="/sign-up"
-          signInUrl="/sign-in"
-          afterSignUpUrl="/home"
+          path="/app/sign-up"
+          signInUrl="/app/sign-in"
+          afterSignUpUrl="/app/home"
           appearance={{
             variables: {
               colorBackground: '#1c1917',

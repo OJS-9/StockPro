@@ -334,7 +334,7 @@ export default function AppNav() {
         </div>
 
         <button
-          onClick={() => signOut({ redirectUrl: '/' })}
+          onClick={() => signOut({ redirectUrl: '/app/' })}
           title={t('nav.signOut')}
           style={{
             width: 34,
