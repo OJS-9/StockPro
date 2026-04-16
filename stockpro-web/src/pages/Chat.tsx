@@ -293,7 +293,7 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, stepText])
 
-  const handleCitationClick = useCallback((messageId: string, sourceIndex: number, sources: Source[]) => {
+  const handleCitationClick = useCallback((messageId: string, sourceIndex: number, _sources: Source[]) => {
     // Expand sources panel for this message
     setExpandedSources(prev => {
       const next = new Set(prev)

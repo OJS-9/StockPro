@@ -78,8 +78,6 @@ export default function Alerts() {
   const activeCount = stats.active_count ?? alerts.filter((a: any) => a.active && !a.last_triggered_at).length
   const pausedCount = stats.paused_count ?? alerts.filter((a: any) => !a.active).length
   const triggeredCount = stats.triggered_count ?? alerts.filter((a: any) => !!a.last_triggered_at).length
-  const triggered30d = stats.triggered_30d_count ?? 0
-
   const getProgress = (a: any) => {
     const target = a.target_price ?? a.target ?? 0
     const current = a.current_price ?? 0
@@ -89,8 +87,6 @@ export default function Alerts() {
     }
     return Math.min(((target - current) / target + 1) * 100, 100)
   }
-
-  const statusDotColor = (active: boolean) => active ? '#22c55e' : '#a8a29e'
 
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
