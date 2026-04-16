@@ -19,6 +19,7 @@ from flask import (
     jsonify,
     Response,
     abort,
+    send_from_directory,
 )
 from flask_wtf.csrf import CSRFProtect
 from flask_cors import CORS
@@ -1160,6 +1161,12 @@ def start_generation():
 
     threading.Thread(target=run_generation, daemon=True).start()
     return jsonify({"success": True})
+
+
+@app.route("/api/health")
+@csrf.exempt
+def api_health():
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/report_status/<session_id>")
@@ -3706,6 +3713,24 @@ except ImportError as e:
     app.logger.warning("WebSocket /ws/prices not registered: %s", e)
 
 
+# --- SPA serving (production) ---
+# In production, serve the React SPA from the built dist/ folder.
+# All non-API, non-static paths fall through to index.html for client-side routing.
+_spa_dist = project_root / "stockpro-web" / "dist"
+
+
+@app.route("/app/", defaults={"path": ""})
+@app.route("/app/<path:path>")
+def serve_spa(path):
+    """Serve the React SPA static files."""
+    if path and (_spa_dist / path).is_file():
+        return send_from_directory(str(_spa_dist), path)
+    index = _spa_dist / "index.html"
+    if index.is_file():
+        return send_from_directory(str(_spa_dist), "index.html")
+    return "SPA not built. Run: cd stockpro-web && npm run build", 404
+
+
 def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
@@ -3719,9 +3744,9 @@ def main():
     start_price_refresh()
 
     app.run(
-        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        host=os.getenv("FLASK_HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 5000)),
-        debug=True,
+        debug=not _is_production,
     )
 
 

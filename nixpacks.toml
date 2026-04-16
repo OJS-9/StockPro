@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["python311", "nodejs_20", "npm"]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+  "cd stockpro-web && npm ci"
+]
+
+[phases.build]
+cmds = ["cd stockpro-web && npm run build"]
+
+[start]
+cmd = "python src/app.py"
