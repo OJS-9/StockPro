@@ -83,9 +83,9 @@ export default function SignIn() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
         <ClerkSignIn
           routing="path"
-          path="/app/sign-in"
-          signUpUrl="/app/sign-up"
-          afterSignInUrl="/app/home"
+          path={`${import.meta.env.BASE_URL}sign-in`}
+          signUpUrl={`${import.meta.env.BASE_URL}sign-up`}
+          afterSignInUrl={`${import.meta.env.BASE_URL}home`}
           appearance={{
             variables: {
               colorBackground: '#1c1917',

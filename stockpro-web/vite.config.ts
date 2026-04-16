@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: '/app/',
+export default defineConfig(({ mode }) => ({
+  base: mode === 'production' ? '/app/' : '/',
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
@@ -29,4 +29,4 @@ export default defineConfig({
       '/ws': { target: 'ws://127.0.0.1:5000', ws: true },
     },
   },
-})
+}))
