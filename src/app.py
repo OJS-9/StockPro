@@ -502,6 +502,19 @@ def sign_up():
     return render_template("sign_up.html")
 
 
+@app.route("/cli/auth")
+def cli_auth():
+    """CLI authentication page -- renders Clerk sign-in, redirects JWT to localhost callback."""
+    port = request.args.get("port", "")
+    if not port.isdigit() or not (1024 <= int(port) <= 65535):
+        return "Invalid port", 400
+    return render_template(
+        "cli_auth.html",
+        callback_port=port,
+        clerk_publishable_key=os.getenv("CLERK_PUBLISHABLE_KEY", ""),
+    )
+
+
 @app.route("/sign-out")
 def sign_out():
     """Sign out: clear Flask session and redirect to sign-in."""
