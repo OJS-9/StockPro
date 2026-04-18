@@ -3715,9 +3715,10 @@ def device_authorize():
     from auth_tokens import create_device_code
 
     data = create_device_code()
-    data["verification_uri"] = (
-        request.host_url.rstrip("/") + "/app/device"
-    )
+    # Respect X-Forwarded-Proto so the printed URL uses https behind Railway's proxy.
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    data["verification_uri"] = f"{scheme}://{host}/app/device"
     return jsonify(data)
 
 
