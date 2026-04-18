@@ -33,7 +33,7 @@ createRoot(document.getElementById('root')!).render(
     <ClerkProvider publishableKey={CLERK_KEY}>
       <QueryClientProvider client={queryClient}>
         <LanguageProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
             <App />
             <AppToaster />
           </BrowserRouter>

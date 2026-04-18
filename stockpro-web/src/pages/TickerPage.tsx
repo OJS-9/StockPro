@@ -209,7 +209,7 @@ export default function TickerPage() {
                 Key Statistics
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
-                {statItems.map(({ label, val, highlight, small, muted }, i) => (
+                {statItems.map(({ label, val, highlight, small, muted }) => (
                   <div key={label} style={{ background: '#1c1917', padding: '14px 18px' }}>
                     <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>{label}</div>
                     <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>

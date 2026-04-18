@@ -13,7 +13,7 @@ function fmtPrice(n: number | null | undefined, locale: string) {
   return n != null ? new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n) : '—'
 }
 
-function ItemMenu({ item, watchlistId, onClose }: { item: any; watchlistId: string; onClose: () => void }) {
+function ItemMenu({ item, watchlistId: _watchlistId, onClose }: { item: any; watchlistId: string; onClose: () => void }) {
   const api = useApiClient()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
