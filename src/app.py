@@ -1165,9 +1165,144 @@ def api_health():
 @login_required
 def report_status(session_id: str):
     """Poll endpoint for background generation status."""
-    if session.get("session_id") != session_id:
+    user_id = session.get("user_id")
+    status = _generation_status.get(session_id)
+
+    # Web session ownership check (browser flow)
+    web_session_ok = session.get("session_id") == session_id
+    # API/CLI token ownership check (stateless generate endpoint)
+    api_owner_ok = status is not None and status.get("_owner_user_id") == user_id
+
+    if not web_session_ok and not api_owner_ok:
         return jsonify({"error": "forbidden"}), 403
-    return jsonify(_generation_status.get(session_id, {"status": "unknown"}))
+
+    if status is None:
+        return jsonify({"status": "unknown"})
+    return jsonify({k: v for k, v in status.items() if not k.startswith("_")})
+
+
+@app.route("/api/reports/generate", methods=["POST"])
+@csrf.exempt
+@login_required
+@limiter.limit(_report_gen_rate_limit, key_func=get_remote_address)
+def api_reports_generate():
+    """Stateless report generation endpoint for headless/CLI clients.
+
+    Accepts JSON body: {ticker, trade_type, context (optional)}
+    Returns: {success: true, session_id: "<uuid>"}
+    Poll GET /api/report_status/<session_id> until status == "ready" or "error".
+    """
+    data = request.get_json(force=True) or {}
+    ticker = (data.get("ticker") or "").strip().upper()
+    trade_type = (data.get("trade_type") or "").strip()
+    context_str = (data.get("context") or "").strip()
+
+    if not ticker or not trade_type:
+        return jsonify({"error": "ticker and trade_type are required"}), 400
+
+    if _session_hits_report_quota():
+        return _report_quota_json_error()
+
+    # Fresh session_id independent of any browser session
+    session_id = str(uuid.uuid4())
+    agent = initialize_session(session_id)
+    agent.reset_conversation()
+
+    user_id = session.get("user_id")
+    agent.user_id = user_id
+
+    # Username: prefer session (Clerk web flow), fall back to DB lookup (Bearer token)
+    agent.username = session.get("username")
+    if not agent.username and user_id:
+        try:
+            from database import get_database_manager as _get_db
+            _user_rec = _get_db().get_user_by_id(user_id)
+            if _user_rec:
+                agent.username = _user_rec.get("username", user_id)
+        except Exception:
+            agent.username = user_id
+
+    # Language preference from user profile
+    try:
+        from database import get_database_manager as _get_db2
+        _user_rec2 = _get_db2().get_user_by_id(user_id)
+        agent.language = (
+            (_user_rec2.get("preferences") or {}).get("language", "en") if _user_rec2 else "en"
+        )
+    except Exception:
+        agent.language = "en"
+
+    # Prime the orchestrator with ticker/trade_type (mirrors popup_start)
+    try:
+        agent.start_research(ticker, trade_type)
+    except Exception:
+        pass
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    _generation_status[session_id] = {
+        "status": "in_progress",
+        "report_id": None,
+        "progress": 5,
+        "step": "Starting...",
+        "_owner_user_id": user_id,
+    }
+
+    def run_generation():
+        import threading as _threading
+
+        subject_counter = {"done": 0, "total": 0}
+        counter_lock = _threading.Lock()
+
+        def progress_fn(progress, step):
+            status = _generation_status.get(session_id)
+            if status is None:
+                return
+            if progress is None:
+                with counter_lock:
+                    subject_counter["done"] += 1
+                    done = subject_counter["done"]
+                    total = subject_counter["total"] or 1
+                    pct = 20 + int((done / total) * 55)
+                    status["progress"] = min(pct, 75)
+                    status["step"] = f"Researching: {done}/{total} subjects done"
+            else:
+                status["progress"] = progress
+                status["step"] = step
+                if progress == 20 and "subjects" in step:
+                    try:
+                        subject_counter["total"] = int(step.split()[1])
+                    except (IndexError, ValueError):
+                        pass
+
+        emitter = create_emitter()
+        agent.set_emitter(emitter)
+        agent.set_progress_fn(progress_fn)
+        try:
+            agent.generate_report(
+                context=context_str,
+                spend_budget_usd=spend_budget_usd,
+            )
+            _generation_status[session_id] = {
+                "status": "ready",
+                "report_id": agent.current_report_id,
+                "progress": 100,
+                "step": "Report ready",
+                "_owner_user_id": user_id,
+            }
+        except Exception as e:
+            _generation_status[session_id] = {
+                "status": "error",
+                "message": str(e),
+                "_owner_user_id": user_id,
+            }
+        finally:
+            agent.set_emitter(None)
+            agent.set_progress_fn(None)
+
+    threading.Thread(target=run_generation, daemon=True).start()
+    return jsonify({"success": True, "session_id": session_id})
 
 
 @app.route("/api/position_check/<ticker>")
