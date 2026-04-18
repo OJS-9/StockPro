@@ -256,6 +256,9 @@ def poll_device_code(device_code: str) -> dict:
 def approve_device_code(user_id: str, user_code: str) -> dict:
     """Approve a user_code for a user. Issues an api_key and stashes the raw token on the device_codes row
     so the next poll can hand it back. Returns {status, token_name} or {error}.
+
+    Uses a single connection for the whole flow -- avoids nesting pool.getconn() calls
+    which was contributing to pool exhaustion under load.
     """
     code = normalize_user_code(user_code)
     if len(code) != _USER_CODE_LEN:
@@ -279,9 +282,21 @@ def approve_device_code(user_id: str, user_code: str) -> dict:
             if row["approved_at"] is not None:
                 return {"error": "already_approved"}
 
-            # Issue a token
+            # Issue token on THIS connection (don't nest get_connection).
+            raw_bytes = secrets.token_urlsafe(32)
+            raw_token = f"{TOKEN_PREFIX}{raw_bytes}"
+            prefix = raw_token[: len(TOKEN_PREFIX) + 4]
+            token_hash = _hash_token(raw_token)
+            api_key_id = str(uuid.uuid4())
             name = f"CLI device ({code[:4]})"
-            api_key_id, raw_token = create_api_key(user_id, name)
+
+            cur.execute(
+                """
+                INSERT INTO api_keys (id, user_id, name, token_hash, prefix)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (api_key_id, user_id, name[:100], token_hash, prefix),
+            )
 
             cur.execute(
                 """

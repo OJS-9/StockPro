@@ -27,13 +27,18 @@ export default function DevicePage() {
     }
     const body = await res.json().catch(() => ({}))
     const reason = body.error || 'unknown_error'
+    // If already approved, treat as success — the agent already has the token.
+    if (reason === 'already_approved') {
+      setStatus('approved')
+      return
+    }
     setError(
-      reason === 'unknown_code'
+      reason === 'unknown_code' || reason === 'invalid_code'
         ? 'That code is not valid. Check the code printed in your terminal.'
         : reason === 'expired'
           ? 'That code has expired. Start a new login from your agent.'
-          : reason === 'already_approved'
-            ? 'That code was already approved.'
+          : res.status >= 500
+            ? 'Server is temporarily busy. Please try again in a moment.'
             : 'Something went wrong. Try again.'
     )
     setStatus('error')
