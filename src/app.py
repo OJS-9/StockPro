@@ -471,6 +471,31 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
 # ==================== Auth Routes ====================
 
 
+# Jinja UI is deprecated. Any GET to a non-allowed path redirects into the React SPA.
+_SPA_PASSTHROUGH_PREFIXES = (
+    "/app/",
+    "/api/",
+    "/stream/",
+    "/ws/",
+    "/static/",
+    "/auth/",
+    "/sign-out",
+    "/cli/auth",
+)
+
+
+@app.before_request
+def _force_spa_for_gets():
+    if request.method != "GET":
+        return None
+    path = request.path
+    if path == "/app" or path.startswith(_SPA_PASSTHROUGH_PREFIXES):
+        return None
+    if _wants_json():
+        return None
+    return redirect("/app/")
+
+
 def _safe_redirect_url(next_url, fallback="/"):
     """Allow only relative paths to prevent open redirects."""
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
@@ -611,56 +636,10 @@ def _render_authenticated_home():
 
 @app.route("/")
 def index():
-    """Unified home page at '/'.
-
-    - Authenticated: show the existing app homepage (Markets).
-    - Unauthenticated: show a public landing page with waitlist signup.
-    """
-    if "user_id" in session:
-        return _render_authenticated_home()
-
-    # If the user has a Clerk session cookie but no Flask session yet, hydrate
-    # the session and redirect to the authenticated homepage.
-    try:
-        request_state = clerk_client.authenticate_request(
-            request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
-        )
-        if request_state.is_authenticated:
-            clerk_user_id = request_state.payload["sub"]
-            from database import get_database_manager
-
-            db = get_database_manager()
-            user = db.get_user_by_id(clerk_user_id)
-            if not user:
-                clerk_user = clerk_client.users.get(user_id=clerk_user_id)
-                email = ""
-                username = clerk_user_id
-                if clerk_user.email_addresses:
-                    email = clerk_user.email_addresses[0].email_address or ""
-                if clerk_user.username:
-                    username = clerk_user.username
-                elif clerk_user.first_name or clerk_user.last_name:
-                    username = (
-                        f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip()
-                        or clerk_user_id
-                    )
-                db.create_user(user_id=clerk_user_id, username=username, email=email)
-            else:
-                username = user.get("username", clerk_user_id)
-
-            session["user_id"] = clerk_user_id
-            session["username"] = username
-            threading.Thread(
-                target=_warm_portfolio_cache, args=(clerk_user_id,), daemon=True
-            ).start()
-            get_or_create_session_id()
-            return redirect(url_for("index"))
-    except Exception as exc:
-        app.logger.warning("Clerk auth check on '/' failed: %s", exc, exc_info=True)
-
+    """Redirect root to the React SPA. Jinja UI is deprecated."""
     if _wants_json():
-        return jsonify({"authenticated": False})
-    return render_template("home_public.html", **pop_status())
+        return jsonify({"authenticated": "user_id" in session})
+    return redirect("/app/")
 
 
 @app.route("/chat")

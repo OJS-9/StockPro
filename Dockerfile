@@ -29,6 +29,10 @@ COPY stockpro-web/package.json stockpro-web/package-lock.json stockpro-web/
 RUN cd stockpro-web && npm ci
 
 COPY stockpro-web/ stockpro-web/
+
+# Vite bakes VITE_* env vars into the client bundle at build time.
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 RUN cd stockpro-web && npm run build
 
 # Copy the rest of the app
