@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useUser } from '@clerk/clerk-react'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -28,8 +28,6 @@ const NAV_ITEMS = [
   { id: 'plan', icon: 'card_membership', tKey: 'settings.plan' },
   { id: 'danger', icon: 'warning', tKey: 'settings.dangerZone' },
 ]
-
-const CLI_SECTION_LABEL = 'CLI tokens'
 
 export default function Settings() {
   const { user } = useUser()
