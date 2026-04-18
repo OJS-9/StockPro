@@ -26,6 +26,7 @@ const Watchlist = lazy(() => import('./pages/Watchlist'))
 const Alerts = lazy(() => import('./pages/Alerts'))
 const TickerPage = lazy(() => import('./pages/TickerPage'))
 const Settings = lazy(() => import('./pages/Settings'))
+const DevicePage = lazy(() => import('./pages/DevicePage'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -296,6 +297,15 @@ export default function App() {
         element={
           <SignedIn>
             <Settings />
+          </SignedIn>
+        }
+      />
+
+      <Route
+        path="/device"
+        element={
+          <SignedIn>
+            <DevicePage />
           </SignedIn>
         }
       />

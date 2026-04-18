@@ -34,6 +34,35 @@ Sign out (clears the stored token):
 stockpro auth logout
 ```
 
+## Headless / serverless (no browser)
+
+For agents running in a serverless environment (no browser to open), use the device-code flow. The agent prints a code; the user opens the URL on any device, signs in, and approves.
+
+```bash
+stockpro auth device-login
+```
+
+Output:
+
+```
+Open https://stockpro-production-11c8.up.railway.app/app/device?user_code=ABCD1234 on any browser,
+sign in, and confirm code: ABCD1234
+(expires in 10 min). Waiting...
+```
+
+Once approved, the token is saved to `~/.stockpro/config.json` just like `auth login`.
+
+### Token injection via env var
+
+If the agent already has a token (e.g. generated from the Settings -> CLI tokens page on the web app), skip the device flow entirely:
+
+```bash
+export STOCKPRO_TOKEN=sp_xxxxxxxxxxxxxxxx
+stockpro portfolio list
+```
+
+`STOCKPRO_TOKEN` takes precedence over `~/.stockpro/config.json`. Perfect for injecting into serverless runtimes as a secret.
+
 ## Pointing at local Flask (dev)
 
 Precedence: `--api-url` flag > `STOCKPRO_API_URL` env var > `~/.stockpro/config.json` > default.

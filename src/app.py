@@ -215,6 +215,19 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" in session:
             return f(*args, **kwargs)
+
+        # Accept long-lived StockPro API tokens (CLI / headless agents).
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer sp_"):
+            from auth_tokens import verify_token
+
+            raw_token = auth_header.split(" ", 1)[1].strip()
+            user_id = verify_token(raw_token)
+            if user_id:
+                session["user_id"] = user_id
+                return f(*args, **kwargs)
+            return jsonify({"error": "Unauthorized"}), 401
+
         # Verify Clerk session token via authenticate_request
         request_state = clerk_client.authenticate_request(
             request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
@@ -3690,6 +3703,90 @@ try:
     register_ws_routes(app)
 except ImportError as e:
     app.logger.warning("WebSocket /ws/prices not registered: %s", e)
+
+
+# --- Device-code auth + CLI token management ---
+
+
+@app.route("/api/device/authorize", methods=["POST"])
+@limiter.limit("10/minute")
+def device_authorize():
+    """Start a device-code flow. No auth. Returns {device_code, user_code, expires_in, interval}."""
+    from auth_tokens import create_device_code
+
+    data = create_device_code()
+    data["verification_uri"] = (
+        request.host_url.rstrip("/") + "/app/device"
+    )
+    return jsonify(data)
+
+
+@app.route("/api/device/token", methods=["POST"])
+@limiter.limit("30/minute")
+def device_token():
+    """Agent polls here with its device_code. Returns status; includes access_token once approved."""
+    from auth_tokens import poll_device_code
+
+    body = request.get_json(silent=True) or {}
+    device_code = (body.get("device_code") or "").strip()
+    if not device_code:
+        return jsonify({"error": "device_code required"}), 400
+    result = poll_device_code(device_code)
+    if result.get("status") == "unknown":
+        return jsonify({"status": "pending"}), 200  # don't leak existence
+    return jsonify(result)
+
+
+@app.route("/api/device/approve", methods=["POST"])
+@login_required
+def device_approve():
+    """Master approves a user_code for their account. Called from /app/device."""
+    from auth_tokens import approve_device_code
+
+    body = request.get_json(silent=True) or {}
+    user_code = body.get("user_code") or ""
+    result = approve_device_code(session["user_id"], user_code)
+    if "error" in result:
+        code = 404 if result["error"] in ("unknown_code", "invalid_code") else 410
+        return jsonify(result), code
+    return jsonify(result)
+
+
+@app.route("/api/tokens", methods=["GET"])
+@login_required
+def tokens_list():
+    from auth_tokens import list_api_keys
+
+    return jsonify({"tokens": list_api_keys(session["user_id"])})
+
+
+@app.route("/api/tokens", methods=["POST"])
+@login_required
+def tokens_create():
+    """Create a token. Returns raw token ONCE."""
+    from auth_tokens import create_api_key
+
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "CLI token").strip()[:100] or "CLI token"
+    key_id, raw_token = create_api_key(session["user_id"], name)
+    return jsonify(
+        {
+            "id": key_id,
+            "name": name,
+            "access_token": raw_token,
+        }
+    )
+
+
+@app.route("/api/tokens/<key_id>", methods=["DELETE"])
+@login_required
+def tokens_revoke(key_id):
+    from auth_tokens import revoke_api_key
+
+    ok = revoke_api_key(session["user_id"], key_id)
+    if not ok:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"status": "revoked"})
 
 
 # --- SPA serving (production) ---
