@@ -73,16 +73,28 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cur:
 
-                # Trigger function for updated_at auto-update
-                cur.execute("""
-                    CREATE OR REPLACE FUNCTION update_updated_at()
-                    RETURNS TRIGGER AS $$
-                    BEGIN
-                      NEW.updated_at = NOW();
-                      RETURN NEW;
-                    END;
-                    $$ LANGUAGE plpgsql
-                """)
+                # Give this session extra headroom for lock waits during rolling deploys
+                # (old container may still hold pg_proc share locks via active triggers).
+                cur.execute("SET LOCAL statement_timeout = '60s'")
+                cur.execute("SET LOCAL lock_timeout = '30s'")
+
+                # Trigger function for updated_at auto-update.
+                # Skip CREATE OR REPLACE if the function already exists -- that path
+                # takes an exclusive lock on pg_proc and will time out during a
+                # rolling deploy while the old container is still running triggers.
+                cur.execute(
+                    "SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at' LIMIT 1"
+                )
+                if cur.fetchone() is None:
+                    cur.execute("""
+                        CREATE OR REPLACE FUNCTION update_updated_at()
+                        RETURNS TRIGGER AS $$
+                        BEGIN
+                          NEW.updated_at = NOW();
+                          RETURN NEW;
+                        END;
+                        $$ LANGUAGE plpgsql
+                    """)
 
                 # Users
                 cur.execute("""
