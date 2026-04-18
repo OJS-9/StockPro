@@ -304,9 +304,19 @@ export default function App() {
       <Route
         path="/device"
         element={
-          <SignedIn>
-            <DevicePage />
-          </SignedIn>
+          <>
+            <SignedIn>
+              <DevicePage />
+            </SignedIn>
+            <SignedOut>
+              <Navigate
+                to={`/sign-in?redirect_url=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/device'
+                )}`}
+                replace
+              />
+            </SignedOut>
+          </>
         }
       />
 
