@@ -1,5 +1,6 @@
 """Research report commands."""
 
+import time
 import click
 from stockpro_cli.client import get_client
 from stockpro_cli.output import output
@@ -9,6 +10,76 @@ from stockpro_cli.output import output
 def reports():
     """Manage research reports."""
     pass
+
+
+@reports.command("generate")
+@click.option("--ticker", required=True, help="Stock ticker symbol (e.g. AAPL)")
+@click.option(
+    "--trade-type",
+    required=True,
+    type=click.Choice(["Investment", "Swing Trade", "Day Trade"], case_sensitive=False),
+    help="Type of trade to research",
+)
+@click.option("--context", default="", help="Optional research context or notes")
+@click.option(
+    "--poll-interval",
+    default=5,
+    show_default=True,
+    type=int,
+    help="Seconds between status polls",
+)
+@click.pass_context
+def generate(ctx, ticker, trade_type, context, poll_interval):
+    """Generate a new research report. Polls until complete."""
+    client = get_client(ctx.obj.get("api_url"))
+    pretty = ctx.obj.get("pretty", False)
+
+    # Kick off generation
+    resp = client.post(
+        "/api/reports/generate",
+        data={"ticker": ticker, "trade_type": trade_type, "context": context},
+    )
+    if not resp.get("success"):
+        output(resp, pretty)
+        return
+
+    session_id = resp.get("session_id")
+    if not session_id:
+        output({"error": "No session_id returned from server"}, pretty)
+        return
+
+    if pretty:
+        click.echo(f"Generating report for {ticker} ({trade_type})...")
+
+    # Poll until ready or error
+    last_step = ""
+    while True:
+        status = client.get(f"/api/report_status/{session_id}")
+        state = status.get("status", "unknown")
+        step = status.get("step", "")
+        progress = status.get("progress", 0)
+
+        if pretty and step and step != last_step:
+            click.echo(f"  [{progress:>3}%] {step}")
+            last_step = step
+
+        if state == "ready":
+            report_id = status.get("report_id")
+            if pretty:
+                click.echo(f"\nDone! Report ID: {report_id}")
+            else:
+                output({"status": "ready", "report_id": report_id}, pretty)
+            return
+
+        if state == "error":
+            msg = status.get("message", "Unknown error")
+            if pretty:
+                click.echo(f"\nError: {msg}", err=True)
+            else:
+                output({"status": "error", "message": msg}, pretty)
+            raise SystemExit(1)
+
+        time.sleep(poll_interval)
 
 
 @reports.command("list")

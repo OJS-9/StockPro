@@ -215,6 +215,19 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" in session:
             return f(*args, **kwargs)
+
+        # Accept long-lived StockPro API tokens (CLI / headless agents).
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer sp_"):
+            from auth_tokens import verify_token
+
+            raw_token = auth_header.split(" ", 1)[1].strip()
+            user_id = verify_token(raw_token)
+            if user_id:
+                session["user_id"] = user_id
+                return f(*args, **kwargs)
+            return jsonify({"error": "Unauthorized"}), 401
+
         # Verify Clerk session token via authenticate_request
         request_state = clerk_client.authenticate_request(
             request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
@@ -1152,9 +1165,144 @@ def api_health():
 @login_required
 def report_status(session_id: str):
     """Poll endpoint for background generation status."""
-    if session.get("session_id") != session_id:
+    user_id = session.get("user_id")
+    status = _generation_status.get(session_id)
+
+    # Web session ownership check (browser flow)
+    web_session_ok = session.get("session_id") == session_id
+    # API/CLI token ownership check (stateless generate endpoint)
+    api_owner_ok = status is not None and status.get("_owner_user_id") == user_id
+
+    if not web_session_ok and not api_owner_ok:
         return jsonify({"error": "forbidden"}), 403
-    return jsonify(_generation_status.get(session_id, {"status": "unknown"}))
+
+    if status is None:
+        return jsonify({"status": "unknown"})
+    return jsonify({k: v for k, v in status.items() if not k.startswith("_")})
+
+
+@app.route("/api/reports/generate", methods=["POST"])
+@csrf.exempt
+@login_required
+@limiter.limit(_report_gen_rate_limit, key_func=get_remote_address)
+def api_reports_generate():
+    """Stateless report generation endpoint for headless/CLI clients.
+
+    Accepts JSON body: {ticker, trade_type, context (optional)}
+    Returns: {success: true, session_id: "<uuid>"}
+    Poll GET /api/report_status/<session_id> until status == "ready" or "error".
+    """
+    data = request.get_json(force=True) or {}
+    ticker = (data.get("ticker") or "").strip().upper()
+    trade_type = (data.get("trade_type") or "").strip()
+    context_str = (data.get("context") or "").strip()
+
+    if not ticker or not trade_type:
+        return jsonify({"error": "ticker and trade_type are required"}), 400
+
+    if _session_hits_report_quota():
+        return _report_quota_json_error()
+
+    # Fresh session_id independent of any browser session
+    session_id = str(uuid.uuid4())
+    agent = initialize_session(session_id)
+    agent.reset_conversation()
+
+    user_id = session.get("user_id")
+    agent.user_id = user_id
+
+    # Username: prefer session (Clerk web flow), fall back to DB lookup (Bearer token)
+    agent.username = session.get("username")
+    if not agent.username and user_id:
+        try:
+            from database import get_database_manager as _get_db
+            _user_rec = _get_db().get_user_by_id(user_id)
+            if _user_rec:
+                agent.username = _user_rec.get("username", user_id)
+        except Exception:
+            agent.username = user_id
+
+    # Language preference from user profile
+    try:
+        from database import get_database_manager as _get_db2
+        _user_rec2 = _get_db2().get_user_by_id(user_id)
+        agent.language = (
+            (_user_rec2.get("preferences") or {}).get("language", "en") if _user_rec2 else "en"
+        )
+    except Exception:
+        agent.language = "en"
+
+    # Prime the orchestrator with ticker/trade_type (mirrors popup_start)
+    try:
+        agent.start_research(ticker, trade_type)
+    except Exception:
+        pass
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    _generation_status[session_id] = {
+        "status": "in_progress",
+        "report_id": None,
+        "progress": 5,
+        "step": "Starting...",
+        "_owner_user_id": user_id,
+    }
+
+    def run_generation():
+        import threading as _threading
+
+        subject_counter = {"done": 0, "total": 0}
+        counter_lock = _threading.Lock()
+
+        def progress_fn(progress, step):
+            status = _generation_status.get(session_id)
+            if status is None:
+                return
+            if progress is None:
+                with counter_lock:
+                    subject_counter["done"] += 1
+                    done = subject_counter["done"]
+                    total = subject_counter["total"] or 1
+                    pct = 20 + int((done / total) * 55)
+                    status["progress"] = min(pct, 75)
+                    status["step"] = f"Researching: {done}/{total} subjects done"
+            else:
+                status["progress"] = progress
+                status["step"] = step
+                if progress == 20 and "subjects" in step:
+                    try:
+                        subject_counter["total"] = int(step.split()[1])
+                    except (IndexError, ValueError):
+                        pass
+
+        emitter = create_emitter()
+        agent.set_emitter(emitter)
+        agent.set_progress_fn(progress_fn)
+        try:
+            agent.generate_report(
+                context=context_str,
+                spend_budget_usd=spend_budget_usd,
+            )
+            _generation_status[session_id] = {
+                "status": "ready",
+                "report_id": agent.current_report_id,
+                "progress": 100,
+                "step": "Report ready",
+                "_owner_user_id": user_id,
+            }
+        except Exception as e:
+            _generation_status[session_id] = {
+                "status": "error",
+                "message": str(e),
+                "_owner_user_id": user_id,
+            }
+        finally:
+            agent.set_emitter(None)
+            agent.set_progress_fn(None)
+
+    threading.Thread(target=run_generation, daemon=True).start()
+    return jsonify({"success": True, "session_id": session_id})
 
 
 @app.route("/api/position_check/<ticker>")
@@ -3690,6 +3838,91 @@ try:
     register_ws_routes(app)
 except ImportError as e:
     app.logger.warning("WebSocket /ws/prices not registered: %s", e)
+
+
+# --- Device-code auth + CLI token management ---
+
+
+@app.route("/api/device/authorize", methods=["POST"])
+@limiter.limit("10/minute")
+def device_authorize():
+    """Start a device-code flow. No auth. Returns {device_code, user_code, expires_in, interval}."""
+    from auth_tokens import create_device_code
+
+    data = create_device_code()
+    # Respect X-Forwarded-Proto so the printed URL uses https behind Railway's proxy.
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    data["verification_uri"] = f"{scheme}://{host}/app/device"
+    return jsonify(data)
+
+
+@app.route("/api/device/token", methods=["POST"])
+@limiter.limit("30/minute")
+def device_token():
+    """Agent polls here with its device_code. Returns status; includes access_token once approved."""
+    from auth_tokens import poll_device_code
+
+    body = request.get_json(silent=True) or {}
+    device_code = (body.get("device_code") or "").strip()
+    if not device_code:
+        return jsonify({"error": "device_code required"}), 400
+    result = poll_device_code(device_code)
+    if result.get("status") == "unknown":
+        return jsonify({"status": "pending"}), 200  # don't leak existence
+    return jsonify(result)
+
+
+@app.route("/api/device/approve", methods=["POST"])
+@login_required
+def device_approve():
+    """Master approves a user_code for their account. Called from /app/device."""
+    from auth_tokens import approve_device_code
+
+    body = request.get_json(silent=True) or {}
+    user_code = body.get("user_code") or ""
+    result = approve_device_code(session["user_id"], user_code)
+    if "error" in result:
+        code = 404 if result["error"] in ("unknown_code", "invalid_code") else 410
+        return jsonify(result), code
+    return jsonify(result)
+
+
+@app.route("/api/tokens", methods=["GET"])
+@login_required
+def tokens_list():
+    from auth_tokens import list_api_keys
+
+    return jsonify({"tokens": list_api_keys(session["user_id"])})
+
+
+@app.route("/api/tokens", methods=["POST"])
+@login_required
+def tokens_create():
+    """Create a token. Returns raw token ONCE."""
+    from auth_tokens import create_api_key
+
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "CLI token").strip()[:100] or "CLI token"
+    key_id, raw_token = create_api_key(session["user_id"], name)
+    return jsonify(
+        {
+            "id": key_id,
+            "name": name,
+            "access_token": raw_token,
+        }
+    )
+
+
+@app.route("/api/tokens/<key_id>", methods=["DELETE"])
+@login_required
+def tokens_revoke(key_id):
+    from auth_tokens import revoke_api_key
+
+    ok = revoke_api_key(session["user_id"], key_id)
+    if not ok:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"status": "revoked"})
 
 
 # --- SPA serving (production) ---

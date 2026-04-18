@@ -34,7 +34,7 @@ def get_api_url() -> str:
 
 
 def get_token() -> str | None:
-    return load_config().get("access_token")
+    return os.environ.get("STOCKPRO_TOKEN") or load_config().get("access_token")
 
 
 def clear_auth():

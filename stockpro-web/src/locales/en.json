@@ -223,6 +223,7 @@
   "settings.notifications": "Notifications",
   "settings.researchDefaults": "Research defaults",
   "settings.telegram": "Telegram",
+  "settings.cli": "CLI tokens",
   "settings.plan": "Plan",
   "settings.dangerZone": "Danger zone",
   "settings.editProfile": "Edit profile",

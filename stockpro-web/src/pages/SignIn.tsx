@@ -1,7 +1,11 @@
 import { SignIn as ClerkSignIn } from '@clerk/clerk-react'
+import { useSearchParams } from 'react-router'
 import Icon from '../components/Icon'
 
 export default function SignIn() {
+  const [params] = useSearchParams()
+  const redirectParam = params.get('redirect_url')
+  const afterSignIn = redirectParam || `${import.meta.env.BASE_URL}home`
   return (
     <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
       {/* Left branding panel */}
@@ -85,7 +89,8 @@ export default function SignIn() {
           routing="path"
           path={`${import.meta.env.BASE_URL}sign-in`}
           signUpUrl={`${import.meta.env.BASE_URL}sign-up`}
-          afterSignInUrl={`${import.meta.env.BASE_URL}home`}
+          afterSignInUrl={afterSignIn}
+          forceRedirectUrl={afterSignIn}
           appearance={{
             variables: {
               colorBackground: '#1c1917',

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useUser } from '@clerk/clerk-react'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { id: 'notifications', icon: 'notifications', tKey: 'settings.notifications' },
   { id: 'research', icon: 'query_stats', tKey: 'settings.researchDefaults' },
   { id: 'telegram', icon: 'send', tKey: 'settings.telegram' },
+  { id: 'cli', icon: 'terminal', tKey: 'settings.cli' },
   { id: 'plan', icon: 'card_membership', tKey: 'settings.plan' },
   { id: 'danger', icon: 'warning', tKey: 'settings.dangerZone' },
 ]
@@ -299,6 +300,9 @@ export default function Settings() {
             </div>
           )}
 
+          {/* CLI TOKENS */}
+          {activeSection === 'cli' && <CliTokensSection />}
+
           {/* DANGER ZONE */}
           {activeSection === 'danger' && (
             <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, overflow: 'hidden' }}>
@@ -322,6 +326,8 @@ export default function Settings() {
         </div>
       </main>
 
+      {/* CLI tokens section — intentionally outside the save-banner mutation flow */}
+
       {/* SAVE BANNER */}
       {hasChanges && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 24px', background: 'rgba(12,10,9,0.96)', backdropFilter: 'blur(16px)', borderTop: '1px solid #292524' }}>
@@ -334,6 +340,118 @@ export default function Settings() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function CliTokensSection() {
+  const api = useApiClient()
+  const queryClient = useQueryClient()
+  const [newName, setNewName] = useState('')
+  const [newToken, setNewToken] = useState<string | null>(null)
+
+  const { data } = useQuery({
+    queryKey: ['cli-tokens'],
+    queryFn: async () => {
+      const res = await api.get('/api/tokens')
+      if (!res.ok) throw new Error('Failed to load tokens')
+      return res.json() as Promise<{ tokens: Array<{ id: string; name: string; prefix: string; created_at: string; last_used_at: string | null }> }>
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/api/tokens', { name: newName || 'CLI token' })
+      if (!res.ok) throw new Error('Failed to create token')
+      return res.json() as Promise<{ id: string; access_token: string }>
+    },
+    onSuccess: (resp) => {
+      setNewToken(resp.access_token)
+      setNewName('')
+      queryClient.invalidateQueries({ queryKey: ['cli-tokens'] })
+    },
+    onError: () => toast.error('Failed to create token'),
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/api/tokens/${id}`)
+      if (!res.ok) throw new Error('Failed to revoke')
+    },
+    onSuccess: () => {
+      toast.success('Token revoked')
+      queryClient.invalidateQueries({ queryKey: ['cli-tokens'] })
+    },
+    onError: () => toast.error('Failed to revoke token'),
+  })
+
+  const tokens = data?.tokens ?? []
+  const rowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #292524', gap: 16 } as const
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p style={{ fontSize: 13, color: '#a8a29e', margin: 0 }}>
+        Long-lived tokens for the <code style={{ color: '#d6d3d1' }}>stockpro</code> CLI and headless agents. Set the token as <code style={{ color: '#d6d3d1' }}>STOCKPRO_TOKEN</code> or run <code style={{ color: '#d6d3d1' }}>stockpro auth device-login</code>.
+      </p>
+
+      {newToken && (
+        <div style={{ background: '#1c1917', border: '1px solid #22c55e', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>Copy this token now</div>
+          <div style={{ fontSize: 12, color: '#a8a29e' }}>It will never be shown again.</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <code style={{ flex: 1, background: '#0c0a09', border: '1px solid #292524', borderRadius: 8, padding: '10px 12px', fontFamily: 'ui-monospace, monospace', fontSize: 12, color: '#fafaf9', wordBreak: 'break-all' }}>{newToken}</code>
+            <button
+              onClick={() => { navigator.clipboard.writeText(newToken); toast.success('Copied') }}
+              style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #292524', background: '#232120', color: '#fafaf9', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
+            >
+              Copy
+            </button>
+          </div>
+          <button onClick={() => setNewToken(null)} style={{ alignSelf: 'start', background: 'transparent', border: 0, color: '#a8a29e', fontSize: 12, cursor: 'pointer', marginTop: 4, padding: 0 }}>
+            I saved it
+          </button>
+        </div>
+      )}
+
+      <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 16, display: 'flex', gap: 8 }}>
+        <input
+          placeholder="Token name (e.g. laptop, serverless agent)"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          style={{ flex: 1, background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontSize: 13, padding: '9px 12px', outline: 'none' }}
+        />
+        <button
+          onClick={() => createMutation.mutate()}
+          disabled={createMutation.isPending}
+          style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >
+          {createMutation.isPending ? 'Creating...' : 'Create token'}
+        </button>
+      </div>
+
+      <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
+        {tokens.length === 0 ? (
+          <div style={{ padding: 20, fontSize: 13, color: '#a8a29e', textAlign: 'center' }}>No tokens yet. Create one above, or run <code>stockpro auth device-login</code>.</div>
+        ) : (
+          tokens.map((t, i) => (
+            <div key={t.id} style={{ ...rowStyle, borderBottom: i < tokens.length - 1 ? '1px solid #292524' : 'none' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{t.name}</div>
+                <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 3, fontFamily: 'ui-monospace, monospace' }}>
+                  {t.prefix}... &middot; created {new Date(t.created_at).toLocaleDateString()}
+                  {t.last_used_at && ` \u00B7 last used ${new Date(t.last_used_at).toLocaleDateString()}`}
+                </div>
+              </div>
+              <button
+                onClick={() => { if (confirm(`Revoke ${t.name}?`)) revokeMutation.mutate(t.id) }}
+                style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
+              >
+                Revoke
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }

@@ -73,16 +73,28 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cur:
 
-                # Trigger function for updated_at auto-update
-                cur.execute("""
-                    CREATE OR REPLACE FUNCTION update_updated_at()
-                    RETURNS TRIGGER AS $$
-                    BEGIN
-                      NEW.updated_at = NOW();
-                      RETURN NEW;
-                    END;
-                    $$ LANGUAGE plpgsql
-                """)
+                # Give this session extra headroom for lock waits during rolling deploys
+                # (old container may still hold pg_proc share locks via active triggers).
+                cur.execute("SET LOCAL statement_timeout = '60s'")
+                cur.execute("SET LOCAL lock_timeout = '30s'")
+
+                # Trigger function for updated_at auto-update.
+                # Skip CREATE OR REPLACE if the function already exists -- that path
+                # takes an exclusive lock on pg_proc and will time out during a
+                # rolling deploy while the old container is still running triggers.
+                cur.execute(
+                    "SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at' LIMIT 1"
+                )
+                if cur.fetchone() is None:
+                    cur.execute("""
+                        CREATE OR REPLACE FUNCTION update_updated_at()
+                        RETURNS TRIGGER AS $$
+                        BEGIN
+                          NEW.updated_at = NOW();
+                          RETURN NEW;
+                        END;
+                        $$ LANGUAGE plpgsql
+                    """)
 
                 # Users
                 cur.execute("""
@@ -488,6 +500,68 @@ class DatabaseManager:
                 """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_report_usage_period ON report_usage (period)"
+                )
+
+                # Long-lived API tokens for CLI / headless agents
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id           VARCHAR(36) PRIMARY KEY,
+                        user_id      VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        name         VARCHAR(100) NOT NULL,
+                        token_hash   VARCHAR(64)  NOT NULL UNIQUE,
+                        prefix       VARCHAR(16)  NOT NULL,
+                        created_at   TIMESTAMPTZ DEFAULT NOW(),
+                        last_used_at TIMESTAMPTZ,
+                        revoked_at   TIMESTAMPTZ
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_api_keys_token_hash ON api_keys (token_hash)"
+                )
+
+                # Device-code flow: pending agent authorizations awaiting user approval.
+                # access_token holds the raw token between approval and the next agent poll
+                # (max 10 min, deleted on first successful poll).
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS device_codes (
+                        device_code  VARCHAR(128) PRIMARY KEY,
+                        user_code    VARCHAR(16)  NOT NULL UNIQUE,
+                        user_id      VARCHAR(36)  REFERENCES users(user_id) ON DELETE CASCADE,
+                        api_key_id   VARCHAR(36)  REFERENCES api_keys(id) ON DELETE SET NULL,
+                        expires_at   TIMESTAMPTZ  NOT NULL,
+                        approved_at  TIMESTAMPTZ,
+                        access_token TEXT,
+                        created_at   TIMESTAMPTZ  DEFAULT NOW()
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_device_codes_user_code ON device_codes (user_code)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_device_codes_expires_at ON device_codes (expires_at)"
+                )
+
+                # RLS: backend uses the postgres role (bypasses RLS); these policies
+                # only matter for any client that ever connects as `authenticated` or `anon`.
+                cur.execute("ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY")
+                cur.execute("DROP POLICY IF EXISTS api_keys_owner ON api_keys")
+                cur.execute(
+                    "CREATE POLICY api_keys_owner ON api_keys "
+                    "FOR ALL USING (user_id = auth.jwt()->>'sub') "
+                    "WITH CHECK (user_id = auth.jwt()->>'sub')"
+                )
+
+                cur.execute("ALTER TABLE device_codes ENABLE ROW LEVEL SECURITY")
+                cur.execute("DROP POLICY IF EXISTS device_codes_owner ON device_codes")
+                # Once approved, the owner can read their pending/approved rows.
+                # Pre-approval rows have user_id=NULL and are only accessible by service_role.
+                cur.execute(
+                    "CREATE POLICY device_codes_owner ON device_codes "
+                    "FOR ALL USING (user_id = auth.jwt()->>'sub') "
+                    "WITH CHECK (user_id = auth.jwt()->>'sub')"
                 )
 
             conn.commit()
