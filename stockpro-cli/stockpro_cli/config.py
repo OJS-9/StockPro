@@ -6,7 +6,7 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".stockpro"
 CONFIG_FILE = CONFIG_DIR / "config.json"
-DEFAULT_API_URL = "http://127.0.0.1:5000"
+DEFAULT_API_URL = "https://stockpro-production-11c8.up.railway.app"
 
 
 def _ensure_dir():
