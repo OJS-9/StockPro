@@ -36,18 +36,26 @@ class MCPManager:
         self.mcp_client: Optional[MCPClient] = None
 
     def _load_config(self) -> Dict[str, Any]:
-        """Load MCP configuration from JSON file."""
+        """Load MCP configuration from env var or JSON file."""
+        api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        if api_key:
+            return {
+                "servers": {
+                    "alphavantage": {
+                        "type": "http",
+                        "url": f"https://mcp.alphavantage.co/mcp?apikey={api_key}"
+                    }
+                }
+            }
+        # Fall back to file
+        if not self.mcp_config_path.exists():
+            raise FileNotFoundError(
+                f"MCP config file not found: {self.mcp_config_path}. "
+                f"Please copy mcp.json.example to mcp.json and configure it."
+            )
         try:
-            if not self.mcp_config_path.exists():
-                raise FileNotFoundError(
-                    f"MCP config file not found: {self.mcp_config_path}. "
-                    f"Please copy mcp.json.example to mcp.json and configure it."
-                )
-
-            with open(self.mcp_config_path, "r") as f:
-                config = json.load(f)
-
-            return config
+            with open(self.mcp_config_path) as f:
+                return json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in MCP config: {e}")
         except Exception as e:
