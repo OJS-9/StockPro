@@ -1,1 +1,261 @@
-IiIiCkNvbnZlcnNhdGlvbmFsIG9yY2hlc3RyYXRvciBhcyBhIExhbmdHcmFwaCBSZUFjdCBhZ2VudC4KClJlcGxhY2VzIFN0b2NrUmVzZWFyY2hBZ2VudCAoYWdlbnQucHkpLiBNYW5hZ2VzIHRoZSBjb252ZXJzYXRpb24gd2l0aCB0aGUgdXNlciwKYXNrcyBjbGFyaWZ5aW5nIHF1ZXN0aW9ucywgYW5kIHRyaWdnZXJzIHRoZSByZXNlYXJjaCBwaXBlbGluZSB2aWEgdGhlCmdlbmVyYXRlX3JlcG9ydCB0b29sIHdoZW4gcmVhZHkuCiIiIgoKaW1wb3J0IGxvZ2dpbmcKaW1wb3J0IG9zCmZyb20gdHlwaW5nIGltcG9ydCBPcHRpb25hbCwgTGlzdCwgRGljdCwgQW55Cgpmcm9tIGxhbmdjaGFpbl9nb29nbGVfZ2VuYWkgaW1wb3J0IENoYXRHb29nbGVHZW5lcmF0aXZlQUkKZnJvbSBsYW5nY2hhaW5fY29yZS50b29scyBpbXBvcnQgdG9vbApmcm9tIGxhbmdjaGFpbl9jb3JlLm1lc3NhZ2VzIGltcG9ydCBIdW1hbk1lc3NhZ2UsIEFJTWVzc2FnZQpmcm9tIGxhbmdjaGFpbl9jb3JlLnJ1bm5hYmxlcyBpbXBvcnQgUnVubmFibGVDb25maWcKZnJvbSBsYW5nZ3JhcGgucHJlYnVpbHQgaW1wb3J0IGNyZWF0ZV9yZWFjdF9hZ2VudAoKZnJvbSByZXNlYXJjaF9wcm9tcHQgaW1wb3J0IGdldF9vcmNoZXN0cmF0aW9uX2luc3RydWN0aW9ucwpmcm9tIHJlc2VhcmNoX2dyYXBoIGltcG9ydCBydW5fcmVzZWFyY2gKZnJvbSBhZ2VudHMuY2hhdF9hZ2VudCBpbXBvcnQgUmVwb3J0Q2hhdEFnZW50CmZyb20gbGFuZ3NtaXRoX3NlcnZpY2UgaW1wb3J0IFN0ZXBFbWl0dGVyCgpsb2dnZXIgPSBsb2dnaW5nLmdldExvZ2dlcihfX25hbWVfXykKCk9SQ0hFU1RSQVRPUl9NT0RFTCA9IG9zLmdldGVudigiT1JDSEVTVFJBVE9SX01PREVMIiwgImdlbWluaS0yLjUtZmxhc2giKQpPUkNIRVNUUkFUT1JfTUFYX09VVFBVVF9UT0tFTlMgPSBpbnQob3MuZ2V0ZW52KCJPUkNIRVNUUkFUT1JfTUFYX09VVFBVVF9UT0tFTlMiLCAiNjAwIikpCgoKY2xhc3MgT3JjaGVzdHJhdG9yU2Vzc2lvbjoKICAgICIiIgogICAgTWFuYWdlcyBhIHNpbmdsZSB1c2VyIHJlc2VhcmNoIHNlc3Npb24uCiAgICBXcmFwcyB0aGUgTGFuZ0dyYXBoIG9yY2hlc3RyYXRvciBhZ2VudCBhbmQgaG9sZHMgc2Vzc2lvbiBzdGF0ZS4KICAgICIiIgoKICAgIGRlZiBfX2luaXRfXyhzZWxmLCB1c2VyX2lkOiBPcHRpb25hbFtpbnRdID0gTm9uZSk6CiAgICAgICAgc2VsZi51c2VyX2lkID0gdXNlcl9pZAogICAgICAgIHNlbGYudXNlcm5hbWU6IE9wdGlvbmFsW3N0cl0gPSBOb25lCiAgICAgICAgc2VsZi5sYW5ndWFnZTogT3B0aW9uYWxbc3RyXSA9IE5vbmUKICAgICAgICBzZWxmLmN1cnJlbnRfdGlja2VyOiBPcHRpb25hbFtzdHJdID0gTm9uZQogICAgICAgIHNlbGYuY3VycmVudF90cmFkZV90eXBlOiBPcHRpb25hbFtzdHJdID0gTm9uZQogICAgICAgIHNlbGYuY3VycmVudF9yZXBvcnRfaWQ6IE9wdGlvbmFsW3N0cl0gPSBOb25lCiAgICAgICAgc2VsZi5sYXN0X3JlcG9ydF90ZXh0OiBPcHRpb25hbFtzdHJdID0gTm9uZQogICAgICAgIHNlbGYucGVuZGluZ19xdWVzdGlvbnM6IExpc3RbRGljdFtzdHIsIEFueV1dID0gW10KICAgICAgICBzZWxmLmNvbnZlcnNhdGlvbl9oaXN0b3J5OiBMaXN0W0RpY3Rbc3RyLCBzdHJdXSA9IFtdCiAgICAgICAgc2VsZi5fY2hhdF9hZ2VudCA9IFJlcG9ydENoYXRBZ2VudCgpCiAgICAgICAgc2VsZi5fZW1pdHRlcjogT3B0aW9uYWxbU3RlcEVtaXR0ZXJdID0gTm9uZQogICAgICAgIHNlbGYuX3Byb2dyZXNzX2ZuID0gTm9uZQoKICAgIGRlZiBzZXRfZW1pdHRlcihzZWxmLCBlbWl0dGVyOiBPcHRpb25hbFtTdGVwRW1pdHRlcl0pOgogICAgICAgIHNlbGYuX2VtaXR0ZXIgPSBlbWl0dGVyCgogICAgZGVmIHNldF9wcm9ncmVzc19mbihzZWxmLCBmbik6CiAgICAgICAgc2VsZi5fcHJvZ3Jlc3NfZm4gPSBmbgoKICAgIGRlZiBzdGFydF9yZXNlYXJjaChzZWxmLCB0aWNrZXI6IHN0ciwgdHJhZGVfdHlwZTogc3RyKSAtPiBzdHI6CiAgICAgICAgIiIiU3RhcnQgYSBuZXcgcmVzZWFyY2ggc2Vzc2lvbi4iIiIKICAgICAgICBzZWxmLmN1cnJlbnRfdGlja2VyID0gdGlja2VyLnVwcGVyKCkKICAgICAgICBzZWxmLmN1cnJlbnRfdHJhZGVfdHlwZSA9IHRyYWRlX3R5cGUKICAgICAgICBzZWxmLmNvbnZlcnNhdGlvbl9oaXN0b3J5ID0gW10KCiAgICAgICAgc3lzdGVtX2luc3RydWN0aW9ucyA9IGdldF9vcmNoZXN0cmF0aW9uX2luc3RydWN0aW9ucyh0aWNrZXIsIHRyYWRlX3R5cGUpCiAgICAgICAgdXNlcl9tZXNzYWdlID0gKAogICAgICAgICAgICBmIkkgd2FudCB0byByZXNlYXJjaCB7dGlja2VyfSBmb3IgYSB7dHJhZGVfdHlwZX0gc3RyYXRlZ3kuICIKICAgICAgICAgICAgIlBsZWFzZSBoZWxwIG1lIGNyZWF0ZSBhIGZ1bmRhbWVudGFsIHJlc2VhcmNoIHJlcG9ydC4iCiAgICAgICAgKQogICAgICAgIHNlbGYuY29udmVyc2F0aW9uX2hpc3RvcnkuYXBwZW5kKAogICAgICAgICAgICB7InJvbGUiOiAic3lzdGVtIiwgImNvbnRlbnQiOiBzeXN0ZW1faW5zdHJ1Y3Rpb25zfQogICAgICAgICkKICAgICAgICBzZWxmLmNvbnZlcnNhdGlvbl9oaXN0b3J5LmFwcGVuZCh7InJvbGUiOiAidXNlciIsICJjb250ZW50IjogdXNlcl9tZXNzYWdlfSkKCiAgICAgICAgcmV0dXJuIHNlbGYuX2dldF9hZ2VudF9yZXNwb25zZSh1c2VyX21lc3NhZ2UsIHN5c3RlbV9pbnN0cnVjdGlvbnMpCgogICAgZGVmIGNvbnRpbnVlX2NvbnZlcnNhdGlvbihzZWxmLCB1c2VyX3Jlc3BvbnNlOiBzdHIpIC0+IHN0cjoKICAgICAgICAiIiJDb250aW51ZSB3aXRoIGEgdXNlciByZXNwb25zZS4iIiIKICAgICAgICBzZWxmLmNvbnZlcnNhdGlvbl9oaXN0b3J5LmFwcGVuZCh7InJvbGUiOiAidXNlciIsICJjb250ZW50IjogdXNlcl9yZXNwb25zZX0pCiAgICAgICAgc3lzdGVtX2luc3RydWN0aW9ucyA9IG5leHQoCiAgICAgICAgICAgIChtWyJjb250ZW50Il0gZm9yIG0gaW4gc2VsZi5jb252ZXJzYXRpb25faGlzdG9yeSBpZiBtWyJyb2xlIl0gPT0gInN5c3RlbSIpLAogICAgICAgICAgICAiIiwKICAgICAgICApCiAgICAgICAgcmV0dXJuIHNlbGYuX2dldF9hZ2VudF9yZXNwb25zZSh1c2VyX3Jlc3BvbnNlLCBzeXN0ZW1faW5zdHJ1Y3Rpb25zKQoKICAgIGRlZiBfZ2V0X2FnZW50X3Jlc3BvbnNlKHNlbGYsIHVzZXJfbWVzc2FnZTogc3RyLCBzeXN0ZW1faW5zdHJ1Y3Rpb25zOiBzdHIpIC0+IHN0cjoKICAgICAgICAiIiJSdW4gb25lIHR1cm4gb2YgdGhlIG9yY2hlc3RyYXRvciBSZUFjdCBhZ2VudC4iIiIKICAgICAgICB0aWNrZXIgPSBzZWxmLmN1cnJlbnRfdGlja2VyIG9yICIiCiAgICAgICAgdHJhZGVfdHlwZSA9IHNlbGYuY3VycmVudF90cmFkZV90eXBlIG9yICIiCiAgICAgICAgc2Vzc2lvbiA9IHNlbGYKCiAgICAgICAgQHRvb2wKICAgICAgICBkZWYgYXNrX3VzZXJfcXVlc3Rpb25zKHF1ZXN0aW9uczogTGlzdFtEaWN0W3N0ciwgQW55XV0pIC0+IHN0cjoKICAgICAgICAgICAgIiIiCiAgICAgICAgICAgIEFzayB0aGUgdXNlciBjbGFyaWZ5aW5nIHF1ZXN0aW9ucyBiZWZvcmUgZ2VuZXJhdGluZyB0aGUgcmVwb3J0LgogICAgICAgICAgICBDYWxsIHRoaXMgT05DRSBhdCB0aGUgc3RhcnQgb2YgYSBuZXcgcmVzZWFyY2ggc2Vzc2lvbiB3aXRoIDEtMyBtdWx0aXBsZS1jaG9pY2UgcXVlc3Rpb25zLgogICAgICAgICAgICBFYWNoIHF1ZXN0aW9uIG11c3QgaGF2ZSBhICdxdWVzdGlvbicga2V5IChzdHJpbmcpIGFuZCBhbiAnb3B0aW9ucycga2V5IChsaXN0IG9mIDMtNCBzdHJpbmdzKS4KICAgICAgICAgICAgRXhhbXBsZTogW3sicXVlc3Rpb24iOiAiV2hhdCBpcyB5b3VyIHRpbWUgaG9yaXpvbj8iLCAib3B0aW9ucyI6IFsiMSBkYXkiLCAiMSB3ZWVrIiwgIjEgbW9udGgiLCAiMysgbW9udGhzIl19XQogICAgICAgICAgICBEbyBOT1QgY2FsbCB0aGlzIHRvb2wgbW9yZSB0aGFuIG9uY2UgcGVyIHNlc3Npb24uCiAgICAgICAgICAgICIiIgogICAgICAgICAgICBzZXNzaW9uLnBlbmRpbmdfcXVlc3Rpb25zID0gcXVlc3Rpb25zCiAgICAgICAgICAgIHJldHVybiAiUXVlc3Rpb25zIGNhcHR1cmVkLiBXYWl0aW5nIGZvciB1c2VyIGFuc3dlcnMgYmVmb3JlIGdlbmVyYXRpbmcgdGhlIHJlcG9ydC4iCgogICAgICAgIEB0b29sCiAgICAgICAgZGVmIGdlbmVyYXRlX3JlcG9ydChjb25maWc6IFJ1bm5hYmxlQ29uZmlnKSAtPiBzdHI6CiAgICAgICAgICAgICIiIgogICAgICAgICAgICBUcmlnZ2VyIHJlcG9ydCBnZW5lcmF0aW9uIHdoZW4geW91IGhhdmUgZ2F0aGVyZWQgZW5vdWdoIGNvbnRleHQgZnJvbSB0aGUgdXNlci4KICAgICAgICAgICAgQ2FsbCB0aGlzIGFmdGVyIGFza2luZyAxLTIgcmVsZXZhbnQgcXVlc3Rpb25zLiBEbyBOT1QgY2FsbCBpbW1lZGlhdGVseS4KICAgICAgICAgICAgIiIiCiAgICAgICAgICAgIGNvbnRleHRfc3RyID0gIgoiLmpvaW4oCiAgICAgICAgICAgICAgICBmIlVzZXI6IHttWydjb250ZW50J119IgogICAgICAgICAgICAgICAgZm9yIG0gaW4gc2Vzc2lvbi5jb252ZXJzYXRpb25faGlzdG9yeQogICAgICAgICAgICAgICAgaWYgbS5nZXQoInJvbGUiKSA9PSAidXNlciIKICAgICAgICAgICAgKQogICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICBmcm9tIHNwZW5kX2J1ZGdldCBpbXBvcnQgZ2V0X3NwZW5kX2J1ZGdldF91c2QKCiAgICAgICAgICAgICAgICByZXN1bHQgPSBydW5fcmVzZWFyY2goCiAgICAgICAgICAgICAgICAgICAgdGlja2VyPXRpY2tlciwKICAgICAgICAgICAgICAgICAgICB0cmFkZV90eXBlPXRyYWRlX3R5cGUsCiAgICAgICAgICAgICAgICAgICAgY29udmVyc2F0aW9uX2NvbnRleHQ9Y29udGV4dF9zdHIsCiAgICAgICAgICAgICAgICAgICAgdXNlcl9pZD1zZXNzaW9uLnVzZXJfaWQsCiAgICAgICAgICAgICAgICAgICAgZW1pdHRlcj1zZXNzaW9uLl9lbWl0dGVyLAogICAgICAgICAgICAgICAgICAgIHNwZW5kX2J1ZGdldF91c2Q9Z2V0X3NwZW5kX2J1ZGdldF91c2Qoc2Vzc2lvbi51c2VyX2lkKSwKICAgICAgICAgICAgICAgICAgICBwYXJlbnRfY29uZmlnPWNvbmZpZywKICAgICAgICAgICAgICAgICAgICB1c2VybmFtZT1zZXNzaW9uLnVzZXJuYW1lLAogICAgICAgICAgICAgICAgICAgIHByb2dyZXNzX2ZuPXNlc3Npb24uX3Byb2dyZXNzX2ZuLAogICAgICAgICAgICAgICAgICAgIGxhbmd1YWdlPXNlc3Npb24ubGFuZ3VhZ2UsCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICBzZXNzaW9uLmN1cnJlbnRfcmVwb3J0X2lkID0gcmVzdWx0LmdldCgicmVwb3J0X2lkIiwgIiIpCiAgICAgICAgICAgICAgICBzZXNzaW9uLmxhc3RfcmVwb3J0X3RleHQgPSByZXN1bHQuZ2V0KCJyZXBvcnRfdGV4dCIsICIiKQogICAgICAgICAgICAgICAgcmVwb3J0X2lkX3Nob3J0ID0gKAogICAgICAgICAgICAgICAgICAgIHNlc3Npb24uY3VycmVudF9yZXBvcnRfaWRbOjhdCiAgICAgICAgICAgICAgICAgICAgaWYgc2Vzc2lvbi5jdXJyZW50X3JlcG9ydF9pZAogICAgICAgICAgICAgICAgICAgIGVsc2UgInVua25vd24iCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICByZXR1cm4gKAogICAgICAgICAgICAgICAgICAgIGYiUmVwb3J0IGdlbmVyYXRlZCBzdWNjZXNzZnVsbHkhIFJlcG9ydCBJRDoge3JlcG9ydF9pZF9zaG9ydH0uLi4KCiIKICAgICAgICAgICAgICAgICAgICAiVGhlIGNvbXByZWhlbnNpdmUgcmVzZWFyY2ggcmVwb3J0IGhhcyBiZWVuIGNyZWF0ZWQgYW5kIGlzIHJlYWR5IHRvIHZpZXcuIgogICAgICAgICAgICAgICAgKQogICAgICAgICAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgICAgICByZXR1cm4gZiJFcnJvciBnZW5lcmF0aW5nIHJlcG9ydDoge2V9IgoKICAgICAgICBsbG0gPSBDaGF0R29vZ2xlR2VuZXJhdGl2ZUFJKAogICAgICAgICAgICBtb2RlbD1PUkNIRVNUUkFUT1JfTU9ERUwsCiAgICAgICAgICAgIHRlbXBlcmF0dXJlPTAuNywKICAgICAgICAgICAgbWF4X291dHB1dF90b2tlbnM9T1JDSEVTVFJBVE9SX01BWF9PVVRQVVRfVE9LRU5TLAogICAgICAgICkKCiAgICAgICAgYWdlbnQgPSBjcmVhdGVfcmVhY3RfYWdlbnQoCiAgICAgICAgICAgIGxsbSwKICAgICAgICAgICAgW2Fza191c2VyX3F1ZXN0aW9ucywgZ2VuZXJhdGVfcmVwb3J0XSwKICAgICAgICAgICAgcHJvbXB0PXN5c3RlbV9pbnN0cnVjdGlvbnMsCiAgICAgICAgKQoKICAgICAgICAjIEJ1aWxkIG1lc3NhZ2UgaGlzdG9yeSAobGFzdCA0IG5vbi1zeXN0ZW0gbWVzc2FnZXMpCiAgICAgICAgcmVjZW50ID0gW20gZm9yIG0gaW4gc2VsZi5jb252ZXJzYXRpb25faGlzdG9yeVstNDpdIGlmIG1bInJvbGUiXSAhPSAic3lzdGVtIl0KICAgICAgICBtZXNzYWdlcyA9IFtdCiAgICAgICAgZm9yIG0gaW4gcmVjZW50OgogICAgICAgICAgICBpZiBtWyJyb2xlIl0gPT0gInVzZXIiOgogICAgICAgICAgICAgICAgbWVzc2FnZXMuYXBwZW5kKEh1bWFuTWVzc2FnZShjb250ZW50PW1bImNvbnRlbnQiXVs6MTAwMF0pKQogICAgICAgICAgICBlbGlmIG1bInJvbGUiXSA9PSAiYXNzaXN0YW50IjoKICAgICAgICAgICAgICAgIG1lc3NhZ2VzLmFwcGVuZChBSU1lc3NhZ2UoY29udGVudD1tWyJjb250ZW50Il1bOjEwMDBdKSkKCiAgICAgICAgIyBFbnN1cmUgY3VycmVudCB1c2VyIG1lc3NhZ2UgaXMgbGFzdAogICAgICAgIGlmIG5vdCBtZXNzYWdlcyBvciBub3QgaXNpbnN0YW5jZShtZXNzYWdlc1stMV0sIEh1bWFuTWVzc2FnZSk6CiAgICAgICAgICAgIG1lc3NhZ2VzLmFwcGVuZChIdW1hbk1lc3NhZ2UoY29udGVudD11c2VyX21lc3NhZ2VbOjEwMDBdKSkKCiAgICAgICAgdHJ5OgogICAgICAgICAgICByZXN1bHQgPSBhZ2VudC5pbnZva2UoeyJtZXNzYWdlcyI6IG1lc3NhZ2VzfSkKICAgICAgICAgICAgcmVzcG9uc2VfdGV4dCA9ICIiCiAgICAgICAgICAgIGZvciBtc2cgaW4gcmV2ZXJzZWQocmVzdWx0WyJtZXNzYWdlcyJdKToKICAgICAgICAgICAgICAgIGlmICgKICAgICAgICAgICAgICAgICAgICBpc2luc3RhbmNlKG1zZywgQUlNZXNzYWdlKQogICAgICAgICAgICAgICAgICAgIGFuZCBtc2cuY29udGVudAogICAgICAgICAgICAgICAgICAgIGFuZCBub3QgZ2V0YXR0cihtc2csICJ0b29sX2NhbGxzIiwgTm9uZSkKICAgICAgICAgICAgICAgICk6CiAgICAgICAgICAgICAgICAgICAgY29udGVudCA9IG1zZy5jb250ZW50CiAgICAgICAgICAgICAgICAgICAgcmVzcG9uc2VfdGV4dCA9ICgKICAgICAgICAgICAgICAgICAgICAgICAgIgoiLmpvaW4oCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcGFydC5nZXQoInRleHQiLCAiIikKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiBpc2luc3RhbmNlKHBhcnQsIGRpY3QpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZWxzZSBzdHIocGFydCkKICAgICAgICAgICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGZvciBwYXJ0IGluIGNvbnRlbnQKICAgICAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgICAgICAgICBpZiBpc2luc3RhbmNlKGNvbnRlbnQsIGxpc3QpCiAgICAgICAgICAgICAgICAgICAgICAgIGVsc2Ugc3RyKGNvbnRlbnQpCiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgICAgIGJyZWFrCiAgICAgICAgICAgIHNlbGYuY29udmVyc2F0aW9uX2hpc3RvcnkuYXBwZW5kKAogICAgICAgICAgICAgICAgeyJyb2xlIjogImFzc2lzdGFudCIsICJjb250ZW50IjogcmVzcG9uc2VfdGV4dH0KICAgICAgICAgICAgKQogICAgICAgICAgICByZXR1cm4gcmVzcG9uc2VfdGV4dAogICAgICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgICAgICAgICAgZXJyb3JfbXNnID0gZiJFcnJvciBnZW5lcmF0aW5nIHJlc3BvbnNlOiB7ZX0iCiAgICAgICAgICAgIGxvZ2dlci5leGNlcHRpb24oIk9yY2hlc3RyYXRvciByZXNwb25zZSBmYWlsZWQiKQogICAgICAgICAgICByZXR1cm4gZXJyb3JfbXNnCgogICAgZGVmIGdlbmVyYXRlX3JlcG9ydCgKICAgICAgICBzZWxmLAogICAgICAgIGNvbnRleHQ6IHN0ciA9ICIiLAogICAgICAgIHNlbGVjdGVkX3N1YmplY3RzOiBPcHRpb25hbFtMaXN0W3N0cl1dID0gTm9uZSwKICAgICAgICBzcGVuZF9idWRnZXRfdXNkOiBPcHRpb25hbFtmbG9hdF0gPSBOb25lLAogICAgKSAtPiBzdHI6CiAgICAgICAgIiIiRGlyZWN0bHkgdHJpZ2dlciByZXBvcnQgZ2VuZXJhdGlvbiAodXNlZCBieSBhcHAucHkgYmFja2dyb3VuZCB0aHJlYWRzKS4iIiIKICAgICAgICBpZiBub3Qgc2VsZi5jdXJyZW50X3RpY2tlciBvciBub3Qgc2VsZi5jdXJyZW50X3RyYWRlX3R5cGU6CiAgICAgICAgICAgIHJldHVybiAiRXJyb3I6IE5vIGFjdGl2ZSByZXNlYXJjaCBzZXNzaW9uLiIKCiAgICAgICAgaWYgc3BlbmRfYnVkZ2V0X3VzZCBpcyBOb25lOgogICAgICAgICAgICAjIEJ1ZGdldCBlbmZvcmNlbWVudCBkZWZhdWx0cyAoZGlzYWJsZWQgd2hlbiBub3QgY29uZmlndXJlZCkuCiAgICAgICAgICAgIGZyb20gc3BlbmRfYnVkZ2V0IGltcG9ydCBnZXRfc3BlbmRfYnVkZ2V0X3VzZAoKICAgICAgICAgICAgc3BlbmRfYnVkZ2V0X3VzZCA9IGdldF9zcGVuZF9idWRnZXRfdXNkKHNlbGYudXNlcl9pZCkKCiAgICAgICAgdHJ5OgogICAgICAgICAgICByZXN1bHQgPSBydW5fcmVzZWFyY2goCiAgICAgICAgICAgICAgICB0aWNrZXI9c2VsZi5jdXJyZW50X3RpY2tlciwKICAgICAgICAgICAgICAgIHRyYWRlX3R5cGU9c2VsZi5jdXJyZW50X3RyYWRlX3R5cGUsCiAgICAgICAgICAgICAgICBjb252ZXJzYXRpb25fY29udGV4dD1jb250ZXh0LAogICAgICAgICAgICAgICAgdXNlcl9pZD1zZWxmLnVzZXJfaWQsCiAgICAgICAgICAgICAgICBlbWl0dGVyPXNlbGYuX2VtaXR0ZXIsCiAgICAgICAgICAgICAgICBzZWxlY3RlZF9zdWJqZWN0cz1zZWxlY3RlZF9zdWJqZWN0cywKICAgICAgICAgICAgICAgIHNwZW5kX2J1ZGdldF91c2Q9c3BlbmRfYnVkZ2V0X3VzZCwKICAgICAgICAgICAgICAgIHVzZXJuYW1lPXNlbGYudXNlcm5hbWUsCiAgICAgICAgICAgICAgICBwcm9ncmVzc19mbj1zZWxmLl9wcm9ncmVzc19mbiwKICAgICAgICAgICAgICAgIGxhbmd1YWdlPXNlbGYubGFuZ3VhZ2UsCiAgICAgICAgICAgICkKICAgICAgICAgICAgc2VsZi5jdXJyZW50X3JlcG9ydF9pZCA9IHJlc3VsdC5nZXQoInJlcG9ydF9pZCIsICIiKQogICAgICAgICAgICBzZWxmLmxhc3RfcmVwb3J0X3RleHQgPSByZXN1bHQuZ2V0KCJyZXBvcnRfdGV4dCIsICIiKQogICAgICAgICAgICByZXR1cm4gc2VsZi5sYXN0X3JlcG9ydF90ZXh0CiAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgICAgICAgICBsb2dnZXIuZXhjZXB0aW9uKCJSZXBvcnQgZ2VuZXJhdGlvbiBmYWlsZWQiKQogICAgICAgICAgICByYWlzZQoKICAgIGRlZiBjaGF0X3dpdGhfcmVwb3J0KHNlbGYsIHF1ZXN0aW9uOiBzdHIpIC0+IERpY3Rbc3RyLCBBbnldOgogICAgICAgICIiIkNoYXQgd2l0aCB0aGUgY3VycmVudCByZXBvcnQgdXNpbmcgUmVBY3QgYWdlbnQgd2l0aCBsaXZlIHRvb2xzLiIiIgogICAgICAgIGlmIG5vdCBzZWxmLmN1cnJlbnRfcmVwb3J0X2lkOgogICAgICAgICAgICByZXR1cm4geyJhbnN3ZXIiOiAiRXJyb3I6IE5vIHJlcG9ydCBhdmFpbGFibGUuIFBsZWFzZSBnZW5lcmF0ZSBhIHJlcG9ydCBmaXJzdC4iLCAic291cmNlcyI6IFtdfQogICAgICAgIHNlbGYuX2NoYXRfYWdlbnQuc2V0X3Byb2dyZXNzX2ZuKAogICAgICAgICAgICBzZWxmLl9lbWl0dGVyLmVtaXQgaWYgc2VsZi5fZW1pdHRlciBlbHNlIE5vbmUKICAgICAgICApCiAgICAgICAgcmV0dXJuIHNlbGYuX2NoYXRfYWdlbnQuY2hhdF93aXRoX3JlcG9ydCgKICAgICAgICAgICAgcmVwb3J0X2lkPXNlbGYuY3VycmVudF9yZXBvcnRfaWQsCiAgICAgICAgICAgIHRpY2tlcj1zZWxmLmN1cnJlbnRfdGlja2VyIG9yICIiLAogICAgICAgICAgICBxdWVzdGlvbj1xdWVzdGlvbiwKICAgICAgICAgICAgbGFuZ3VhZ2U9c2VsZi5sYW5ndWFnZSwKICAgICAgICApCgogICAgZGVmIHJlc2V0X2NvbnZlcnNhdGlvbihzZWxmKToKICAgICAgICBzZWxmLmNvbnZlcnNhdGlvbl9oaXN0b3J5ID0gW10KICAgICAgICBzZWxmLmN1cnJlbnRfdGlja2VyID0gTm9uZQogICAgICAgIHNlbGYuY3VycmVudF90cmFkZV90eXBlID0gTm9uZQogICAgICAgIHNlbGYuY3VycmVudF9yZXBvcnRfaWQgPSBOb25lCiAgICAgICAgc2VsZi5wZW5kaW5nX3F1ZXN0aW9ucyA9IFtdCiAgICAgICAgc2VsZi5fY2hhdF9hZ2VudC5yZXNldF9jb252ZXJzYXRpb24oKQoKCmRlZiBjcmVhdGVfc2Vzc2lvbih1c2VyX2lkOiBPcHRpb25hbFtpbnRdID0gTm9uZSkgLT4gT3JjaGVzdHJhdG9yU2Vzc2lvbjoKICAgICIiIkNyZWF0ZSBhIG5ldyBvcmNoZXN0cmF0b3Igc2Vzc2lvbi4iIiIKICAgIHJldHVybiBPcmNoZXN0cmF0b3JTZXNzaW9uKHVzZXJfaWQ9dXNlcl9pZCkK
+"""
+Conversational orchestrator as a LangGraph ReAct agent.
+
+Replaces StockResearchAgent (agent.py). Manages the conversation with the user,
+asks clarifying questions, and triggers the research pipeline via the
+generate_report tool when ready.
+"""
+
+import logging
+import os
+from typing import Optional, List, Dict, Any
+
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.prebuilt import create_react_agent
+
+from research_prompt import get_orchestration_instructions
+from research_graph import run_research
+from agents.chat_agent import ReportChatAgent
+from langsmith_service import StepEmitter
+
+logger = logging.getLogger(__name__)
+
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "gemini-2.5-flash")
+ORCHESTRATOR_MAX_OUTPUT_TOKENS = int(os.getenv("ORCHESTRATOR_MAX_OUTPUT_TOKENS", "600"))
+
+
+class OrchestratorSession:
+    """
+    Manages a single user research session.
+    Wraps the LangGraph orchestrator agent and holds session state.
+    """
+
+    def __init__(self, user_id: Optional[int] = None):
+        self.user_id = user_id
+        self.username: Optional[str] = None
+        self.language: Optional[str] = None
+        self.current_ticker: Optional[str] = None
+        self.current_trade_type: Optional[str] = None
+        self.current_report_id: Optional[str] = None
+        self.last_report_text: Optional[str] = None
+        self.pending_questions: List[Dict[str, Any]] = []
+        self.conversation_history: List[Dict[str, str]] = []
+        self._chat_agent = ReportChatAgent()
+        self._emitter: Optional[StepEmitter] = None
+        self._progress_fn = None
+
+    def set_emitter(self, emitter: Optional[StepEmitter]):
+        self._emitter = emitter
+
+    def set_progress_fn(self, fn):
+        self._progress_fn = fn
+
+    def start_research(self, ticker: str, trade_type: str) -> str:
+        """Start a new research session."""
+        self.current_ticker = ticker.upper()
+        self.current_trade_type = trade_type
+        self.conversation_history = []
+
+        system_instructions = get_orchestration_instructions(ticker, trade_type)
+        user_message = (
+            f"I want to research {ticker} for a {trade_type} strategy. "
+            "Please help me create a fundamental research report."
+        )
+        self.conversation_history.append(
+            {"role": "system", "content": system_instructions}
+        )
+        self.conversation_history.append({"role": "user", "content": user_message})
+
+        return self._get_agent_response(user_message, system_instructions)
+
+    def continue_conversation(self, user_response: str) -> str:
+        """Continue with a user response."""
+        self.conversation_history.append({"role": "user", "content": user_response})
+        system_instructions = next(
+            (m["content"] for m in self.conversation_history if m["role"] == "system"),
+            "",
+        )
+        return self._get_agent_response(user_response, system_instructions)
+
+    def _get_agent_response(self, user_message: str, system_instructions: str) -> str:
+        """Run one turn of the orchestrator ReAct agent."""
+        ticker = self.current_ticker or ""
+        trade_type = self.current_trade_type or ""
+        session = self
+
+        @tool
+        def ask_user_questions(questions: List[Dict[str, Any]]) -> str:
+            """
+            Ask the user clarifying questions before generating the report.
+            Call this ONCE at the start of a new research session with 1–3 multiple-choice questions.
+            Each question must have a 'question' key (string) and an 'options' key (list of 3–4 strings).
+            Example: [{"question": "What is your time horizon?", "options": ["1 day", "1 week", "1 month", "3+ months"]}]
+            Do NOT call this tool more than once per session.
+            """
+            session.pending_questions = questions
+            return "Questions captured. Waiting for user answers before generating the report."
+
+        @tool
+        def generate_report(config: RunnableConfig) -> str:
+            """
+            Trigger report generation when you have gathered enough context from the user.
+            Call this after asking 1-2 relevant questions. Do NOT call immediately.
+            """
+            context_str = "\n".join(
+                f"User: {m['content']}"
+                for m in session.conversation_history
+                if m.get("role") == "user"
+            )
+            try:
+                from spend_budget import get_spend_budget_usd
+
+                result = run_research(
+                    ticker=ticker,
+                    trade_type=trade_type,
+                    conversation_context=context_str,
+                    user_id=session.user_id,
+                    emitter=session._emitter,
+                    spend_budget_usd=get_spend_budget_usd(session.user_id),
+                    parent_config=config,
+                    username=session.username,
+                    progress_fn=session._progress_fn,
+                    language=session.language,
+                )
+                session.current_report_id = result.get("report_id", "")
+                session.last_report_text = result.get("report_text", "")
+                report_id_short = (
+                    session.current_report_id[:8]
+                    if session.current_report_id
+                    else "unknown"
+                )
+                return (
+                    f"Report generated successfully! Report ID: {report_id_short}...\n\n"
+                    "The comprehensive research report has been created and is ready to view."
+                )
+            except Exception as e:
+                return f"Error generating report: {e}"
+
+        llm = ChatGoogleGenerativeAI(
+            model=ORCHESTRATOR_MODEL,
+            temperature=0.7,
+            max_output_tokens=ORCHESTRATOR_MAX_OUTPUT_TOKENS,
+        )
+
+        agent = create_react_agent(
+            llm,
+            [ask_user_questions, generate_report],
+            prompt=system_instructions,
+        )
+
+        # Build message history (last 4 non-system messages)
+        recent = [m for m in self.conversation_history[-4:] if m["role"] != "system"]
+        messages = []
+        for m in recent:
+            if m["role"] == "user":
+                messages.append(HumanMessage(content=m["content"][:1000]))
+            elif m["role"] == "assistant":
+                messages.append(AIMessage(content=m["content"][:1000]))
+
+        # Ensure current user message is last
+        if not messages or not isinstance(messages[-1], HumanMessage):
+            messages.append(HumanMessage(content=user_message[:1000]))
+
+        try:
+            result = agent.invoke({"messages": messages})
+            response_text = ""
+            for msg in reversed(result["messages"]):
+                if (
+                    isinstance(msg, AIMessage)
+                    and msg.content
+                    and not getattr(msg, "tool_calls", None)
+                ):
+                    content = msg.content
+                    response_text = (
+                        "\n".join(
+                            (
+                                part.get("text", "")
+                                if isinstance(part, dict)
+                                else str(part)
+                            )
+                            for part in content
+                        )
+                        if isinstance(content, list)
+                        else str(content)
+                    )
+                    break
+            self.conversation_history.append(
+                {"role": "assistant", "content": response_text}
+            )
+            return response_text
+        except Exception as e:
+            error_msg = f"Error generating response: {e}"
+            logger.exception("Orchestrator response failed")
+            return error_msg
+
+    def generate_report(
+        self,
+        context: str = "",
+        selected_subjects: Optional[List[str]] = None,
+        spend_budget_usd: Optional[float] = None,
+    ) -> str:
+        """Directly trigger report generation (used by app.py background threads)."""
+        if not self.current_ticker or not self.current_trade_type:
+            return "Error: No active research session."
+
+        if spend_budget_usd is None:
+            # Budget enforcement defaults (disabled when not configured).
+            from spend_budget import get_spend_budget_usd
+
+            spend_budget_usd = get_spend_budget_usd(self.user_id)
+
+        try:
+            result = run_research(
+                ticker=self.current_ticker,
+                trade_type=self.current_trade_type,
+                conversation_context=context,
+                user_id=self.user_id,
+                emitter=self._emitter,
+                selected_subjects=selected_subjects,
+                spend_budget_usd=spend_budget_usd,
+                username=self.username,
+                progress_fn=self._progress_fn,
+                language=self.language,
+            )
+            self.current_report_id = result.get("report_id", "")
+            self.last_report_text = result.get("report_text", "")
+            return self.last_report_text
+        except Exception as e:
+            error_msg = f"Error generating report: {e}"
+            logger.exception("Report generation failed")
+            return error_msg
+
+    def chat_with_report(self, question: str) -> Dict[str, Any]:
+        """Chat with the current report using ReAct agent with live tools."""
+        if not self.current_report_id:
+            return {
+                "answer": "Error: No report available. Please generate a report first.",
+                "sources": [],
+            }
+        self._chat_agent.set_progress_fn(self._emitter.emit if self._emitter else None)
+        return self._chat_agent.chat_with_report(
+            report_id=self.current_report_id,
+            ticker=self.current_ticker or "",
+            question=question,
+            language=self.language,
+        )
+
+    def reset_conversation(self):
+        self.conversation_history = []
+        self.current_ticker = None
+        self.current_trade_type = None
+        self.current_report_id = None
+        self.pending_questions = []
+        self._chat_agent.reset_conversation()
+
+
+def create_session(user_id: Optional[int] = None) -> OrchestratorSession:
+    """Create a new orchestrator session."""
+    return OrchestratorSession(user_id=user_id)
