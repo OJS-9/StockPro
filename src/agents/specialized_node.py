@@ -10,6 +10,7 @@ import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.prebuilt import create_react_agent
+from langgraph.errors import GraphRecursionError
 
 from research_subjects import ResearchSubject, get_research_subject_by_id
 from date_utils import get_datetime_context_string
@@ -180,10 +181,29 @@ def specialized_node(state: dict) -> dict:
                 tools,
                 prompt=instructions,
             )
-            result = agent.invoke(
-                {"messages": [HumanMessage(content=research_prompt)]},
-                config={"recursion_limit": int(effective_max_turns) * 2},
-            )
+            try:
+                result = agent.invoke(
+                    {"messages": [HumanMessage(content=research_prompt)]},
+                    config={"recursion_limit": int(effective_max_turns) * 2},
+                )
+            except GraphRecursionError:
+                logger.warning("%s: hit recursion limit", subject_id)
+                output_text = ""
+                return {
+                    "research_outputs": {
+                        subject_id: {
+                            "subject_id": subject_id,
+                            "subject_name": subject.name,
+                            "research_output": output_text,
+                            "sources": [],
+                            "ticker": ticker,
+                            "trade_type": trade_type,
+                            "focus_hint": focus_hint,
+                        }
+                    },
+                    "actual_input_tokens": 0,
+                    "actual_output_tokens": 0,
+                }
             # Extract the last AI message as the research output.
             # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
             output_text = ""
