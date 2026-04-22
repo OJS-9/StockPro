@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from './Icon'
 import { useApiClient } from '../api/client'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const navLinks = [
   { to: '/home', icon: 'dashboard', tKey: 'nav.dashboard' },
@@ -33,8 +34,10 @@ export default function AppNav() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const [showPanel, setShowPanel] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLButtonElement>(null)
+  const { isMobile } = useBreakpoint()
 
   // Read notification data from shared query (NotificationListener in App.tsx handles toasts)
   // Provides its own queryFn so it works even if it renders before NotificationListener
@@ -111,7 +114,7 @@ export default function AppNav() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 48px',
+        padding: isMobile ? '0 16px' : '0 48px',
         height: 60,
         background: 'rgba(12,10,9,0.95)',
         backdropFilter: 'blur(16px)',
@@ -132,30 +135,65 @@ export default function AppNav() {
         >
           StockPro
         </Link>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {navLinks.map(({ to, icon, tKey }) => (
-            <Link
-              key={to}
-              to={to}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                color: isActive(to) ? '#fafaf9' : '#a8a29e',
-                textDecoration: 'none',
-                fontSize: 13.5,
-                fontWeight: 500,
-                padding: '6px 12px',
-                borderRadius: 8,
-                background: isActive(to) ? 'rgba(214,211,209,0.07)' : 'transparent',
-                transition: 'all 0.15s',
-              }}
+        {isMobile ? (
+          <>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e7e5e4', display: 'flex', alignItems: 'center', padding: 8 }}
             >
-              <Icon name={icon} size={18} />
-              {t(tKey)}
-            </Link>
-          ))}
-        </div>
+              <span className="material-symbols-outlined" style={{ fontSize: 24 }}>
+                {menuOpen ? 'close' : 'menu'}
+              </span>
+            </button>
+            {menuOpen && (
+              <div style={{
+                position: 'fixed', top: 60, insetInlineStart: 0, width: '100vw', background: 'rgba(12,10,9,0.98)',
+                borderBottom: '1px solid #292524', zIndex: 200, display: 'flex', flexDirection: 'column', padding: '8px 0'
+              }}>
+                {navLinks.map(link => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 24px',
+                      color: isActive(link.to) ? '#f97316' : '#e7e5e4',
+                      textDecoration: 'none', fontWeight: isActive(link.to) ? 600 : 400, fontSize: 15
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{link.icon}</span>
+                    {t(link.tKey)}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {navLinks.map(({ to, icon, tKey }) => (
+              <Link
+                key={to}
+                to={to}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: isActive(to) ? '#fafaf9' : '#a8a29e',
+                  textDecoration: 'none',
+                  fontSize: 13.5,
+                  fontWeight: 500,
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  background: isActive(to) ? 'rgba(214,211,209,0.07)' : 'transparent',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Icon name={icon} size={18} />
+                {t(tKey)}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
