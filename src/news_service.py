@@ -4,9 +4,13 @@ as primary source, and web search (WSJ + Reuters) as secondary on demand.
 Results are cached in memory with a 15-minute TTL per cache slot.
 """
 
+import logging
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
+
+logger = logging.getLogger(__name__)
 
 CACHE_TTL = 15 * 60  # 15 minutes
 
@@ -38,19 +42,37 @@ def get_more() -> List[Dict]:
     return _cache["more"]["articles"]
 
 
+def force_refresh() -> None:
+    """Reset cache TTL so next call fetches fresh news."""
+    _cache["primary"]["fetched_at"] = None
+    _cache["more"]["fetched_at"] = None
+
+
 def _refresh_primary() -> None:
     try:
         from nimble_client import NimbleClient
 
         client = NimbleClient()
     except Exception:
+        logger.warning("news refresh failed: NimbleClient unavailable")
+        _cache["primary"]["fetched_at"] = time.time()
         return
 
-    bloomberg_results = client.run_agent(BLOOMBERG_AGENT, {"query": SEARCH_QUERY})
-    morningstar_results = client.run_agent(
-        MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY}
-    )
-    wsj_results = client.run_agent(WSJ_AGENT, {"feed_name": WSJ_PIPELINE})
+    try:
+        _do_refresh_primary(client)
+    except Exception as e:
+        logger.warning("news refresh failed: %s", e)
+    _cache["primary"]["fetched_at"] = time.time()
+
+
+def _do_refresh_primary(client) -> None:
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_bloomberg = pool.submit(client.run_agent, BLOOMBERG_AGENT, {"query": SEARCH_QUERY})
+        f_morningstar = pool.submit(client.run_agent, MORNINGSTAR_AGENT, {"search_term": SEARCH_QUERY})
+        f_wsj = pool.submit(client.run_agent, WSJ_AGENT, {"feed_name": WSJ_PIPELINE})
+        bloomberg_results = f_bloomberg.result()
+        morningstar_results = f_morningstar.result()
+        wsj_results = f_wsj.result()
 
     # Sort each source by image presence before interleaving, so image articles
     # lead within each source without collapsing all no-image sources to the end.
@@ -79,7 +101,6 @@ def _refresh_primary() -> None:
             break
 
     _cache["primary"]["articles"] = interleaved
-    _cache["primary"]["fetched_at"] = time.time()
 
 
 def _map_article(item: Dict, publisher: str) -> Dict:

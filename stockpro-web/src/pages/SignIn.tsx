@@ -1,14 +1,18 @@
 import { SignIn as ClerkSignIn } from '@clerk/clerk-react'
+import { useSearchParams } from 'react-router'
 import Icon from '../components/Icon'
 
 export default function SignIn() {
+  const [params] = useSearchParams()
+  const redirectParam = params.get('redirect_url')
+  const afterSignIn = redirectParam || `${import.meta.env.BASE_URL}home`
   return (
     <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
       {/* Left branding panel */}
       <div
         style={{
           background: '#1c1917',
-          borderRight: '1px solid #292524',
+          borderInlineEnd: '1px solid #292524',
           padding: 48,
           display: 'flex',
           flexDirection: 'column',
@@ -22,7 +26,7 @@ export default function SignIn() {
             content: '',
             position: 'absolute',
             top: -120,
-            right: -120,
+            insetInlineEnd: -120,
             width: 440,
             height: 440,
             borderRadius: '50%',
@@ -83,13 +87,14 @@ export default function SignIn() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
         <ClerkSignIn
           routing="path"
-          path="/sign-in"
-          signUpUrl="/sign-up"
-          afterSignInUrl="/home"
+          path={`${import.meta.env.BASE_URL}sign-in`}
+          signUpUrl={`${import.meta.env.BASE_URL}sign-up`}
+          afterSignInUrl={afterSignIn}
+          forceRedirectUrl={afterSignIn}
           appearance={{
             variables: {
               colorBackground: '#1c1917',
-              colorInputBackground: '#1c1917',
+              colorInputBackground: '#292524',
               colorInputText: '#fafaf9',
               colorText: '#fafaf9',
               colorTextSecondary: '#a8a29e',
@@ -105,6 +110,31 @@ export default function SignIn() {
                 background: '#d6d3d1',
                 color: '#0c0a09',
                 fontWeight: 600,
+              },
+              socialButtonsBlockButton: {
+                background: '#292524',
+                border: '1px solid #44403c',
+                color: '#fafaf9',
+              },
+              socialButtonsBlockButtonText: {
+                color: '#fafaf9',
+              },
+              formFieldInput: {
+                border: '1px solid #44403c',
+                background: '#292524',
+                color: '#fafaf9',
+              },
+              footerActionLink: {
+                color: '#d6d3d1',
+              },
+              footerActionText: {
+                color: '#a8a29e',
+              },
+              dividerLine: {
+                background: '#44403c',
+              },
+              dividerText: {
+                color: '#a8a29e',
               },
             },
           }}

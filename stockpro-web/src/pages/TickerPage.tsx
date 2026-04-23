@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -51,7 +52,7 @@ export default function TickerPage() {
     },
   })
 
-  const { data: fundData } = useQuery({
+  const { data: fundData, isLoading: fundLoading } = useQuery({
     queryKey: ['ticker-fundamentals', symbol],
     queryFn: async () => {
       const res = await api.get(`/api/ticker/${symbol}/fundamentals`)
@@ -112,6 +113,19 @@ export default function TickerPage() {
       <AppNav />
       <main style={{ maxWidth: 1240, margin: '0 auto', padding: '36px 48px 80px' }}>
 
+        {fundLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Skeleton height={40} width={120} />
+              <Skeleton height={20} width={200} />
+            </div>
+            <Skeleton height={50} width={180} />
+            <Skeleton height={160} borderRadius={14} />
+            <Skeleton height={200} borderRadius={14} />
+          </div>
+        )}
+
+        {!fundLoading && <>
         {/* TICKER HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
@@ -195,7 +209,7 @@ export default function TickerPage() {
                 Key Statistics
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
-                {statItems.map(({ label, val, highlight, small, muted }, i) => (
+                {statItems.map(({ label, val, highlight, small, muted }) => (
                   <div key={label} style={{ background: '#1c1917', padding: '14px 18px' }}>
                     <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>{label}</div>
                     <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>
@@ -292,6 +306,7 @@ export default function TickerPage() {
 
           </div>
         </div>
+        </>}
       </main>
     </div>
   )

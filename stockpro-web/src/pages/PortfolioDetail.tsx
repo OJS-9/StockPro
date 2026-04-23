@@ -2,11 +2,13 @@ import { useState, useMemo } from 'react'
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
+import { useLanguage } from '../LanguageContext'
 
-const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtCompact = (n: number) => {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
@@ -42,7 +44,7 @@ function inferAssetType(symbol: string): 'stock' | 'crypto' {
   return 'stock'
 }
 
-function LineChart({ data, dates, gain = true, loading = false }: { data: number[]; dates?: string[]; gain?: boolean; loading?: boolean }) {
+function LineChart({ data, dates, gain = true, loading = false, locale = 'en-US' }: { data: number[]; dates?: string[]; gain?: boolean; loading?: boolean; locale?: string }) {
   if (loading) return (
     <div style={{ height: 160, background: '#232120', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: 12, color: '#a8a29e' }}>Loading chart...</div>
@@ -82,7 +84,7 @@ function LineChart({ data, dates, gain = true, loading = false }: { data: number
     for (let i = 0; i < dates.length; i += step) {
       const x = padLeft + (i / (dates.length - 1)) * (w - padLeft - padRight)
       const d = new Date(dates[i])
-      xLabels.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), x })
+      xLabels.push({ label: d.toLocaleDateString(locale, { month: 'short', day: 'numeric' }), x })
     }
   }
 
@@ -234,6 +236,11 @@ export default function PortfolioDetail() {
   const [searchText, setSearchText] = useState('')
   const [assetFilter, setAssetFilter] = useState<AssetFilter>('all')
   const api = useApiClient()
+  const { t } = useTranslation()
+  const { lang } = useLanguage()
+
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
+  const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n)
 
   // /api/portfolio/<id>/history returns {history: [{date, value}], granularity}
   const { data: historyData, isLoading: historyLoading } = useQuery({
@@ -256,7 +263,7 @@ export default function PortfolioDetail() {
   })
 
   // /portfolio/<id>?format=json returns {portfolio, summary, holdings}
-  const { data: portfolioData } = useQuery({
+  const { data: portfolioData, isLoading: portfolioLoading } = useQuery({
     queryKey: ['portfolio-detail', id],
     queryFn: async () => {
       const res = await api.get(`/api/portfolio/${id}`)
@@ -428,28 +435,37 @@ export default function PortfolioDetail() {
       {showCashModal && <CashModal portfolioId={id!} currentBalance={cashBalance} onClose={() => setShowCashModal(false)} />}
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 48px 80px' }}>
 
+        {portfolioLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <Skeleton height={32} width={200} />
+            <Skeleton height={200} />
+            <Skeleton height={300} />
+          </div>
+        )}
+
+        {!portfolioLoading && <>
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Link to="/portfolio" style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Icon name="arrow_back" size={16} /> Portfolios
+                <Icon name="arrow_back" size={16} /> {t('portfolioDetail.portfolios')}
               </Link>
               <Icon name="chevron_right" size={16} />
               <span style={{ fontSize: 13, color: '#fafaf9' }}>{portfolioName}</span>
             </div>
             <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{portfolioName}</h1>
-            <div style={{ fontSize: 13, color: '#a8a29e' }}>{holdings.length + (trackCash ? 1 : 0)} holdings</div>
+            <div style={{ fontSize: 13, color: '#a8a29e' }}>{holdings.length + (trackCash ? 1 : 0)} {t('portfolioDetail.holdings')}</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to={`/portfolio/${id}/add`} style={{ background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Icon name="add" size={16} /> Add Transaction
+              <Icon name="add" size={16} /> {t('portfolioDetail.addTransaction')}
             </Link>
             <Link to={`/portfolio/${id}/import`} style={{ background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Icon name="upload" size={16} /> Import CSV
+              <Icon name="upload" size={16} /> {t('portfolioDetail.importCsv')}
             </Link>
             <Link to={`/portfolio/${id}/analytics`} style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Icon name="analytics" size={16} /> Analytics
+              <Icon name="analytics" size={16} /> {t('portfolioDetail.analytics')}
             </Link>
           </div>
         </div>
@@ -463,11 +479,11 @@ export default function PortfolioDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 4 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>
-                      Portfolio Value{isFiltered && <span style={{ marginLeft: 6, fontSize: 10, color: '#78716c', textTransform: 'none', letterSpacing: 'normal' }}>(filtered)</span>}
+                      {t('portfolioDetail.portfolioValue')}{isFiltered && <span style={{ marginLeft: 6, fontSize: 10, color: '#78716c', textTransform: 'none', letterSpacing: 'normal' }}>(filtered)</span>}
                     </div>
                     <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
+                  <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
                       {pnl >= 0 ? '+' : ''}{fmt(pnl)}
                     </div>
@@ -489,7 +505,7 @@ export default function PortfolioDetail() {
                 </div>
               </div>
               <div style={{ padding: '20px 24px' }}>
-                <LineChart data={chartData} dates={chartDates} gain={pnl >= 0} loading={chartLoading} />
+                <LineChart data={chartData} dates={chartDates} gain={pnl >= 0} loading={chartLoading} locale={locale} />
               </div>
             </div>
 
@@ -497,9 +513,9 @@ export default function PortfolioDetail() {
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
               <div style={{ padding: '16px 24px', borderBottom: '1px solid #292524' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Holdings</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{t('portfolioDetail.holdings')}</div>
                   <Link to={`/portfolio/${id}/add`} style={{ fontSize: 12, color: '#a8a29e', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="add" size={14} /> Add
+                    <Icon name="add" size={14} /> {t('portfolioDetail.add')}
                   </Link>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -530,14 +546,15 @@ export default function PortfolioDetail() {
                   <tr style={{ padding: '0 24px' }}>
                     {COLUMNS.map(col => {
                       const active = sortKey === col.key
+                      const label = col.key === 'current_price' ? t('portfolioDetail.currentPrice') : col.label
                       return (
                         <th
                           key={col.key}
                           onClick={() => handleSort(col.key)}
-                          style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: active ? '#fafaf9' : '#a8a29e', textAlign: col.align, padding: '12px 24px', borderBottom: '1px solid #292524', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                          style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: active ? '#fafaf9' : '#a8a29e', textAlign: col.align === 'left' ? 'start' : 'end', padding: '12px 24px', borderBottom: '1px solid #292524', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                         >
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            {col.label}
+                            {label}
                             <Icon
                               name={active ? (sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'swap_vert'}
                               size={14}
@@ -599,14 +616,14 @@ export default function PortfolioDetail() {
                           </div>
                         </Link>
                       </td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{Number(h.shares).toFixed(2)}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.avg_cost)}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.current_price != null ? fmt(h.current_price) : <span style={{ color: '#57534e' }}>--</span>}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.market_value)}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: h.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{Number(h.shares).toFixed(2)}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.avg_cost)}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.current_price != null ? fmt(h.current_price) : <span style={{ color: '#57534e' }}>--</span>}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.market_value)}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: h.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
                         {h.pnl >= 0 ? '+' : ''}{fmt(h.pnl)}
                       </td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'right' }}>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                         <span style={{ display: 'inline-flex', fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: h.pnl_pct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: h.pnl_pct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${h.pnl_pct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
                           {h.pnl_pct >= 0 ? '+' : ''}{Number(h.pnl_pct).toFixed(2)}%
                         </span>
@@ -621,23 +638,23 @@ export default function PortfolioDetail() {
           {/* SIDEBAR */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #292524', fontSize: 13, fontWeight: 600 }}>Recent Transactions</div>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #292524', fontSize: 13, fontWeight: 600 }}>{t('portfolioDetail.recentTransactions')}</div>
               <div style={{ padding: '8px 0' }}>
                 {displayTransactions.length === 0 ? (
-                  <div style={{ padding: '16px 20px', fontSize: 12, color: '#a8a29e' }}>{isFiltered ? 'No transactions match your filter.' : 'No transactions yet.'}</div>
-                ) : displayTransactions.map((t: any) => {
+                  <div style={{ padding: '16px 20px', fontSize: 12, color: '#a8a29e' }}>{isFiltered ? 'No transactions match your filter.' : t('portfolioDetail.noTransactions')}</div>
+                ) : displayTransactions.map((tx: any) => {
                   // API fields: transaction_id, symbol, transaction_type, quantity, price_per_unit, transaction_date
-                  const txType = (t.transaction_type || t.type || 'BUY').toUpperCase()
+                  const txType = (tx.transaction_type || tx.type || 'BUY').toUpperCase()
                   const isBuy = txType === 'BUY'
-                  const dateStr = t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : (t.date || '')
+                  const dateStr = tx.transaction_date ? new Date(tx.transaction_date).toLocaleDateString(locale, { month: 'short', day: 'numeric' }) : (tx.date || '')
                   return (
-                  <div key={t.transaction_id || t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)' }}>
+                  <div key={tx.transaction_id || tx.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)' }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: isBuy ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${isBuy ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Icon name={isBuy ? 'add' : 'remove'} size={16} />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{txType} {t.symbol}</div>
-                      <div style={{ fontSize: 11.5, color: '#a8a29e' }}>{t.quantity ?? t.shares} shares @ {fmt(t.price_per_unit ?? t.price ?? 0)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{txType} {tx.symbol}</div>
+                      <div style={{ fontSize: 11.5, color: '#a8a29e' }}>{tx.quantity ?? tx.shares} shares @ {fmt(tx.price_per_unit ?? tx.price ?? 0)}</div>
                     </div>
                     <div style={{ fontSize: 11, color: '#a8a29e' }}>{dateStr}</div>
                   </div>
@@ -645,13 +662,14 @@ export default function PortfolioDetail() {
                 })}
                 <div style={{ padding: '12px 20px' }}>
                   <Link to={`/portfolio/${id}/add`} style={{ fontSize: 12, color: '#a8a29e', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="add" size={14} /> Add transaction
+                    <Icon name="add" size={14} /> {t('portfolioDetail.addTransactionLink')}
                   </Link>
                 </div>
               </div>
             </div>
           </div>
         </div>
+        </>}
       </main>
     </div>
   )

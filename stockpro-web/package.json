@@ -14,10 +14,12 @@
     "@tanstack/react-query": "^5.96.2",
     "dompurify": "^3.3.3",
     "framer-motion": "^12.38.0",
+    "i18next": "^26.0.4",
     "marked": "^17.0.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hot-toast": "^2.6.0",
+    "react-i18next": "^17.0.2",
     "react-router": "^7.14.0"
   },
   "devDependencies": {

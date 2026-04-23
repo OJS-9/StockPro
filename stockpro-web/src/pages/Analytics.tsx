@@ -254,7 +254,7 @@ export default function Analytics() {
                       <div style={{ width: 10, height: 10, borderRadius: 2, background: a.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{a.symbol}</div>
                       <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#a8a29e' }}>{fmt(a.value)}</div>
-                      <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'right' }}>{a.pct}%</div>
+                      <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'end' }}>{a.pct}%</div>
                     </div>
                   ))}
                 </div>
@@ -275,7 +275,7 @@ export default function Analytics() {
                   <div key={p.symbol} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < winners.length - 1 ? '1px solid rgba(41,37,36,0.5)' : 'none' }}>
                     <div style={{ fontSize: 12, color: '#a8a29e', minWidth: 20 }}>#{i + 1}</div>
                     <Link to={`/ticker/${p.symbol}`} style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#fafaf9', textDecoration: 'none' }}>{p.symbol}</Link>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'end' }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: '#22c55e', fontVariantNumeric: 'tabular-nums' }}>
                         +{Number(p.pnl_pct).toFixed(2)}%
                       </div>
@@ -300,7 +300,7 @@ export default function Analytics() {
                   <div key={p.symbol} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: i < losers.length - 1 ? '1px solid rgba(41,37,36,0.5)' : 'none' }}>
                     <div style={{ fontSize: 12, color: '#a8a29e', minWidth: 20 }}>#{i + 1}</div>
                     <Link to={`/ticker/${p.symbol}`} style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#fafaf9', textDecoration: 'none' }}>{p.symbol}</Link>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'end' }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
                         {Number(p.pnl_pct).toFixed(2)}%
                       </div>

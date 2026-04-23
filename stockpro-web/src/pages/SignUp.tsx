@@ -8,7 +8,7 @@ export default function SignUp() {
       <div
         style={{
           background: '#1c1917',
-          borderRight: '1px solid #292524',
+          borderInlineEnd: '1px solid #292524',
           padding: 48,
           display: 'flex',
           flexDirection: 'column',
@@ -21,7 +21,7 @@ export default function SignUp() {
           style={{
             position: 'absolute',
             top: -120,
-            right: -120,
+            insetInlineEnd: -120,
             width: 440,
             height: 440,
             borderRadius: '50%',
@@ -72,13 +72,13 @@ export default function SignUp() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
         <ClerkSignUp
           routing="path"
-          path="/sign-up"
-          signInUrl="/sign-in"
-          afterSignUpUrl="/home"
+          path={`${import.meta.env.BASE_URL}sign-up`}
+          signInUrl={`${import.meta.env.BASE_URL}sign-in`}
+          afterSignUpUrl={`${import.meta.env.BASE_URL}home`}
           appearance={{
             variables: {
               colorBackground: '#1c1917',
-              colorInputBackground: '#1c1917',
+              colorInputBackground: '#292524',
               colorInputText: '#fafaf9',
               colorText: '#fafaf9',
               colorTextSecondary: '#a8a29e',
@@ -91,6 +91,31 @@ export default function SignUp() {
               card: { border: 'none', boxShadow: 'none', background: 'transparent' },
               headerTitle: { fontFamily: 'Nunito, sans-serif', fontWeight: 600 },
               formButtonPrimary: { background: '#d6d3d1', color: '#0c0a09', fontWeight: 600 },
+              socialButtonsBlockButton: {
+                background: '#292524',
+                border: '1px solid #44403c',
+                color: '#fafaf9',
+              },
+              socialButtonsBlockButtonText: {
+                color: '#fafaf9',
+              },
+              formFieldInput: {
+                border: '1px solid #44403c',
+                background: '#292524',
+                color: '#fafaf9',
+              },
+              footerActionLink: {
+                color: '#d6d3d1',
+              },
+              footerActionText: {
+                color: '#a8a29e',
+              },
+              dividerLine: {
+                background: '#44403c',
+              },
+              dividerText: {
+                color: '#a8a29e',
+              },
             },
           }}
         />

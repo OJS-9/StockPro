@@ -19,6 +19,7 @@ from flask import (
     jsonify,
     Response,
     abort,
+    send_from_directory,
 )
 from flask_wtf.csrf import CSRFProtect
 from flask_cors import CORS
@@ -214,6 +215,19 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" in session:
             return f(*args, **kwargs)
+
+        # Accept long-lived StockPro API tokens (CLI / headless agents).
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer sp_"):
+            from auth_tokens import verify_token
+
+            raw_token = auth_header.split(" ", 1)[1].strip()
+            user_id = verify_token(raw_token)
+            if user_id:
+                session["user_id"] = user_id
+                return f(*args, **kwargs)
+            return jsonify({"error": "Unauthorized"}), 401
+
         # Verify Clerk session token via authenticate_request
         request_state = clerk_client.authenticate_request(
             request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
@@ -470,6 +484,31 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
 # ==================== Auth Routes ====================
 
 
+# Jinja UI is deprecated. Any GET to a non-allowed path redirects into the React SPA.
+_SPA_PASSTHROUGH_PREFIXES = (
+    "/app/",
+    "/api/",
+    "/stream/",
+    "/ws/",
+    "/static/",
+    "/auth/",
+    "/sign-out",
+    "/cli/auth",
+)
+
+
+@app.before_request
+def _force_spa_for_gets():
+    if request.method != "GET":
+        return None
+    path = request.path
+    if path == "/app" or path.startswith(_SPA_PASSTHROUGH_PREFIXES):
+        return None
+    if _wants_json():
+        return None
+    return redirect("/app/")
+
+
 def _safe_redirect_url(next_url, fallback="/"):
     """Allow only relative paths to prevent open redirects."""
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
@@ -500,6 +539,19 @@ def sign_up():
     if "user_id" in session:
         return redirect(url_for("index"))
     return render_template("sign_up.html")
+
+
+@app.route("/cli/auth")
+def cli_auth():
+    """CLI authentication page -- renders Clerk sign-in, redirects JWT to localhost callback."""
+    port = request.args.get("port", "")
+    if not port.isdigit() or not (1024 <= int(port) <= 65535):
+        return "Invalid port", 400
+    return render_template(
+        "cli_auth.html",
+        callback_port=port,
+        clerk_publishable_key=os.getenv("CLERK_PUBLISHABLE_KEY", ""),
+    )
 
 
 @app.route("/sign-out")
@@ -597,56 +649,10 @@ def _render_authenticated_home():
 
 @app.route("/")
 def index():
-    """Unified home page at '/'.
-
-    - Authenticated: show the existing app homepage (Markets).
-    - Unauthenticated: show a public landing page with waitlist signup.
-    """
-    if "user_id" in session:
-        return _render_authenticated_home()
-
-    # If the user has a Clerk session cookie but no Flask session yet, hydrate
-    # the session and redirect to the authenticated homepage.
-    try:
-        request_state = clerk_client.authenticate_request(
-            request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
-        )
-        if request_state.is_authenticated:
-            clerk_user_id = request_state.payload["sub"]
-            from database import get_database_manager
-
-            db = get_database_manager()
-            user = db.get_user_by_id(clerk_user_id)
-            if not user:
-                clerk_user = clerk_client.users.get(user_id=clerk_user_id)
-                email = ""
-                username = clerk_user_id
-                if clerk_user.email_addresses:
-                    email = clerk_user.email_addresses[0].email_address or ""
-                if clerk_user.username:
-                    username = clerk_user.username
-                elif clerk_user.first_name or clerk_user.last_name:
-                    username = (
-                        f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip()
-                        or clerk_user_id
-                    )
-                db.create_user(user_id=clerk_user_id, username=username, email=email)
-            else:
-                username = user.get("username", clerk_user_id)
-
-            session["user_id"] = clerk_user_id
-            session["username"] = username
-            threading.Thread(
-                target=_warm_portfolio_cache, args=(clerk_user_id,), daemon=True
-            ).start()
-            get_or_create_session_id()
-            return redirect(url_for("index"))
-    except Exception as exc:
-        app.logger.warning("Clerk auth check on '/' failed: %s", exc, exc_info=True)
-
+    """Redirect root to the React SPA. Jinja UI is deprecated."""
     if _wants_json():
-        return jsonify({"authenticated": False})
-    return render_template("home_public.html", **pop_status())
+        return jsonify({"authenticated": "user_id" in session})
+    return redirect("/app/")
 
 
 @app.route("/chat")
@@ -757,6 +763,15 @@ def continue_conversation():
     agent = initialize_session(session_id)
     agent.user_id = session.get("user_id")
     agent.username = session.get("username")
+
+    # Set user language preference for Hebrew chat/report generation
+    try:
+        from database import get_database_manager
+        _db = get_database_manager()
+        _user = _db.get_user_by_id(session.get("user_id"))
+        agent.language = (_user.get("preferences") or {}).get("language", "en") if _user else "en"
+    except Exception:
+        agent.language = "en"
 
     # Snapshot mutable session state so the background thread can read it safely
     previous_report_id = session.get("current_report_id")
@@ -1048,6 +1063,15 @@ def start_generation():
     agent.user_id = session.get("user_id")
     agent.username = session.get("username")
 
+    # Set user language preference for Hebrew report generation
+    try:
+        from database import get_database_manager
+        _db = get_database_manager()
+        _user = _db.get_user_by_id(session.get("user_id"))
+        agent.language = (_user.get("preferences") or {}).get("language", "en") if _user else "en"
+    except Exception:
+        agent.language = "en"
+
     # Snapshot budget input for the background thread.
     from spend_budget import get_spend_budget_usd
 
@@ -1131,13 +1155,154 @@ def start_generation():
     return jsonify({"success": True})
 
 
+@app.route("/api/health")
+@csrf.exempt
+def api_health():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/report_status/<session_id>")
 @login_required
 def report_status(session_id: str):
     """Poll endpoint for background generation status."""
-    if session.get("session_id") != session_id:
+    user_id = session.get("user_id")
+    status = _generation_status.get(session_id)
+
+    # Web session ownership check (browser flow)
+    web_session_ok = session.get("session_id") == session_id
+    # API/CLI token ownership check (stateless generate endpoint)
+    api_owner_ok = status is not None and status.get("_owner_user_id") == user_id
+
+    if not web_session_ok and not api_owner_ok:
         return jsonify({"error": "forbidden"}), 403
-    return jsonify(_generation_status.get(session_id, {"status": "unknown"}))
+
+    if status is None:
+        return jsonify({"status": "unknown"})
+    return jsonify({k: v for k, v in status.items() if not k.startswith("_")})
+
+
+@app.route("/api/reports/generate", methods=["POST"])
+@csrf.exempt
+@login_required
+@limiter.limit(_report_gen_rate_limit, key_func=get_remote_address)
+def api_reports_generate():
+    """Stateless report generation endpoint for headless/CLI clients.
+
+    Accepts JSON body: {ticker, trade_type, context (optional)}
+    Returns: {success: true, session_id: "<uuid>"}
+    Poll GET /api/report_status/<session_id> until status == "ready" or "error".
+    """
+    data = request.get_json(force=True) or {}
+    ticker = (data.get("ticker") or "").strip().upper()
+    trade_type = (data.get("trade_type") or "").strip()
+    context_str = (data.get("context") or "").strip()
+
+    if not ticker or not trade_type:
+        return jsonify({"error": "ticker and trade_type are required"}), 400
+
+    if _session_hits_report_quota():
+        return _report_quota_json_error()
+
+    # Fresh session_id independent of any browser session
+    session_id = str(uuid.uuid4())
+    agent = initialize_session(session_id)
+    agent.reset_conversation()
+
+    user_id = session.get("user_id")
+    agent.user_id = user_id
+
+    # Username: prefer session (Clerk web flow), fall back to DB lookup (Bearer token)
+    agent.username = session.get("username")
+    if not agent.username and user_id:
+        try:
+            from database import get_database_manager as _get_db
+            _user_rec = _get_db().get_user_by_id(user_id)
+            if _user_rec:
+                agent.username = _user_rec.get("username", user_id)
+        except Exception:
+            agent.username = user_id
+
+    # Language preference from user profile
+    try:
+        from database import get_database_manager as _get_db2
+        _user_rec2 = _get_db2().get_user_by_id(user_id)
+        agent.language = (
+            (_user_rec2.get("preferences") or {}).get("language", "en") if _user_rec2 else "en"
+        )
+    except Exception:
+        agent.language = "en"
+
+    # Prime the orchestrator with ticker/trade_type (mirrors popup_start)
+    try:
+        agent.start_research(ticker, trade_type)
+    except Exception:
+        pass
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    _generation_status[session_id] = {
+        "status": "in_progress",
+        "report_id": None,
+        "progress": 5,
+        "step": "Starting...",
+        "_owner_user_id": user_id,
+    }
+
+    def run_generation():
+        import threading as _threading
+
+        subject_counter = {"done": 0, "total": 0}
+        counter_lock = _threading.Lock()
+
+        def progress_fn(progress, step):
+            status = _generation_status.get(session_id)
+            if status is None:
+                return
+            if progress is None:
+                with counter_lock:
+                    subject_counter["done"] += 1
+                    done = subject_counter["done"]
+                    total = subject_counter["total"] or 1
+                    pct = 20 + int((done / total) * 55)
+                    status["progress"] = min(pct, 75)
+                    status["step"] = f"Researching: {done}/{total} subjects done"
+            else:
+                status["progress"] = progress
+                status["step"] = step
+                if progress == 20 and "subjects" in step:
+                    try:
+                        subject_counter["total"] = int(step.split()[1])
+                    except (IndexError, ValueError):
+                        pass
+
+        emitter = create_emitter()
+        agent.set_emitter(emitter)
+        agent.set_progress_fn(progress_fn)
+        try:
+            agent.generate_report(
+                context=context_str,
+                spend_budget_usd=spend_budget_usd,
+            )
+            _generation_status[session_id] = {
+                "status": "ready",
+                "report_id": agent.current_report_id,
+                "progress": 100,
+                "step": "Report ready",
+                "_owner_user_id": user_id,
+            }
+        except Exception as e:
+            _generation_status[session_id] = {
+                "status": "error",
+                "message": str(e),
+                "_owner_user_id": user_id,
+            }
+        finally:
+            agent.set_emitter(None)
+            agent.set_progress_fn(None)
+
+    threading.Thread(target=run_generation, daemon=True).start()
+    return jsonify({"success": True, "session_id": session_id})
 
 
 @app.route("/api/position_check/<ticker>")
@@ -1747,44 +1912,67 @@ def portfolios_prices():
     portfolio_service = get_portfolio_service()
     portfolios = portfolio_service.list_portfolios(user_id=session["user_id"])
 
+    from concurrent.futures import ThreadPoolExecutor
+
     def to_float(v):
         return float(v) if v is not None else None
 
-    result = []
-    total_value = 0.0
-    total_pnl = 0.0
-    total_day_change = 0.0
-    for p in portfolios:
-        pid = p["portfolio_id"]
+    def _fetch_summary(pid):
         try:
             summary = portfolio_service.get_portfolio_summary(pid, with_prices=True)
             mv = to_float(summary.get("total_market_value")) or 0.0
             ug = to_float(summary.get("total_unrealized_gain")) or 0.0
-            total_value += mv
-            total_pnl += ug
             row = {
                 "portfolio_id": pid,
                 "total_market_value": to_float(summary.get("total_market_value")),
                 "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
                 "total_unrealized_gain_pct": to_float(summary.get("total_unrealized_gain_pct")),
+                "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
+                "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
             }
-            # Day change: sum of (day_change_pct * market_value / 100) per holding
+            holdings_out = []
             day_change = 0.0
             for h in summary.get("holdings", []):
                 h_mv = to_float(h.get("market_value")) or 0.0
                 h_day_pct = to_float(h.get("day_change_pct")) or 0.0
                 day_change += h_mv * h_day_pct / 100.0
+                holdings_out.append({
+                    "symbol": h["symbol"],
+                    "name": h.get("name", h["symbol"]),
+                    "total_quantity": to_float(h.get("total_quantity")),
+                    "average_cost": to_float(h.get("average_cost")),
+                    "price_available": h.get("price_available", False),
+                    "current_price": to_float(h.get("current_price")),
+                    "market_value": to_float(h.get("market_value")),
+                    "unrealized_gain": to_float(h.get("unrealized_gain")),
+                    "unrealized_gain_pct": to_float(h.get("unrealized_gain_pct")),
+                })
+            row["holdings"] = holdings_out
             row["day_change"] = day_change
-            total_day_change += day_change
-            result.append(row)
+            return row, mv, ug, day_change
         except Exception:
-            result.append({
+            return {
                 "portfolio_id": pid,
                 "total_market_value": None,
                 "total_unrealized_gain": None,
                 "total_unrealized_gain_pct": None,
                 "day_change": None,
-            })
+            }, 0.0, 0.0, 0.0
+
+    pids = [p["portfolio_id"] for p in portfolios]
+    with ThreadPoolExecutor(max_workers=min(len(pids), 5)) as pool:
+        futures = {pid: pool.submit(_fetch_summary, pid) for pid in pids}
+
+    result = []
+    total_value = 0.0
+    total_pnl = 0.0
+    total_day_change = 0.0
+    for pid in pids:
+        row, mv, ug, dc = futures[pid].result()
+        result.append(row)
+        total_value += mv
+        total_pnl += ug
+        total_day_change += dc
 
     return jsonify({
         "portfolios": result,
@@ -3397,25 +3585,67 @@ def api_home():
         portfolios = svc.list_portfolios(user_id=uid)
         total_value = 0.0
         total_pnl = 0.0
+        day_change = 0.0
         holdings_preview = []
         for p in portfolios:
             try:
-                summary = svc.get_portfolio_summary(p["portfolio_id"], with_prices=True)
-                total_value += _safe_float(summary.get("total_market_value")) or 0.0
-                total_pnl += _safe_float(summary.get("total_unrealized_gain")) or 0.0
-                for h in summary.get("holdings", [])[:5]:
+                summary = svc.get_portfolio_summary(p["portfolio_id"], with_prices=False)
+                # Overlay cached prices for instant response
+                symbols = [h["symbol"] for h in summary.get("holdings", []) if h.get("symbol")]
+                cached = db.get_cached_prices(symbols) if symbols else {}
+                all_holdings = summary.get("holdings", [])
+                p_total_value = 0.0
+                p_total_pnl = 0.0
+                # Calculate totals from ALL holdings
+                for h in all_holdings:
+                    sym = h["symbol"]
+                    cp = cached.get(sym)
+                    current_price = _safe_float(cp.get("price")) if cp else None
+                    qty = _safe_float(h.get("total_quantity")) or 0
+                    avg_cost = _safe_float(h.get("average_cost")) or 0
+                    if current_price is not None:
+                        mv = current_price * qty
+                        ug = mv - (avg_cost * qty)
+                        p_total_value += mv
+                        p_total_pnl += ug
+                        # Day change from cached change_percent
+                        chg_pct = _safe_float(cp.get("change_percent")) if cp else None
+                        if chg_pct:
+                            day_change += qty * current_price * (chg_pct / 100)
+                # Preview: only first 5 for display
+                for h in all_holdings[:5]:
+                    sym = h["symbol"]
+                    cp = cached.get(sym)
+                    current_price = _safe_float(cp.get("price")) if cp else None
+                    qty = _safe_float(h.get("total_quantity")) or 0
+                    avg_cost = _safe_float(h.get("average_cost")) or 0
+                    if current_price is not None:
+                        mv = current_price * qty
+                        ug = mv - (avg_cost * qty)
+                        ug_pct = (ug / (avg_cost * qty) * 100) if avg_cost * qty else 0
+                    else:
+                        mv = None
+                        ug = None
+                        ug_pct = None
                     holdings_preview.append({
-                        "symbol": h["symbol"],
+                        "symbol": sym,
                         "portfolio_name": p["name"],
-                        "quantity": _safe_float(h.get("total_quantity")),
-                        "average_cost": _safe_float(h.get("average_cost")),
-                        "market_value": _safe_float(h.get("market_value")),
-                        "unrealized_gain": _safe_float(h.get("unrealized_gain")),
-                        "unrealized_gain_pct": _safe_float(h.get("unrealized_gain_pct")),
+                        "quantity": qty,
+                        "average_cost": avg_cost,
+                        "market_value": mv,
+                        "unrealized_gain": ug,
+                        "unrealized_gain_pct": ug_pct,
                     })
+                total_value += p_total_value
+                total_pnl += p_total_pnl
             except Exception as _e:
                 app.logger.debug("api_home: portfolio summary error: %s", _e)
-        portfolio_totals = {"total_value": total_value, "total_pnl": total_pnl}
+        portfolio_totals = {
+            "total_value": total_value,
+            "total_pnl": total_pnl,
+            "day_change": day_change,
+            "day_change_pct": (day_change / total_value * 100) if total_value else 0,
+        }
     except Exception:
         portfolio_totals = {}
         holdings_preview = []
@@ -3433,7 +3663,7 @@ def api_home():
     # Active alerts count
     try:
         alert_rows = db.list_price_alerts_for_user(uid)
-        active_alerts_count = sum(1 for r in alert_rows if r.get("active"))
+        active_alerts_count = sum(1 for r in alert_rows if r.get("active") and not r.get("last_triggered_at"))
     except Exception:
         active_alerts_count = 0
 
@@ -3456,10 +3686,13 @@ def api_home():
     except Exception:
         watchlist_preview = []
 
-    # News (top 5)
+    # News (top 5) — force refresh on first load after login
     try:
-        from news_service import get_briefing
-        news_items = get_briefing()[:5] if get_briefing() else []
+        from news_service import get_briefing, force_refresh
+        if request.args.get("refresh_news"):
+            force_refresh()
+        briefing = get_briefing()
+        news_items = briefing[:5] if briefing else []
     except Exception:
         news_items = []
 
@@ -3655,6 +3888,109 @@ except ImportError as e:
     app.logger.warning("WebSocket /ws/prices not registered: %s", e)
 
 
+# --- Device-code auth + CLI token management ---
+
+
+@app.route("/api/device/authorize", methods=["POST"])
+@limiter.limit("10/minute")
+def device_authorize():
+    """Start a device-code flow. No auth. Returns {device_code, user_code, expires_in, interval}."""
+    from auth_tokens import create_device_code
+
+    data = create_device_code()
+    # Respect X-Forwarded-Proto so the printed URL uses https behind Railway's proxy.
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    data["verification_uri"] = f"{scheme}://{host}/app/device"
+    return jsonify(data)
+
+
+@app.route("/api/device/token", methods=["POST"])
+@limiter.limit("30/minute")
+def device_token():
+    """Agent polls here with its device_code. Returns status; includes access_token once approved."""
+    from auth_tokens import poll_device_code
+
+    body = request.get_json(silent=True) or {}
+    device_code = (body.get("device_code") or "").strip()
+    if not device_code:
+        return jsonify({"error": "device_code required"}), 400
+    result = poll_device_code(device_code)
+    if result.get("status") == "unknown":
+        return jsonify({"status": "pending"}), 200  # don't leak existence
+    return jsonify(result)
+
+
+@app.route("/api/device/approve", methods=["POST"])
+@login_required
+def device_approve():
+    """Master approves a user_code for their account. Called from /app/device."""
+    from auth_tokens import approve_device_code
+
+    body = request.get_json(silent=True) or {}
+    user_code = body.get("user_code") or ""
+    result = approve_device_code(session["user_id"], user_code)
+    if "error" in result:
+        code = 404 if result["error"] in ("unknown_code", "invalid_code") else 410
+        return jsonify(result), code
+    return jsonify(result)
+
+
+@app.route("/api/tokens", methods=["GET"])
+@login_required
+def tokens_list():
+    from auth_tokens import list_api_keys
+
+    return jsonify({"tokens": list_api_keys(session["user_id"])})
+
+
+@app.route("/api/tokens", methods=["POST"])
+@login_required
+def tokens_create():
+    """Create a token. Returns raw token ONCE."""
+    from auth_tokens import create_api_key
+
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "CLI token").strip()[:100] or "CLI token"
+    key_id, raw_token = create_api_key(session["user_id"], name)
+    return jsonify(
+        {
+            "id": key_id,
+            "name": name,
+            "access_token": raw_token,
+        }
+    )
+
+
+@app.route("/api/tokens/<key_id>", methods=["DELETE"])
+@login_required
+def tokens_revoke(key_id):
+    from auth_tokens import revoke_api_key
+
+    ok = revoke_api_key(session["user_id"], key_id)
+    if not ok:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"status": "revoked"})
+
+
+# --- SPA serving (production) ---
+# In production, serve the React SPA from the built dist/ folder.
+# All non-API, non-static paths fall through to index.html for client-side routing.
+_spa_dist = project_root / "stockpro-web" / "dist"
+
+
+@app.route("/app/", defaults={"path": ""})
+@app.route("/app/<path:path>")
+def serve_spa(path):
+    """Serve the React SPA static files."""
+    if path and (_spa_dist / path).is_file():
+        return send_from_directory(str(_spa_dist), path)
+    index = _spa_dist / "index.html"
+    if index.is_file():
+        return send_from_directory(str(_spa_dist), "index.html")
+    return "SPA not built. Run: cd stockpro-web && npm run build", 404
+
+
 def main():
     """Main entry point for the Flask app."""
     # Check for required environment variables
@@ -3668,9 +4004,9 @@ def main():
     start_price_refresh()
 
     app.run(
-        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        host=os.getenv("FLASK_HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 5000)),
-        debug=True,
+        debug=not _is_production,
     )
 
 

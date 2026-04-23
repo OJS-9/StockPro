@@ -10,6 +10,7 @@ import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.prebuilt import create_react_agent
+from langgraph.errors import GraphRecursionError
 
 from research_subjects import ResearchSubject, get_research_subject_by_id
 from date_utils import get_datetime_context_string
@@ -103,11 +104,7 @@ Your specific research task: {subject.description}
 **Research Objective:**
 {subject.prompt_template.format(ticker=ticker)}
 {focus_block}
-**Trade Type Context:** {trade_type}
-- Adjust your research depth and focus based on this trade type
-- For Day Trade: Focus on immediate, actionable insights
-- For Swing Trade: Focus on near-term factors (1-14 days)
-- For Investment: Focus on comprehensive, long-term analysis
+**Trade Type:** {trade_type}
 
 **Tool Priority (use in this order):**
 {tool_priority}
@@ -117,19 +114,9 @@ If a tool returns {{"status": "failed"}} or an error, immediately try the next t
 Do NOT retry the same tool. Once you have data from at least one successful tool call, write your research output.
 Never end your response with "I need more steps" — always produce findings from whatever data you have.
 
-**Output Requirements:**
-1. Provide comprehensive research findings on {subject.name}
-2. Include specific data points, metrics, and facts
-3. Cite all sources (tool outputs, research results)
-4. Structure your response clearly with:
-   - Key findings
-   - Supporting data
-   - Sources and citations
-   - Any relevant context or analysis
+**Output:** Structure findings with Key Findings, Supporting Data, and Sources. Quantify every claim — no vague language. End with a **Key Takeaways** section (3-5 bullets, each with a specific metric or fact).
 
-**IMPORTANT: You MUST call at least one tool before writing your response. Never rely on your training data — always fetch current data using the tools above.**
-
-Begin your research now."""
+**IMPORTANT: You MUST call at least one tool before writing your response. Never rely on your training data — always fetch current data using the tools above.**"""
 
 
 def specialized_node(state: dict) -> dict:
@@ -194,10 +181,29 @@ def specialized_node(state: dict) -> dict:
                 tools,
                 prompt=instructions,
             )
-            result = agent.invoke(
-                {"messages": [HumanMessage(content=research_prompt)]},
-                config={"recursion_limit": int(effective_max_turns) * 2},
-            )
+            try:
+                result = agent.invoke(
+                    {"messages": [HumanMessage(content=research_prompt)]},
+                    config={"recursion_limit": int(effective_max_turns) * 2},
+                )
+            except GraphRecursionError:
+                logger.warning("%s: hit recursion limit", subject_id)
+                output_text = ""
+                return {
+                    "research_outputs": {
+                        subject_id: {
+                            "subject_id": subject_id,
+                            "subject_name": subject.name,
+                            "research_output": output_text,
+                            "sources": [],
+                            "ticker": ticker,
+                            "trade_type": trade_type,
+                            "focus_hint": focus_hint,
+                        }
+                    },
+                    "actual_input_tokens": 0,
+                    "actual_output_tokens": 0,
+                }
             # Extract the last AI message as the research output.
             # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
             output_text = ""

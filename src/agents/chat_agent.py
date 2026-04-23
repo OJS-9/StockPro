@@ -26,9 +26,9 @@ CHAT_TOP_K = int(os.getenv("CHAT_TOP_K", "5"))
 CHAT_RECURSION_LIMIT = int(os.getenv("CHAT_RECURSION_LIMIT", "10"))
 
 
-def _get_system_instructions(ticker: str) -> str:
+def _get_system_instructions(ticker: str, language: Optional[str] = None) -> str:
     datetime_context = get_datetime_context_string()
-    return f"""You are a research assistant that answers questions about the {ticker} research report.
+    instructions = f"""You are a research assistant that answers questions about the {ticker} research report.
 
 {datetime_context}
 
@@ -53,6 +53,15 @@ GUIDELINES:
 - If report and live data conflict, note the discrepancy and state which is more recent
 - Keep answers concise but complete
 - If information is not available from any source, say so clearly"""
+
+    if language == "he":
+        instructions += """
+
+IMPORTANT: Respond entirely in Hebrew. Keep ticker symbols, company names, \
+source citations [1], and numerical data in their original form. All explanations, \
+analysis, and natural language must be in Hebrew."""
+
+    return instructions
 
 
 class ReportChatAgent:
@@ -167,10 +176,12 @@ class ReportChatAgent:
         user_question: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         top_k: int = CHAT_TOP_K,
+        language: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Answer a question about a report using a ReAct agent with report retrieval, IR search, and yfinance tools."""
-        print(
-            f"[ReportChat] answer_question called -- report_id={report_id}, ticker={ticker}, question={user_question[:80]!r}"
+        logger.debug(
+            "answer_question called -- report_id=%s, ticker=%s, question=%r",
+            report_id, ticker, user_question[:80],
         )
 
         tools = create_chat_tools(
@@ -182,7 +193,7 @@ class ReportChatAgent:
             progress_fn=self._progress_fn,
         )
 
-        system_instructions = _get_system_instructions(ticker)
+        system_instructions = _get_system_instructions(ticker, language=language)
 
         agent = create_react_agent(
             self._llm,
@@ -208,7 +219,7 @@ class ReportChatAgent:
             messages.append(HumanMessage(content=user_question))
 
         try:
-            print(f"[ReportChat] Running ReAct agent ({CHAT_MODEL}, recursion_limit={CHAT_RECURSION_LIMIT})...")
+            logger.debug("Running ReAct agent (%s, recursion_limit=%s)", CHAT_MODEL, CHAT_RECURSION_LIMIT)
             result = agent.invoke(
                 {"messages": messages},
                 config={"recursion_limit": CHAT_RECURSION_LIMIT},
@@ -245,7 +256,7 @@ class ReportChatAgent:
             if not sources and all_sources:
                 sources = [s for s in all_sources if s["chunk_type"] in ("report", "research")]
 
-            print(f"[ReportChat] Answer: {len(answer_text)} chars, {len(sources)} cited sources (of {len(all_sources)} total)")
+            logger.debug("Answer: %s chars, %s cited sources (of %s total)", len(answer_text), len(sources), len(all_sources))
             return {"answer": answer_text, "sources": sources}
 
         except Exception as e:
@@ -260,6 +271,7 @@ class ReportChatAgent:
         ticker: str,
         question: str,
         reset_history: bool = False,
+        language: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Chat with a report, maintaining conversation history."""
         if reset_history:
@@ -270,6 +282,7 @@ class ReportChatAgent:
             ticker=ticker,
             user_question=question,
             conversation_history=self.conversation_history,
+            language=language,
         )
 
         self.conversation_history.append({"role": "user", "content": question})

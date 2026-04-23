@@ -2,15 +2,16 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useUser, useClerk } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import Icon from './Icon'
 import { useApiClient } from '../api/client'
 
 const navLinks = [
-  { to: '/home', icon: 'dashboard', label: 'Dashboard' },
-  { to: '/portfolio', icon: 'pie_chart', label: 'Portfolio' },
-  { to: '/watchlist', icon: 'visibility', label: 'Watchlist' },
-  { to: '/reports', icon: 'description', label: 'Reports' },
-  { to: '/alerts', icon: 'notifications', label: 'Alerts' },
+  { to: '/home', icon: 'dashboard', tKey: 'nav.dashboard' },
+  { to: '/portfolio', icon: 'pie_chart', tKey: 'nav.portfolio' },
+  { to: '/watchlist', icon: 'visibility', tKey: 'nav.watchlist' },
+  { to: '/reports', icon: 'description', tKey: 'nav.reports' },
+  { to: '/alerts', icon: 'notifications', tKey: 'nav.alerts' },
 ]
 
 function timeAgo(iso: string) {
@@ -30,20 +31,21 @@ export default function AppNav() {
   const { signOut } = useClerk()
   const api = useApiClient()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const [showPanel, setShowPanel] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLButtonElement>(null)
 
   // Read notification data from shared query (NotificationListener in App.tsx handles toasts)
-  const { data } = useQuery({
+  // Provides its own queryFn so it works even if it renders before NotificationListener
+  const { data } = useQuery<{ notifications: any[]; unread_count: number }>({
     queryKey: ['alert-notifications'],
     queryFn: async () => {
       const res = await api.get('/api/alerts/notifications?limit=20')
       if (!res.ok) return { notifications: [], unread_count: 0 }
       return res.json()
     },
-    refetchInterval: 30_000,
-    staleTime: 25_000,
+    staleTime: 30_000,
   })
 
   const notifications: any[] = (data?.notifications ?? []).filter((n: any) => !n.read_at)
@@ -131,7 +133,7 @@ export default function AppNav() {
           StockPro
         </Link>
         <div style={{ display: 'flex', gap: 4 }}>
-          {navLinks.map(({ to, icon, label }) => (
+          {navLinks.map(({ to, icon, tKey }) => (
             <Link
               key={to}
               to={to}
@@ -150,7 +152,7 @@ export default function AppNav() {
               }}
             >
               <Icon name={icon} size={18} />
-              {label}
+              {t(tKey)}
             </Link>
           ))}
         </div>
@@ -171,7 +173,7 @@ export default function AppNav() {
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            title="New Research"
+            title={t('nav.newResearch')}
           >
             <Icon name="search" size={18} />
           </button>
@@ -201,7 +203,7 @@ export default function AppNav() {
               <span style={{
                 position: 'absolute',
                 top: 4,
-                right: 4,
+                insetInlineEnd: 4,
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
@@ -217,7 +219,7 @@ export default function AppNav() {
               style={{
                 position: 'absolute',
                 top: 42,
-                right: 0,
+                insetInlineEnd: 0,
                 width: 340,
                 maxHeight: 400,
                 overflowY: 'auto',
@@ -236,7 +238,7 @@ export default function AppNav() {
                 padding: '14px 16px 10px',
                 borderBottom: '1px solid #292524',
               }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafaf9' }}>Notifications</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafaf9' }}>{t('nav.notifications')}</span>
                 {notifications.length > 0 && (
                   <button
                     onClick={clearAll}
@@ -250,7 +252,7 @@ export default function AppNav() {
                       borderRadius: 4,
                     }}
                   >
-                    Clear all
+                    {t('nav.clearAll')}
                   </button>
                 )}
               </div>
@@ -258,7 +260,7 @@ export default function AppNav() {
               {/* Notification list */}
               {notifications.length === 0 ? (
                 <div style={{ padding: '32px 16px', textAlign: 'center', color: '#a8a29e', fontSize: 13 }}>
-                  No notifications
+                  {t('nav.noNotifications')}
                 </div>
               ) : (
                 notifications.map((n: any) => (
@@ -332,8 +334,8 @@ export default function AppNav() {
         </div>
 
         <button
-          onClick={() => signOut({ redirectUrl: '/' })}
-          title="Sign out"
+          onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL })}
+          title={t('nav.signOut')}
           style={{
             width: 34,
             height: 34,
