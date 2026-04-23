@@ -1405,6 +1405,21 @@ def portfolio():
 @login_required
 def create_portfolio_route():
     """Create a new portfolio."""
+    from database import get_database_manager
+    from tiers import check_limit, limit_error_payload
+
+    db = get_database_manager()
+    used = db.count_portfolios(session["user_id"])
+    ok, limit = check_limit(db, session["user_id"], "portfolios", used)
+    if not ok:
+        if _wants_json():
+            return jsonify(limit_error_payload("portfolios", limit)), 403
+        flash_status(
+            f"You have reached your plan's limit of {limit} portfolios. Upgrade to add more.",
+            "error",
+        )
+        return redirect(url_for("portfolio"))
+
     name = request.form.get("name", "").strip()
     if not name:
         flash_status("Portfolio name is required", "error")
@@ -1521,6 +1536,27 @@ def add_transaction(portfolio_id: str):
                 raise ValueError("Date is required")
 
             transaction_date = datetime.strptime(date_str, "%Y-%m-%d")
+
+            if transaction_type == "buy":
+                from database import get_database_manager as _gdb
+                from tiers import check_limit
+
+                _db = _gdb()
+                existing = _db.count_holdings_in_portfolio(portfolio_id)
+                # Only enforce when this buy would introduce a NEW symbol
+                already_held = False
+                for h in (portfolio_data.get("holdings") or []):
+                    if str(h.get("symbol", "")).upper() == symbol:
+                        already_held = True
+                        break
+                if not already_held:
+                    ok, lim = check_limit(
+                        _db, session["user_id"], "holdings_per_portfolio", existing
+                    )
+                    if not ok:
+                        raise ValueError(
+                            f"This portfolio is at its {lim}-holding limit. Upgrade to add more."
+                        )
 
             portfolio_service.add_transaction(
                 portfolio_id=portfolio_id,
@@ -2121,8 +2157,17 @@ def api_create_alert():
     if asset_type not in ("stock", "crypto"):
         return jsonify({"success": False, "error": "invalid asset_type"}), 400
 
-    alert_id = str(uuid.uuid4())
+    from tiers import check_limit, limit_error_payload
+
     db = get_database_manager()
+    used = db.count_active_alerts(session["user_id"])
+    ok, limit = check_limit(db, session["user_id"], "active_alerts", used)
+    if not ok:
+        payload = limit_error_payload("active_alerts", limit)
+        payload["success"] = False
+        return jsonify(payload), 403
+
+    alert_id = str(uuid.uuid4())
     db.create_price_alert(
         alert_id=alert_id,
         user_id=session["user_id"],
@@ -2841,6 +2886,21 @@ def watchlist():
 @app.route("/watchlist/create", methods=["POST"])
 @login_required
 def watchlist_create():
+    from database import get_database_manager
+    from tiers import check_limit, limit_error_payload
+
+    db = get_database_manager()
+    used = db.count_watchlists(session["user_id"])
+    ok, limit = check_limit(db, session["user_id"], "watchlists", used)
+    if not ok:
+        if _wants_json():
+            return jsonify(limit_error_payload("watchlists", limit)), 403
+        flash_status(
+            f"You have reached your plan's limit of {limit} watchlists. Upgrade to add more.",
+            "error",
+        )
+        return redirect(url_for("watchlist"))
+
     name = request.form.get("name", "").strip() or "My Watchlist"
     try:
         watchlist_svc = get_watchlist_service()
@@ -2881,10 +2941,24 @@ def watchlist_delete(watchlist_id):
 @app.route("/watchlist/<watchlist_id>/add-symbol", methods=["POST"])
 @login_required
 def watchlist_add_symbol(watchlist_id):
+    from database import get_database_manager
+    from tiers import check_limit
+
     watchlist_svc = get_watchlist_service()
     wl = watchlist_svc.db.get_watchlist(watchlist_id)
     if not wl or wl["user_id"] != session["user_id"]:
         abort(403)
+
+    db = get_database_manager()
+    used = db.count_watchlist_items(watchlist_id)
+    ok, limit = check_limit(db, session["user_id"], "items_per_watchlist", used)
+    if not ok:
+        flash_status(
+            f"Watchlist is full ({limit} items max on your plan). Upgrade to add more.",
+            "error",
+        )
+        return redirect(url_for("watchlist", wl=watchlist_id))
+
     symbol = request.form.get("symbol", "").strip().upper()
     section_id = request.form.get("section_id") or None
     if not symbol:
@@ -3725,10 +3799,20 @@ def api_watchlists():
 @login_required
 def api_watchlist_add_symbol(watchlist_id):
     """Add a symbol to a watchlist (JSON API for React SPA)."""
+    from database import get_database_manager
+    from tiers import check_limit, limit_error_payload
+
     watchlist_svc = get_watchlist_service()
     wl = watchlist_svc.db.get_watchlist(watchlist_id)
     if not wl or wl["user_id"] != session["user_id"]:
         return jsonify({"error": "Not found"}), 404
+
+    db = get_database_manager()
+    used = db.count_watchlist_items(watchlist_id)
+    ok, limit = check_limit(db, session["user_id"], "items_per_watchlist", used)
+    if not ok:
+        return jsonify(limit_error_payload("items_per_watchlist", limit)), 403
+
     data = request.get_json(silent=True) or {}
     symbol = (data.get("symbol") or "").strip().upper()
     if not symbol:
@@ -3923,6 +4007,119 @@ def tokens_revoke(key_id):
     if not ok:
         return jsonify({"error": "not_found"}), 404
     return jsonify({"status": "revoked"})
+
+
+# --- Billing (Polar.sh) ---
+
+
+def _billing_success_url() -> str:
+    """Where Polar redirects after checkout."""
+    base = os.getenv("STOCKPRO_APP_BASE_URL") or request.host_url.rstrip("/")
+    return f"{base}/app/settings?section=plan&status=success"
+
+
+@app.route("/api/billing/status", methods=["GET"])
+@login_required
+def billing_status():
+    """Return subscription status for the current user."""
+    from database import get_database_manager
+
+    db = get_database_manager()
+    user = db.get_user_by_id(session["user_id"])
+    sub = db.get_subscription(session["user_id"])
+
+    from tiers import family_for_tier, LIMITS
+
+    tier = (user or {}).get("tier") or "free"
+    is_pro = bool((user or {}).get("is_pro"))
+    if not is_pro:
+        tier = "free"
+    family = family_for_tier(tier)
+
+    return jsonify(
+        {
+            "is_pro": is_pro,
+            "tier": tier,
+            "family": family,
+            "plan": tier if tier != "free" else None,
+            "limits": LIMITS[family],
+            "current_period_end": (
+                sub["current_period_end"].isoformat()
+                if sub and sub.get("current_period_end")
+                else None
+            ),
+            "cancel_at_period_end": bool(sub and sub.get("cancel_at_period_end")),
+        }
+    )
+
+
+@app.route("/api/billing/checkout", methods=["POST"])
+@login_required
+def billing_checkout():
+    """Create a Polar hosted checkout session and return its URL."""
+    from billing import polar_service
+
+    from tiers import VALID_PLAN_KEYS
+
+    body = request.get_json(silent=True) or {}
+    plan = body.get("plan")
+    if plan not in VALID_PLAN_KEYS:
+        return (
+            jsonify({"error": f"plan must be one of {sorted(VALID_PLAN_KEYS)}"}),
+            400,
+        )
+    try:
+        url = polar_service.create_checkout_url(
+            user_id=session["user_id"],
+            plan=plan,
+            success_url=_billing_success_url(),
+        )
+        return jsonify({"url": url})
+    except Exception as e:
+        app.logger.exception("Polar checkout failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/billing/portal", methods=["GET"])
+@login_required
+def billing_portal():
+    """Return a Polar customer portal URL (for cancel / update card)."""
+    from billing import polar_service
+    from database import get_database_manager
+
+    db = get_database_manager()
+    sub = db.get_subscription(session["user_id"])
+    if not sub or not sub.get("polar_customer_id"):
+        return jsonify({"error": "no_subscription"}), 404
+    try:
+        url = polar_service.customer_portal_url(sub["polar_customer_id"])
+        return jsonify({"url": url})
+    except Exception as e:
+        app.logger.exception("Polar portal failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/billing/webhook", methods=["POST"])
+@csrf.exempt
+def billing_webhook():
+    """Polar webhook endpoint — verifies signature then applies event."""
+    from billing import polar_service
+    from database import get_database_manager
+
+    raw = request.get_data() or b""
+    sig = request.headers.get("webhook-signature") or request.headers.get(
+        "polar-signature"
+    )
+    if not polar_service.verify_webhook(raw, sig):
+        return jsonify({"error": "invalid_signature"}), 400
+
+    try:
+        event = request.get_json(silent=True) or {}
+        polar_service.handle_webhook_event(event, get_database_manager())
+    except Exception as e:
+        app.logger.exception("Polar webhook handler failed")
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"status": "ok"})
 
 
 # --- SPA serving (production) ---

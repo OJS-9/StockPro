@@ -502,6 +502,29 @@ class DatabaseManager:
                     "CREATE INDEX IF NOT EXISTS idx_report_usage_period ON report_usage (period)"
                 )
 
+                # Polar.sh subscription records (source of truth for billing state;
+                # users.is_pro / users.tier are the read path used by report_usage.py).
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS subscriptions (
+                        id                     SERIAL PRIMARY KEY,
+                        user_id                VARCHAR(36) REFERENCES users(user_id) ON DELETE CASCADE,
+                        polar_subscription_id  VARCHAR(128) UNIQUE,
+                        polar_customer_id      VARCHAR(128),
+                        product_id             VARCHAR(128),
+                        status                 VARCHAR(32),
+                        current_period_end     TIMESTAMPTZ,
+                        cancel_at_period_end   BOOLEAN DEFAULT FALSE,
+                        created_at             TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at             TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_customer_id ON subscriptions (polar_customer_id)"
+                )
+
                 # Long-lived API tokens for CLI / headless agents
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS api_keys (
@@ -2371,6 +2394,192 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to log CSV import: {e}")
+        finally:
+            self._release(conn)
+
+
+    # ------------------------------------------------------------------
+    # Tier-limit counts (used by src/tiers.py enforcement)
+    # ------------------------------------------------------------------
+
+    def count_portfolios(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM portfolios WHERE user_id = %s", (user_id,)
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        finally:
+            self._release(conn)
+
+    def count_holdings_in_portfolio(self, portfolio_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM holdings WHERE portfolio_id = %s",
+                    (portfolio_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        finally:
+            self._release(conn)
+
+    def count_watchlists(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM watchlists WHERE user_id = %s", (user_id,)
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        finally:
+            self._release(conn)
+
+    def count_watchlist_items(self, watchlist_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM watchlist_items WHERE watchlist_id = %s",
+                    (watchlist_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        finally:
+            self._release(conn)
+
+    def count_active_alerts(self, user_id: str) -> int:
+        """Active = not-yet-triggered price alerts."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM price_alerts
+                    WHERE user_id = %s AND COALESCE(active, TRUE) = TRUE
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error:
+            # Fall back if column differs — treat as 0 to avoid false blocks.
+            return 0
+        finally:
+            self._release(conn)
+
+    # ------------------------------------------------------------------
+    # Subscriptions (Polar.sh)
+    # ------------------------------------------------------------------
+
+    def upsert_subscription(
+        self,
+        user_id: str,
+        polar_subscription_id: Optional[str],
+        polar_customer_id: Optional[str],
+        product_id: Optional[str],
+        status: str,
+        current_period_end: Any = None,
+        cancel_at_period_end: bool = False,
+    ) -> None:
+        """Insert or update a subscription row keyed by polar_subscription_id."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO subscriptions
+                        (user_id, polar_subscription_id, polar_customer_id,
+                         product_id, status, current_period_end, cancel_at_period_end,
+                         updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (polar_subscription_id) DO UPDATE SET
+                        polar_customer_id    = EXCLUDED.polar_customer_id,
+                        product_id           = EXCLUDED.product_id,
+                        status               = EXCLUDED.status,
+                        current_period_end   = EXCLUDED.current_period_end,
+                        cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+                        updated_at           = NOW()
+                    """,
+                    (
+                        user_id,
+                        polar_subscription_id,
+                        polar_customer_id,
+                        product_id,
+                        status,
+                        current_period_end,
+                        cancel_at_period_end,
+                    ),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to upsert subscription: {e}")
+        finally:
+            self._release(conn)
+
+    def get_subscription(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Return the most recent subscription row for a user, or None."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT polar_subscription_id, polar_customer_id, product_id,
+                           status, current_period_end, cancel_at_period_end,
+                           created_at, updated_at
+                    FROM subscriptions
+                    WHERE user_id = %s
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                return {
+                    "polar_subscription_id": row[0],
+                    "polar_customer_id": row[1],
+                    "product_id": row[2],
+                    "status": row[3],
+                    "current_period_end": row[4],
+                    "cancel_at_period_end": bool(row[5]),
+                    "created_at": row[6],
+                    "updated_at": row[7],
+                }
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read subscription: {e}")
+        finally:
+            self._release(conn)
+
+    def set_user_pro(self, user_id: str, is_pro: bool, tier: str) -> None:
+        """Flip users.is_pro + users.tier — the read path for quota enforcement."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET is_pro = %s, tier = %s WHERE user_id = %s",
+                    (bool(is_pro), tier, user_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update user tier: {e}")
         finally:
             self._release(conn)
 

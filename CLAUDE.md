@@ -111,6 +111,8 @@ tests/                      # 40 pytest files
 - **Alerts**: evaluate on price_cache upsert, cooldown prevents spam, Telegram notify
 - **Report chat**: two-phase RAG (report chunks first, research chunks if score low)
 - **News**: Nimble agent-based briefing, in-memory TTL cache
+- **Billing**: Polar.sh subscriptions (`src/billing/polar_service.py`); webhook at `/api/billing/webhook` drives `users.is_pro` + `users.tier` + `subscriptions` table
+- **Tiers**: `src/tiers.py` is the single source of truth for plan catalog (4 plan keys: `starter_monthly|starter_yearly|ultra_monthly|ultra_yearly`) and resource limits (reports, portfolios, holdings, watchlists, items, alerts) per family (`free|starter|ultra`). Enforcement uses `check_limit()` before every add-action.
 
 ## React SPA (stockpro-web/)
 

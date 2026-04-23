@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useUser } from '@clerk/clerk-react'
 import toast from 'react-hot-toast'
@@ -34,7 +34,23 @@ export default function Settings() {
   const api = useApiClient()
   const { lang, setLang } = useLanguage()
   const { t } = useTranslation()
-  const [activeSection, setActiveSection] = useState('profile')
+  const initialSection = (() => {
+    if (typeof window === 'undefined') return 'profile'
+    const s = new URLSearchParams(window.location.search).get('section')
+    return NAV_ITEMS.some(n => n.id === s) ? (s as string) : 'profile'
+  })()
+  const [activeSection, setActiveSection] = useState(initialSection)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (activeSection === 'plan' && params.get('status') === 'success') {
+      toast.success('Subscription activated')
+      params.delete('status')
+      const qs = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    }
+  }, [activeSection])
   const [hasChanges, setHasChanges] = useState(false)
 
   const [notifs, setNotifs] = useState({
@@ -303,6 +319,9 @@ export default function Settings() {
           {/* CLI TOKENS */}
           {activeSection === 'cli' && <CliTokensSection />}
 
+          {/* PLAN */}
+          {activeSection === 'plan' && <PlanSection />}
+
           {/* DANGER ZONE */}
           {activeSection === 'danger' && (
             <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, overflow: 'hidden' }}>
@@ -451,6 +470,234 @@ function CliTokensSection() {
             </div>
           ))
         )}
+      </div>
+    </div>
+  )
+}
+
+type PlanKey = 'starter_monthly' | 'starter_yearly' | 'ultra_monthly' | 'ultra_yearly'
+
+const TIER_FEATURES: Record<'free' | 'starter' | 'ultra', string[]> = {
+  free: [
+    '3 research reports / month',
+    '1 portfolio (up to 15 holdings)',
+    '1 watchlist (up to 10 items)',
+    '3 active price alerts',
+  ],
+  starter: [
+    '10 research reports / month',
+    '3 portfolios (up to 50 holdings each)',
+    '5 watchlists (up to 25 items each)',
+    '25 active price alerts',
+    'Telegram + CLI access',
+  ],
+  ultra: [
+    '30 research reports / month',
+    'Unlimited portfolios and holdings',
+    'Unlimited watchlists and items',
+    'Unlimited price alerts',
+    'Priority support',
+  ],
+}
+
+function PlanSection() {
+  const api = useApiClient()
+  const [loadingPlan, setLoadingPlan] = useState<null | PlanKey | 'portal'>(null)
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['billing-status'],
+    queryFn: async () => {
+      const res = await api.get('/api/billing/status')
+      if (!res.ok) throw new Error('Failed to load billing status')
+      return res.json() as Promise<{
+        is_pro: boolean
+        tier: string
+        family: 'free' | 'starter' | 'ultra'
+        plan: string | null
+        current_period_end: string | null
+        cancel_at_period_end: boolean
+      }>
+    },
+  })
+
+  const startCheckout = async (plan: PlanKey) => {
+    setLoadingPlan(plan)
+    try {
+      const res = await api.post('/api/billing/checkout', { plan })
+      const json = await res.json()
+      if (!res.ok || !json.url) throw new Error(json.error || 'Checkout failed')
+      window.location.href = json.url
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Checkout failed')
+      setLoadingPlan(null)
+    }
+  }
+
+  const openPortal = async () => {
+    setLoadingPlan('portal')
+    try {
+      const res = await api.get('/api/billing/portal')
+      const json = await res.json()
+      if (!res.ok || !json.url) throw new Error(json.error || 'Portal unavailable')
+      window.location.href = json.url
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Portal unavailable')
+      setLoadingPlan(null)
+    }
+  }
+
+  if (isLoading) {
+    return <div style={{ color: '#a8a29e', fontSize: 13 }}>Loading...</div>
+  }
+
+  const cardStyle: React.CSSProperties = {
+    background: '#1c1917',
+    border: '1px solid #292524',
+    borderRadius: 14,
+    padding: 24,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  }
+  const priceStyle: React.CSSProperties = {
+    fontFamily: 'Nunito, sans-serif',
+    fontSize: 30,
+    fontWeight: 700,
+    color: '#fafaf9',
+  }
+  const buyBtnStyle: React.CSSProperties = {
+    padding: '11px 18px',
+    borderRadius: 100,
+    border: 'none',
+    background: '#d6d3d1',
+    color: '#0c0a09',
+    fontSize: 13.5,
+    fontWeight: 600,
+    cursor: 'pointer',
+  }
+
+  if (data?.is_pro) {
+    const renews = data.current_period_end
+      ? new Date(data.current_period_end).toLocaleDateString()
+      : null
+    const prettyPlan: Record<string, string> = {
+      starter_monthly: 'Starter Monthly',
+      starter_yearly: 'Starter Yearly',
+      ultra_monthly: 'Ultra Monthly',
+      ultra_yearly: 'Ultra Yearly',
+    }
+    const planLabel = (data.plan && prettyPlan[data.plan]) || 'Starter'
+    const currentFeatures = TIER_FEATURES[data.family] || []
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 100, background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}>
+              <Icon name="check_circle" size={13} filled /> Active
+            </span>
+            <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 700 }}>{planLabel}</div>
+          </div>
+          <div style={{ fontSize: 13, color: '#a8a29e' }}>
+            {data.cancel_at_period_end
+              ? `Cancels on ${renews || 'period end'}.`
+              : renews ? `Renews on ${renews}.` : 'Active subscription.'}
+          </div>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {currentFeatures.map(f => (
+              <li key={f} style={{ fontSize: 13, color: '#d6d3d1', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="check" size={14} /> {f}
+              </li>
+            ))}
+          </ul>
+          <button onClick={openPortal} disabled={loadingPlan === 'portal'} style={{ ...buyBtnStyle, alignSelf: 'flex-start' }}>
+            {loadingPlan === 'portal' ? 'Opening...' : 'Manage subscription'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const intervalBtn = (iv: 'monthly' | 'yearly', label: string) => (
+    <button
+      key={iv}
+      onClick={() => setBillingInterval(iv)}
+      style={{
+        padding: '7px 16px',
+        borderRadius: 100,
+        border: '1px solid #292524',
+        background: billingInterval === iv ? '#d6d3d1' : 'transparent',
+        color: billingInterval === iv ? '#0c0a09' : '#a8a29e',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  )
+
+  const starterKey: PlanKey = billingInterval === 'yearly' ? 'starter_yearly' : 'starter_monthly'
+  const ultraKey: PlanKey = billingInterval === 'yearly' ? 'ultra_yearly' : 'ultra_monthly'
+  const starterPrice = billingInterval === 'yearly' ? '$210' : '$19'
+  const starterUnit = billingInterval === 'yearly' ? ' / year' : ' / month'
+  const ultraPrice = billingInterval === 'yearly' ? '$520' : '$50'
+  const ultraUnit = billingInterval === 'yearly' ? ' / year' : ' / month'
+
+  const featureList = (features: string[]) => (
+    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {features.map(f => (
+        <li key={f} style={{ fontSize: 13, color: '#d6d3d1', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <Icon name="check" size={14} /> <span>{f}</span>
+        </li>
+      ))}
+    </ul>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <p style={{ fontSize: 13, color: '#a8a29e', margin: 0 }}>
+        You are on the Free plan. Upgrade for more research, bigger portfolios, and more alerts.
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {intervalBtn('monthly', 'Monthly')}
+        {intervalBtn('yearly', 'Yearly \u00B7 save up to 13%')}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        {/* FREE */}
+        <div style={cardStyle}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#a8a29e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Free</div>
+          <div style={priceStyle}>$0<span style={{ fontSize: 14, color: '#a8a29e', fontWeight: 400 }}> / month</span></div>
+          <div style={{ fontSize: 13, color: '#a8a29e' }}>Try the core research and portfolio tools.</div>
+          {featureList(TIER_FEATURES.free)}
+          <button disabled style={{ ...buyBtnStyle, background: 'transparent', color: '#57534e', border: '1px solid #292524', cursor: 'default' }}>
+            Current plan
+          </button>
+        </div>
+
+        {/* STARTER */}
+        <div style={{ ...cardStyle, borderColor: '#d6d3d1' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#d6d3d1', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Starter &middot; Recommended</div>
+          <div style={priceStyle}>{starterPrice}<span style={{ fontSize: 14, color: '#a8a29e', fontWeight: 400 }}>{starterUnit}</span></div>
+          <div style={{ fontSize: 13, color: '#a8a29e' }}>For active investors tracking a real portfolio.</div>
+          {featureList(TIER_FEATURES.starter)}
+          <button onClick={() => startCheckout(starterKey)} disabled={loadingPlan !== null} style={buyBtnStyle}>
+            {loadingPlan === starterKey ? 'Redirecting...' : `Go Starter ${billingInterval === 'yearly' ? 'Yearly' : 'Monthly'}`}
+          </button>
+        </div>
+
+        {/* ULTRA */}
+        <div style={cardStyle}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#a8a29e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Ultra</div>
+          <div style={priceStyle}>{ultraPrice}<span style={{ fontSize: 14, color: '#a8a29e', fontWeight: 400 }}>{ultraUnit}</span></div>
+          <div style={{ fontSize: 13, color: '#a8a29e' }}>For power users with large portfolios and lots of alerts.</div>
+          {featureList(TIER_FEATURES.ultra)}
+          <button onClick={() => startCheckout(ultraKey)} disabled={loadingPlan !== null} style={{ ...buyBtnStyle, background: '#fafaf9' }}>
+            {loadingPlan === ultraKey ? 'Redirecting...' : `Go Ultra ${billingInterval === 'yearly' ? 'Yearly' : 'Monthly'}`}
+          </button>
+        </div>
       </div>
     </div>
   )
