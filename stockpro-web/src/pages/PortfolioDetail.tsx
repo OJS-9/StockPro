@@ -210,7 +210,7 @@ export default function PortfolioDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 4 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>{t('portfolioDetail.portfolioValue')}</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
+                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>

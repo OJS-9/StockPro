@@ -140,7 +140,7 @@ export default function HoldingDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>Market Value</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
+                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 24 : 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444' }}>

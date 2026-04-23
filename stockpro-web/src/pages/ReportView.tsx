@@ -193,7 +193,7 @@ export default function ReportView() {
 
           {/* CONTENT */}
           <div ref={contentRef} style={{ padding: isMobile ? '24px 16px 60px' : '40px 48px 100px', maxWidth: 740 }}>
-            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
+            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
               {report.title || `${report.symbol} ${t('reportView.researchReport')}`}
             </h1>
 

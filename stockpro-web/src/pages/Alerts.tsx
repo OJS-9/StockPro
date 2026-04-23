@@ -132,7 +132,7 @@ export default function Alerts() {
           ].map(({ label, val, color }) => (
             <div key={label} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: '16px 18px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 600, lineHeight: 1, color }}>{val}</div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 600, lineHeight: 1, color }}>{val}</div>
             </div>
           ))}
         </div>
@@ -226,7 +226,7 @@ export default function Alerts() {
                   </div>
                   {/* Progress */}
                   {currentPrice > 0 && targetPrice > 0 && (
-                    <div style={{ minWidth: 180 }}>
+                    <div style={{ minWidth: isMobile ? 100 : 180 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#a8a29e', marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
                         <span>{fmt(currentPrice)}</span>
                         <span>{fmt(targetPrice)}</span>

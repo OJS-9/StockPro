@@ -292,7 +292,7 @@ export default function ResearchWizard() {
             <Icon name="psychology" size={14} />
             {t('research.step2Label')}
           </div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{t('research.whatsYourTradeType')}</h2>
+          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{t('research.whatsYourTradeType')}</h2>
           <p style={{ fontSize: 14, color: '#a8a29e', marginBottom: 28 }}>{t('research.tradeTypeDesc')}</p>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
             {TRADE_TYPES.map(({ id, icon, iconStyle, nameKey, descKey }) => (
