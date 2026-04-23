@@ -1196,6 +1196,7 @@ def api_reports_generate():
     ticker = (data.get("ticker") or "").strip().upper()
     trade_type = (data.get("trade_type") or "").strip()
     context_str = (data.get("context") or "").strip()
+    no_questions = bool(data.get("no_questions"))
 
     if not ticker or not trade_type:
         return jsonify({"error": "ticker and trade_type are required"}), 400
@@ -1241,6 +1242,21 @@ def api_reports_generate():
     from spend_budget import get_spend_budget_usd
     spend_budget_usd = get_spend_budget_usd(agent.user_id)
 
+    # If the orchestrator produced clarifying questions and caller didn't
+    # pre-supply context / opt out, pause and ask the client to collect answers.
+    pending = agent.pending_questions if isinstance(agent.pending_questions, list) else []
+    if pending and not context_str and not no_questions:
+        _generation_status[session_id] = {
+            "status": "needs_input",
+            "questions": pending,
+            "_owner_user_id": user_id,
+        }
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "questions": pending,
+        })
+
     _generation_status[session_id] = {
         "status": "in_progress",
         "report_id": None,
@@ -1249,6 +1265,12 @@ def api_reports_generate():
         "_owner_user_id": user_id,
     }
 
+    _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd)
+    return jsonify({"success": True, "session_id": session_id, "questions": []})
+
+
+def _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd):
+    """Spawn the background report-generation thread for CLI/headless flows."""
     def run_generation():
         import threading as _threading
 
@@ -1302,6 +1324,64 @@ def api_reports_generate():
             agent.set_progress_fn(None)
 
     threading.Thread(target=run_generation, daemon=True).start()
+
+
+@app.route("/api/reports/answer", methods=["POST"])
+@csrf.exempt
+@login_required
+def api_reports_answer():
+    """Submit answers to clarifying questions and kick off generation.
+
+    Accepts JSON body: {session_id, answers: [str, ...] or [{question, answer}, ...]}
+    Reads the paused session (status == needs_input), builds context_str from
+    Q&A pairs, and starts the background generation thread.
+    """
+    data = request.get_json(force=True) or {}
+    session_id = (data.get("session_id") or "").strip()
+    answers_in = data.get("answers") or []
+
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+
+    status = _generation_status.get(session_id)
+    user_id = session.get("user_id")
+
+    if status is None:
+        return jsonify({"error": "unknown session"}), 404
+    if status.get("_owner_user_id") != user_id:
+        return jsonify({"error": "forbidden"}), 403
+    if status.get("status") != "needs_input":
+        return jsonify({"error": f"session not awaiting input (status={status.get('status')})"}), 409
+
+    questions = status.get("questions") or []
+
+    # Accept either a flat list of answer strings (aligned with questions order)
+    # or a list of {question, answer} dicts.
+    lines = []
+    for i, q in enumerate(questions):
+        q_text = q.get("question") if isinstance(q, dict) else str(q)
+        ans = ""
+        if i < len(answers_in):
+            a = answers_in[i]
+            ans = a.get("answer", "") if isinstance(a, dict) else str(a)
+        lines.append(f"Q: {q_text}")
+        lines.append(f"A: {ans}")
+    context_str = "User context:\n" + "\n".join(lines) if lines else ""
+
+    agent = initialize_session(session_id)
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    _generation_status[session_id] = {
+        "status": "in_progress",
+        "report_id": None,
+        "progress": 5,
+        "step": "Starting...",
+        "_owner_user_id": user_id,
+    }
+
+    _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd)
     return jsonify({"success": True, "session_id": session_id})
 
 
