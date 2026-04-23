@@ -113,6 +113,8 @@ function LineChart({ data, dates, gain = true, loading = false, locale = 'en-US'
   )
 }
 
+const fmtUsd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+
 function CashModal({ portfolioId, currentBalance, onClose }: { portfolioId: string; currentBalance: number; onClose: () => void }) {
   const [action, setAction] = useState<'deposit' | 'withdraw'>('deposit')
   const [amount, setAmount] = useState('')
@@ -150,7 +152,7 @@ function CashModal({ portfolioId, currentBalance, onClose }: { portfolioId: stri
     >
       <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 32, width: 400, maxWidth: '90vw' }}>
         <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600, marginBottom: 8, letterSpacing: '-0.02em' }}>Deposit / Withdraw</h2>
-        <p style={{ fontSize: 12, color: '#a8a29e', marginBottom: 20 }}>Current balance: <span style={{ fontVariantNumeric: 'tabular-nums', color: '#fafaf9', fontWeight: 600 }}>{fmt(currentBalance)}</span></p>
+        <p style={{ fontSize: 12, color: '#a8a29e', marginBottom: 20 }}>Current balance: <span style={{ fontVariantNumeric: 'tabular-nums', color: '#fafaf9', fontWeight: 600 }}>{fmtUsd(currentBalance)}</span></p>
         <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
           {(['deposit', 'withdraw'] as const).map(a => (
             <label key={a} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
@@ -367,7 +369,10 @@ export default function PortfolioDetail() {
   // Stable signature so useMemo only recomputes when the underlying data actually changes
   // (useQueries returns a new array reference every render).
   const tickerDataSig = tickerHistories
-    .map(q => `${q.data?.symbol ?? ''}:${q.data?.history?.length ?? 0}`)
+    .map(q => {
+      const d = q.data as { symbol?: string; history?: any[] } | undefined
+      return `${d?.symbol ?? ''}:${d?.history?.length ?? 0}`
+    })
     .join('|')
 
   // Portfolio-level history is used as a fallback while per-ticker queries are loading
@@ -384,11 +389,11 @@ export default function PortfolioDetail() {
     const dateMap = new Map<string, number>()
 
     for (const q of tickerHistories) {
-      const d = q.data
-      if (!d || !sharesMap.has(d.symbol)) continue
+      const d = q.data as { symbol?: string; history?: any[] } | undefined
+      if (!d || !d.symbol || !sharesMap.has(d.symbol)) continue
       const shares = sharesMap.get(d.symbol) || 0
       if (shares === 0) continue
-      for (const pt of d.history) {
+      for (const pt of (d.history || [])) {
         if (!pt?.date) continue
         const val = (Number(pt.close) || 0) * shares
         dateMap.set(pt.date, (dateMap.get(pt.date) || 0) + val)
