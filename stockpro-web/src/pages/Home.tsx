@@ -7,6 +7,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 function Sparkline({ gain = true }: { gain?: boolean }) {
   const color = gain ? '#22c55e' : '#ef4444'
@@ -37,6 +38,7 @@ export default function Home() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n)
   const [ticker, setTicker] = useState('')
@@ -85,7 +87,7 @@ export default function Home() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* GREETING */}
         <div style={{ marginBottom: 32, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -133,7 +135,7 @@ export default function Home() {
         </div>
 
         {/* SUMMARY STRIP */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '2fr 1fr 1fr 1fr', gap: isMobile ? 10 : 16, marginBottom: 24 }}>
           {/* Primary */}
           <div style={{ background: '#1c1917', border: '1px solid rgba(214,211,209,0.15)', borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.totalPortfolioValue')}</div>
@@ -223,7 +225,7 @@ export default function Home() {
         </div>
 
         {/* MAIN GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 340px', gap: 20, alignItems: 'start' }}>
 
           {/* LEFT */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

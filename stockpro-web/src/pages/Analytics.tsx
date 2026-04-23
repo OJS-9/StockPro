@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtCompact = (n: number) => {
@@ -119,6 +120,7 @@ function AllocationBar({ items }: { items: { label: string; pct: number; color: 
 export default function Analytics() {
   const { id } = useParams()
   const api = useApiClient()
+  const { isMobile, isTablet } = useBreakpoint()
 
   const { data } = useQuery({
     queryKey: ['portfolio-analytics', id],
@@ -177,7 +179,7 @@ export default function Analytics() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* HEADER */}
         <div style={{ marginBottom: 32 }}>
@@ -190,7 +192,7 @@ export default function Analytics() {
         </div>
 
         {/* KPI STRIP */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: '#292524', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden', marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 1, background: '#292524', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden', marginBottom: 24 }}>
           {[
             { label: 'Total Value', val: analytics.total_value ? fmt(analytics.total_value) : '-', sub: '', subColor: '#a8a29e' },
             { label: 'Total Return', val: analytics.total_return ? `${analytics.total_return >= 0 ? '+' : ''}${fmt(analytics.total_return)}` : '-', sub: analytics.return_pct != null ? `${analytics.return_pct >= 0 ? '+' : ''}${typeof analytics.return_pct === 'number' ? analytics.return_pct.toFixed(1) : analytics.return_pct}%` : '', subColor: analytics.total_return >= 0 ? '#22c55e' : '#ef4444' },
@@ -205,7 +207,7 @@ export default function Analytics() {
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 340px', gap: 20, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* VALUE CHART */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>

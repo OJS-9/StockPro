@@ -8,6 +8,7 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const TRADE_TYPES = [
   { id: 'day', icon: 'bolt', iconStyle: 'bull', name: 'Day Trade', nameKey: 'research.dayTrade', descKey: 'research.dayTradeDesc' },
@@ -60,6 +61,7 @@ export default function ResearchWizard() {
   const [phase, setPhase] = useState<Phase>('setup')
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
   const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
 
   // Position pre-screen state
@@ -222,7 +224,7 @@ export default function ResearchWizard() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: '56px 48px 80px' }}>
+      <main style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '28px 16px 60px' : '56px 48px 80px' }}>
 
         {/* STEP INDICATOR */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 48 }}>
@@ -292,7 +294,7 @@ export default function ResearchWizard() {
           </div>
           <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{t('research.whatsYourTradeType')}</h2>
           <p style={{ fontSize: 14, color: '#a8a29e', marginBottom: 28 }}>{t('research.tradeTypeDesc')}</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
             {TRADE_TYPES.map(({ id, icon, iconStyle, nameKey, descKey }) => (
               <div key={id} onClick={() => setTradeType(id)} style={{ background: '#1c1917', border: `2px solid ${tradeType === id ? '#d6d3d1' : '#292524'}`, borderRadius: 14, padding: 20, cursor: 'pointer', position: 'relative' }}>
                 {tradeType === id && (
@@ -311,7 +313,7 @@ export default function ResearchWizard() {
         </div>
 
         {/* LAUNCH */}
-        <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, opacity: canLaunch ? 1 : 0.5 }}>
+        <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: isMobile ? 20 : 28, display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: isMobile ? 14 : 20, opacity: canLaunch ? 1 : 0.5, flexDirection: isMobile ? 'column' : 'row' }}>
           <div>
             <h3 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 600, marginBottom: 6 }}>
               {phase === 'generating'
