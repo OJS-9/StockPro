@@ -50,7 +50,7 @@ class PortfolioService:
         name: str = "My Portfolio",
         description: str = "",
         user_id: Optional[str] = None,
-        track_cash: bool = False,
+        track_cash: bool = True,
         cash_balance: float = 0.0,
     ) -> str:
         """
@@ -91,6 +91,45 @@ class PortfolioService:
         if cash_balance < 0:
             raise ValueError("Cash balance cannot be negative")
         self.db.update_cash_balance(portfolio_id, cash_balance)
+
+    def deposit_cash(self, portfolio_id: str, amount: float) -> float:
+        """
+        Deposit cash into a portfolio. Returns the new balance.
+
+        Raises:
+            ValueError: If amount is not positive
+        """
+        if amount <= 0:
+            raise ValueError("Deposit amount must be positive")
+        portfolio = self.get_portfolio(portfolio_id)
+        if not portfolio:
+            raise ValueError("Portfolio not found")
+        new_balance = float(portfolio.get("cash_balance", 0)) + amount
+        self.db.update_cash_balance(portfolio_id, new_balance)
+        return new_balance
+
+    def withdraw_cash(self, portfolio_id: str, amount: float) -> float:
+        """
+        Withdraw cash from a portfolio. Returns the new balance.
+
+        Raises:
+            ValueError: If amount is not positive or exceeds balance
+        """
+        if amount <= 0:
+            raise ValueError("Withdrawal amount must be positive")
+        portfolio = self.get_portfolio(portfolio_id)
+        if not portfolio:
+            raise ValueError("Portfolio not found")
+        current_balance = float(portfolio.get("cash_balance", 0))
+        if amount > current_balance:
+            raise ValueError("Insufficient cash balance")
+        new_balance = current_balance - amount
+        self.db.update_cash_balance(portfolio_id, new_balance)
+        return new_balance
+
+    def enable_cash_tracking(self, portfolio_id: str) -> None:
+        """Enable cash tracking for a portfolio."""
+        self.db.enable_cash_tracking(portfolio_id)
 
     def get_portfolio(self, portfolio_id: str) -> Optional[Dict]:
         """
