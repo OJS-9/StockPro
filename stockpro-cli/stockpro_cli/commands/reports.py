@@ -29,6 +29,38 @@ def _prompt_questions(questions):
     return answers
 
 
+def _prompt_subjects(subjects):
+    """Show research subjects and return selected ids (None = use defaults)."""
+    if not subjects:
+        return None
+    ordered = sorted(subjects, key=lambda s: s.get("priority", 99))
+    click.echo("\nResearch areas to cover (sorted by relevance):")
+    for i, s in enumerate(ordered, 1):
+        name = s.get("name", s.get("id", "?"))
+        desc = s.get("description", "")
+        click.echo(f"  {i:>2}. {name} — {desc}")
+    click.echo(
+        "\nEnter numbers separated by commas (e.g. 1,3,5), "
+        "or press Enter to use the recommended defaults."
+    )
+    raw = click.prompt("Your selection", default="", show_default=False)
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    ids = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            idx = int(token)
+            if 1 <= idx <= len(ordered):
+                ids.append(ordered[idx - 1]["id"])
+        except ValueError:
+            continue
+    return ids or None
+
+
 @reports.command("generate")
 @click.option("--ticker", required=True, help="Stock ticker symbol (e.g. AAPL)")
 @click.option(
@@ -76,20 +108,36 @@ def generate(ctx, ticker, trade_type, context, no_questions, poll_interval):
         output({"error": "No session_id returned from server"}, pretty)
         return
 
-    # If the server returned clarifying questions, prompt the user and send answers.
+    # Clarifying questions are mandatory — the flow matches the web app.
+    # Callers who want to skip must pass --no-questions explicitly.
     questions = resp.get("questions") or []
+    subjects = resp.get("subjects") or []
     if questions and not no_questions:
-        if pretty:
-            click.echo("\nA few quick questions to tailor your report:")
-            answers = _prompt_questions(questions)
-        else:
-            # JSON mode: can't prompt interactively, fall back to empty answers.
-            answers = ["" for _ in questions]
+        if not pretty:
+            output(
+                {
+                    "error": "clarifying_questions_required",
+                    "message": (
+                        "Report generation requires answering clarifying questions. "
+                        "Re-run with --pretty to answer interactively, or pass "
+                        "--no-questions to skip (not recommended)."
+                    ),
+                    "session_id": session_id,
+                    "questions": questions,
+                    "subjects": subjects,
+                },
+                pretty,
+            )
+            raise SystemExit(2)
 
-        answer_resp = client.post(
-            "/api/reports/answer",
-            data={"session_id": session_id, "answers": answers},
-        )
+        click.echo("\nA few quick questions to tailor your report:")
+        answers = _prompt_questions(questions)
+        selected_subject_ids = _prompt_subjects(subjects)
+
+        payload = {"session_id": session_id, "answers": answers}
+        if selected_subject_ids:
+            payload["selected_subject_ids"] = selected_subject_ids
+        answer_resp = client.post("/api/reports/answer", data=payload)
         if not answer_resp.get("success"):
             output(answer_resp, pretty)
             return

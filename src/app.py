@@ -1242,19 +1242,47 @@ def api_reports_generate():
     from spend_budget import get_spend_budget_usd
     spend_budget_usd = get_spend_budget_usd(agent.user_id)
 
-    # If the orchestrator produced clarifying questions and caller didn't
-    # pre-supply context / opt out, pause and ask the client to collect answers.
+    # Always surface clarifying questions + subject areas so the CLI flow
+    # matches the web flow. Callers that want to skip (headless automation)
+    # can pass no_questions=True.
     pending = agent.pending_questions if isinstance(agent.pending_questions, list) else []
-    if pending and not context_str and not no_questions:
+    if not pending:
+        # Fallback matches /ask_questions — ensure the user always gets a prompt.
+        pending = [
+            {
+                "question": f"What is your primary goal for researching {ticker}?",
+                "options": [
+                    "Long-term investment",
+                    "Swing trade",
+                    "Day trade",
+                    "General analysis",
+                ],
+            }
+        ]
+
+    from research_subjects import get_research_subjects_for_trade_type
+    subjects = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "description": s.description,
+            "priority": s.priority.get(trade_type, 99),
+        }
+        for s in get_research_subjects_for_trade_type(trade_type)
+    ]
+
+    if not no_questions:
         _generation_status[session_id] = {
             "status": "needs_input",
             "questions": pending,
+            "subjects": subjects,
             "_owner_user_id": user_id,
         }
         return jsonify({
             "success": True,
             "session_id": session_id,
             "questions": pending,
+            "subjects": subjects,
         })
 
     _generation_status[session_id] = {
@@ -1269,7 +1297,7 @@ def api_reports_generate():
     return jsonify({"success": True, "session_id": session_id, "questions": []})
 
 
-def _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd):
+def _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd, selected_subjects=None):
     """Spawn the background report-generation thread for CLI/headless flows."""
     def run_generation():
         import threading as _threading
@@ -1304,6 +1332,7 @@ def _start_report_generation_thread(session_id, agent, context_str, user_id, spe
         try:
             agent.generate_report(
                 context=context_str,
+                selected_subjects=selected_subjects,
                 spend_budget_usd=spend_budget_usd,
             )
             _generation_status[session_id] = {
@@ -1339,6 +1368,7 @@ def api_reports_answer():
     data = request.get_json(force=True) or {}
     session_id = (data.get("session_id") or "").strip()
     answers_in = data.get("answers") or []
+    selected_subject_ids = data.get("selected_subject_ids") or None
 
     if not session_id:
         return jsonify({"error": "session_id is required"}), 400
@@ -1381,7 +1411,10 @@ def api_reports_answer():
         "_owner_user_id": user_id,
     }
 
-    _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd)
+    _start_report_generation_thread(
+        session_id, agent, context_str, user_id, spend_budget_usd,
+        selected_subjects=selected_subject_ids,
+    )
     return jsonify({"success": True, "session_id": session_id})
 
 
