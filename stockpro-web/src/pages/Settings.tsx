@@ -7,6 +7,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -34,6 +35,7 @@ export default function Settings() {
   const api = useApiClient()
   const { lang, setLang } = useLanguage()
   const { t } = useTranslation()
+  const { isMobile } = useBreakpoint()
   const [activeSection, setActiveSection] = useState('profile')
   const [hasChanges, setHasChanges] = useState(false)
 
@@ -111,19 +113,21 @@ export default function Settings() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 48px 80px', display: 'grid', gridTemplateColumns: '220px 1fr', gap: 40, alignItems: 'start' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 16px 100px' : '48px 48px 80px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '220px 1fr', gap: isMobile ? 20 : 40, alignItems: 'start' }}>
 
         {/* SIDEBAR NAV */}
-        <div style={{ position: 'sticky', top: 80 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', marginBottom: 12, padding: '0 10px' }}>{t('settings.settings')}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={isMobile
+          ? { overflowX: 'auto', borderBottom: '1px solid #292524', marginInline: -16, paddingInline: 16 }
+          : { position: 'sticky', top: 80 }}>
+          {!isMobile && <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', marginBottom: 12, padding: '0 10px' }}>{t('settings.settings')}</div>}
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', gap: isMobile ? 4 : 2, paddingBottom: isMobile ? 8 : 0 }}>
             {NAV_ITEMS.map(({ id, icon, tKey }) => (
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 9, color: activeSection === id ? '#fafaf9' : '#a8a29e', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', background: activeSection === id ? 'rgba(214,211,209,0.07)' : 'transparent', border: 'none', textAlign: 'start', transition: 'all 0.15s' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: isMobile ? '8px 14px' : '9px 12px', borderRadius: 9, color: activeSection === id ? '#fafaf9' : '#a8a29e', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', background: activeSection === id ? 'rgba(214,211,209,0.07)' : 'transparent', border: isMobile ? '1px solid #292524' : 'none', textAlign: 'start', transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0 }}
               >
-                <Icon name={icon} size={17} />
+                <Icon name={icon} size={16} />
                 {t(tKey)}
               </button>
             ))}
