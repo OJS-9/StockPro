@@ -3,7 +3,7 @@ import Icon from '../components/Icon'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const features = [
-  { icon: 'query_stats', name: 'Deep AI Research', desc: '12 specialized AI agents research fundamentals, technicals, risk, and news in parallel — synthesized into a structured investment report.' },
+  { icon: 'query_stats', name: 'Deep AI Research', desc: '12 specialized AI agents research fundamentals, technicals, risk, and news in parallel — synthesized into a structured research report.' },
   { icon: 'pie_chart', name: 'Portfolio Tracking', desc: 'Track multiple portfolios with real-time P&L, cost basis, sector allocation, and performance analytics.' },
   { icon: 'visibility', name: 'Smart Watchlists', desc: 'Organize symbols in custom lists with live prices, sparklines, earnings calendar, and AI-powered news briefings.' },
   { icon: 'notifications_active', name: 'Price Alerts', desc: 'Set price level alerts for any stock or crypto. Get notified the moment a condition triggers.' },
@@ -180,7 +180,7 @@ export default function Landing() {
             {[
               { n: '1', title: 'Enter a ticker', desc: 'Type any stock or crypto symbol and select your research focus — long, short, or comprehensive.' },
               { n: '2', title: 'AI agents research', desc: '12 parallel AI agents gather fundamentals, news, technicals, risk factors, and competitive landscape.' },
-              { n: '3', title: 'Read & chat', desc: 'Get a full investment report and chat with the AI to explore any section in depth.' },
+              { n: '3', title: 'Read & chat', desc: 'Get a full research report and chat with the AI to explore any section in depth.' },
             ].map(({ n, title, desc }) => (
               <div key={n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
                 <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#0c0a09', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: '#d6d3d1', position: 'relative', zIndex: 1 }}>{n}</div>
