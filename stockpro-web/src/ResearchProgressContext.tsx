@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 
 type Status = 'idle' | 'generating' | 'ready' | 'error'
