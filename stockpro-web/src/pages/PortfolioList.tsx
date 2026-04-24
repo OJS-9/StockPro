@@ -7,6 +7,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 function Sparkline({ gain = true }: { gain?: boolean }) {
   const color = gain ? '#22c55e' : '#ef4444'
@@ -115,6 +116,7 @@ export default function PortfolioList() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
 
   const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
 
@@ -147,7 +149,7 @@ export default function PortfolioList() {
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
       {showModal && <NewPortfolioModal onClose={() => setShowModal(false)} />}
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 36 }}>
@@ -169,7 +171,7 @@ export default function PortfolioList() {
         </div>
 
         {/* AGGREGATE STRIP */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: '#292524', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden', marginBottom: 36 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 1, background: '#292524', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden', marginBottom: 36 }}>
           {[
             { label: t('portfolio.totalValue'), val: totals.total_value != null ? fmt(totals.total_value) : '-', sub: '', subClass: 'muted' },
             { label: t('portfolio.totalPnl'), val: totals.total_pnl != null ? ((totals.total_pnl >= 0 ? '+' : '') + fmt(totals.total_pnl)) : '-', valColor: totals.total_pnl >= 0 ? '#22c55e' : '#ef4444', sub: t('portfolio.allTime'), subClass: totals.total_pnl >= 0 ? 'up' : 'down' },
@@ -185,7 +187,7 @@ export default function PortfolioList() {
         </div>
 
         {/* PORTFOLIO GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 16 }}>
           {isLoading ? (
             [1, 2].map(i => (
               <div key={i} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, height: 280 }} />

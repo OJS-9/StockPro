@@ -8,6 +8,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 function fmtPrice(n: number | null | undefined, locale: string) {
   return n != null ? new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n) : '—'
@@ -98,6 +99,7 @@ export default function Watchlist() {
   const api = useApiClient()
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
@@ -140,7 +142,7 @@ export default function Watchlist() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
@@ -177,7 +179,8 @@ export default function Watchlist() {
                   <Icon name="add" size={14} /> {t('watchlist.addSymbol')}
                 </button>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 560 : undefined }}>
                 <thead>
                   <tr>
                     {[t('watchlist.symbol'), t('watchlist.price'), t('watchlist.change'), t('watchlist.home'), ''].map(h => (
@@ -250,6 +253,7 @@ export default function Watchlist() {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           ))}
         </div>

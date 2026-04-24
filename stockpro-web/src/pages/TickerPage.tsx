@@ -5,6 +5,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtCompact = (n: number) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
@@ -41,6 +42,7 @@ function PriceChart({ data, gain = true }: { data: number[]; gain?: boolean }) {
 export default function TickerPage() {
   const { symbol } = useParams()
   const api = useApiClient()
+  const { isMobile } = useBreakpoint()
   const [range, setRange] = useState('3M')
 
   const { data: hist } = useQuery({
@@ -111,7 +113,7 @@ export default function TickerPage() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {fundLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -127,10 +129,10 @@ export default function TickerPage() {
 
         {!fundLoading && <>
         {/* TICKER HEADER */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 16 : 0, marginBottom: 32 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 28 : 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
               <div>
                 <div style={{ fontSize: 15, color: '#a8a29e' }}>{name !== symbol ? name : ''}</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
@@ -148,7 +150,7 @@ export default function TickerPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 32 : 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {price ? fmt(price) : '-'}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
@@ -161,7 +163,7 @@ export default function TickerPage() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
+          <div style={{ display: 'flex', gap: 8, paddingTop: 8, flexWrap: 'wrap' }}>
             <button style={{ background: 'transparent', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '9px 16px', borderRadius: 8, border: '1px solid #292524', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <Icon name="visibility" size={16} /> Watch
             </button>
@@ -199,8 +201,8 @@ export default function TickerPage() {
         </div>
 
         {/* MAIN LAYOUT */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: 20, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
 
             {/* KEY STATISTICS */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
@@ -208,7 +210,7 @@ export default function TickerPage() {
                 <Icon name="bar_chart" size={16} style={{ color: '#a8a29e' }} />
                 Key Statistics
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
                 {statItems.map(({ label, val, highlight, small, muted }) => (
                   <div key={label} style={{ background: '#1c1917', padding: '14px 18px' }}>
                     <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>{label}</div>

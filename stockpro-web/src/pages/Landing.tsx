@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import Icon from '../components/Icon'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const features = [
   { icon: 'query_stats', name: 'Deep AI Research', desc: '12 specialized AI agents research fundamentals, technicals, risk, and news in parallel — synthesized into a structured investment report.' },
@@ -18,15 +19,16 @@ const proof = [
 ]
 
 export default function Landing() {
+  const { isMobile } = useBreakpoint()
   return (
-    <div style={{ minHeight: '100vh', background: '#0c0a09', color: '#fafaf9', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#0c0a09', color: '#fafaf9', fontFamily: 'Inter, sans-serif', overflowX: 'hidden' }}>
       {/* NAV */}
       <nav
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 64px',
+          padding: isMobile ? '0 16px' : '0 64px',
           height: 64,
           position: 'sticky',
           top: 0,
@@ -39,37 +41,39 @@ export default function Landing() {
         <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>
           StockPro
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 40, marginInlineStart: 'auto' }}>
-          <div style={{ display: 'flex', gap: 32 }}>
-            {['Features', 'How it works', 'Pricing'].map(l => (
-              <a key={l} href={`#${l.toLowerCase().replace(' ', '-')}`} style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 14, fontWeight: 500, transition: 'color 0.15s' }}>
-                {l}
-              </a>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Link to="/sign-in" style={{ background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '8px 18px', borderRadius: 8, textDecoration: 'none', display: 'inline-block' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 40, marginInlineStart: 'auto' }}>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 32 }}>
+              {['Features', 'How it works', 'Pricing'].map(l => (
+                <a key={l} href={`#${l.toLowerCase().replace(' ', '-')}`} style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 14, fontWeight: 500, transition: 'color 0.15s' }}>
+                  {l}
+                </a>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/sign-in" style={{ background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '8px 14px', borderRadius: 8, textDecoration: 'none', display: 'inline-block' }}>
               Sign in
             </Link>
-            <Link to="/sign-up" style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 20px', borderRadius: 8, textDecoration: 'none', display: 'inline-block' }}>
-              Get started free
+            <Link to="/sign-up" style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 14px', borderRadius: 8, textDecoration: 'none', display: 'inline-block', whiteSpace: 'nowrap' }}>
+              {isMobile ? 'Get started' : 'Get started free'}
             </Link>
           </div>
         </div>
       </nav>
 
       {/* HERO */}
-      <section style={{ textAlign: 'center', padding: '100px 64px 80px', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ textAlign: 'center', padding: isMobile ? '56px 20px 48px' : '100px 64px 80px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: -200, left: '50%', transform: 'translateX(-50%)', width: 800, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.06) 0%, transparent 60%)', pointerEvents: 'none' }} />
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#22c55e', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', padding: '5px 14px', borderRadius: 999, marginBottom: 28 }}>
           <Icon name="auto_awesome" filled size={14} />
           Powered by Gemini AI + LangGraph
         </div>
-        <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 60, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 24, maxWidth: 760, marginInlineStart: 'auto', marginInlineEnd: 'auto' }}>
+        <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 36 : 60, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 24, maxWidth: 760, marginInlineStart: 'auto', marginInlineEnd: 'auto' }}>
           Institutional-grade research for{' '}
           <em style={{ fontStyle: 'normal', color: '#22c55e' }}>every investor</em>
         </h1>
-        <p style={{ fontSize: 18, color: '#a8a29e', lineHeight: 1.7, maxWidth: 540, margin: '0 auto 40px' }}>
+        <p style={{ fontSize: isMobile ? 15 : 18, color: '#a8a29e', lineHeight: 1.7, maxWidth: 540, margin: '0 auto 40px' }}>
           Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, price alerts, and Telegram notifications built for serious retail investors.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -94,12 +98,12 @@ export default function Landing() {
       </section>
 
       {/* SOCIAL PROOF */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32, padding: '32px 64px', borderTop: '1px solid #292524', borderBottom: '1px solid #292524' }}>
+      <div style={{ display: isMobile ? 'grid' : 'flex', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : undefined, alignItems: 'center', justifyContent: 'center', gap: isMobile ? 20 : 32, padding: isMobile ? '24px 20px' : '32px 64px', borderTop: '1px solid #292524', borderBottom: '1px solid #292524' }}>
         {proof.map(({ num, label }, i) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-            {i > 0 && <div style={{ width: 1, height: 40, background: '#292524' }} />}
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 32, justifyContent: 'center' }}>
+            {!isMobile && i > 0 && <div style={{ width: 1, height: 40, background: '#292524' }} />}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 30, fontWeight: 700, color: '#fafaf9', letterSpacing: '-0.03em' }}>{num}</div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 30, fontWeight: 700, color: '#fafaf9', letterSpacing: '-0.03em' }}>{num}</div>
               <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>{label}</div>
             </div>
           </div>
@@ -107,9 +111,9 @@ export default function Landing() {
       </div>
 
       {/* APP PREVIEW */}
-      <section style={{ padding: '80px 64px', textAlign: 'center' }}>
+      <section style={{ padding: isMobile ? '48px 20px' : '80px 64px', textAlign: 'center' }}>
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>The platform</div>
-        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 16 }}>
+        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 16 }}>
           Everything you need to invest smarter
         </h2>
         <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 460, margin: '0 auto 48px' }}>
@@ -126,7 +130,7 @@ export default function Landing() {
               app.stockpro.ai/dashboard
             </div>
           </div>
-          <div style={{ padding: 28, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+          <div style={{ padding: isMobile ? 16 : 28, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: isMobile ? 12 : 16 }}>
             {[
               { label: 'Portfolio Value', val: '$142,830', sub: '+$1,204 today (+0.85%)', subColor: '#22c55e' },
               { label: 'Unrealized P&L', val: '+$18,430', valColor: '#22c55e', sub: '+14.8% all time', subColor: '#a8a29e' },
@@ -148,13 +152,13 @@ export default function Landing() {
       </section>
 
       {/* FEATURES */}
-      <section id="features" style={{ padding: '80px 64px', maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <section id="features" style={{ padding: isMobile ? '48px 20px' : '80px 64px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: isMobile ? 32 : 56 }}>
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>Features</div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for serious retail investors</h2>
+          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for serious retail investors</h2>
           <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 480, margin: '0 auto' }}>Every feature designed to give you the edge that was previously reserved for institutional traders.</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 14 : 20 }}>
           {features.map(({ icon, name, desc }) => (
             <div key={name} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 28, transition: 'border-color 0.2s' }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
@@ -168,12 +172,12 @@ export default function Landing() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how-it-works" style={{ padding: '80px 64px', background: '#1c1917', borderTop: '1px solid #292524', borderBottom: '1px solid #292524' }}>
+      <section id="how-it-works" style={{ padding: isMobile ? '48px 20px' : '80px 64px', background: '#1c1917', borderTop: '1px solid #292524', borderBottom: '1px solid #292524' }}>
         <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>How it works</div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em' }}>Research any ticker in 3 steps</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 40, marginTop: 48, position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 22, left: '15%', right: '15%', height: 1, background: 'linear-gradient(90deg, transparent, #292524, transparent)' }} />
+          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em' }}>Research any ticker in 3 steps</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 28 : 40, marginTop: 48, position: 'relative' }}>
+            {!isMobile && <div style={{ position: 'absolute', top: 22, left: '15%', right: '15%', height: 1, background: 'linear-gradient(90deg, transparent, #292524, transparent)' }} />}
             {[
               { n: '1', title: 'Enter a ticker', desc: 'Type any stock or crypto symbol and select your research focus — long, short, or comprehensive.' },
               { n: '2', title: 'AI agents research', desc: '12 parallel AI agents gather fundamentals, news, technicals, risk factors, and competitive landscape.' },
@@ -190,9 +194,9 @@ export default function Landing() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding: '100px 64px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ padding: isMobile ? '64px 20px' : '100px 64px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.05) 0%, transparent 65%)', pointerEvents: 'none' }} />
-        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 44, fontWeight: 800, letterSpacing: '-0.04em', marginBottom: 16 }}>Start researching smarter today</h2>
+        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 28 : 44, fontWeight: 800, letterSpacing: '-0.04em', marginBottom: 16 }}>Start researching smarter today</h2>
         <p style={{ fontSize: 16, color: '#a8a29e', marginBottom: 36 }}>Free tier available. No credit card required.</p>
         <Link
           to="/sign-up"
@@ -204,7 +208,7 @@ export default function Landing() {
       </section>
 
       {/* FOOTER */}
-      <footer style={{ borderTop: '1px solid #292524', padding: '32px 64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <footer style={{ borderTop: '1px solid #292524', padding: isMobile ? '24px 20px' : '32px 64px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 14 : 0, alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: '#d6d3d1' }}>StockPro</span>
         <div style={{ display: 'flex', gap: 24 }}>
           {['Privacy', 'Terms', 'Contact'].map(l => (

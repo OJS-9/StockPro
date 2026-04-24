@@ -6,6 +6,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const tocIcons: Record<string, string> = {
   'Executive Summary': 'summarize',
@@ -26,6 +27,8 @@ export default function ReportView() {
   const contentRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
+  const [tocOpen, setTocOpen] = useState(false)
 
   // /report/<id>?format=json returns {report: {report_id, ticker, trade_type, report_text, created_at, ...}}
   const { data } = useQuery({
@@ -100,7 +103,28 @@ export default function ReportView() {
       <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
 
         {/* LEFT TOC */}
-        <aside style={{ width: 232, flexShrink: 0, borderInlineEnd: '1px solid #292524', padding: '28px 16px', overflowY: 'auto', background: '#0c0a09', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {isMobile && tocOpen && (
+          <div onClick={() => setTocOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 150 }} />
+        )}
+        <aside style={{
+          width: isMobile ? 260 : 232,
+          flexShrink: 0,
+          borderInlineEnd: '1px solid #292524',
+          padding: '28px 16px',
+          overflowY: 'auto',
+          background: '#0c0a09',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+          ...(isMobile ? {
+            position: 'fixed',
+            top: 60,
+            bottom: 0,
+            insetInlineStart: tocOpen ? 0 : -280,
+            zIndex: 160,
+            transition: 'inset-inline-start 0.25s',
+          } : {}),
+        }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a8a29e', paddingInlineStart: 12, marginBottom: 8 }}>{t('reportView.contents')}</div>
             {sections.map((s: any, i: number) => {
@@ -134,8 +158,13 @@ export default function ReportView() {
         {/* MAIN */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {/* STICKY HEADER */}
-          <div style={{ padding: '24px 48px', borderBottom: '1px solid #292524', position: 'sticky', top: 0, background: 'rgba(12,10,9,0.95)', backdropFilter: 'blur(12px)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ padding: isMobile ? '12px 16px' : '24px 48px', borderBottom: '1px solid #292524', position: 'sticky', top: 0, background: 'rgba(12,10,9,0.95)', backdropFilter: 'blur(12px)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
+              {isMobile && (
+                <button onClick={() => setTocOpen(o => !o)} style={{ background: 'none', border: '1px solid #292524', borderRadius: 8, padding: 6, color: '#a8a29e', cursor: 'pointer', display: 'flex' }}>
+                  <Icon name="menu_book" size={18} />
+                </button>
+              )}
               <span style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 6, letterSpacing: '0.02em', fontFamily: 'Nunito, sans-serif' }}>
                 {report.symbol}
               </span>
@@ -144,11 +173,11 @@ export default function ReportView() {
               </span>
               <span style={{ fontSize: 13, color: '#a8a29e' }}>{report.created_at}</span>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              {(isMobile ? [] : [
                 { icon: 'share', label: t('reportView.share') },
                 { icon: 'download', label: t('reportView.exportPdf') },
-              ].map(({ icon, label }) => (
+              ]).map(({ icon, label }) => (
                 <button key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>
                   <Icon name={icon} size={15} /> {label}
                 </button>
@@ -163,8 +192,8 @@ export default function ReportView() {
           </div>
 
           {/* CONTENT */}
-          <div ref={contentRef} style={{ padding: '40px 48px 100px', maxWidth: 740 }}>
-            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
+          <div ref={contentRef} style={{ padding: isMobile ? '24px 16px 60px' : '40px 48px 100px', maxWidth: 740 }}>
+            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
               {report.title || `${report.symbol} ${t('reportView.researchReport')}`}
             </h1>
 

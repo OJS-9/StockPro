@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
@@ -37,6 +38,7 @@ export default function HoldingDetail() {
   const { id, symbol } = useParams()
   const api = useApiClient()
   const queryClient = useQueryClient()
+  const { isMobile } = useBreakpoint()
 
   // /portfolio/<id>/holding/<symbol>?format=json returns {portfolio, holding, transactions}
   const { data: holdData } = useQuery({
@@ -103,7 +105,7 @@ export default function HoldingDetail() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* HEADER */}
         <div style={{ marginBottom: 28 }}>
@@ -130,7 +132,7 @@ export default function HoldingDetail() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: 20, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* CHART */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
@@ -138,7 +140,7 @@ export default function HoldingDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>Market Value</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
+                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 24 : 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444' }}>

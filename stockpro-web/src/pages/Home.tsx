@@ -7,6 +7,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 function Sparkline({ gain = true }: { gain?: boolean }) {
   const color = gain ? '#22c55e' : '#ef4444'
@@ -37,6 +38,7 @@ export default function Home() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n)
   const [ticker, setTicker] = useState('')
@@ -85,7 +87,7 @@ export default function Home() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* GREETING */}
         <div style={{ marginBottom: 32, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -111,18 +113,20 @@ export default function Home() {
             placeholder={t('home.researchPlaceholder')}
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#fafaf9' }}
           />
-          <div style={{ width: 1, height: 22, background: '#292524', flexShrink: 0 }} />
-          <div style={{ display: 'flex', gap: 6 }}>
-            {recentTickers.slice(0, 3).map((t: string) => (
-              <button
-                key={t}
-                onClick={() => { setTicker(t); navigate(`/research?ticker=${t}`) }}
-                style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 500, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer' }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {!isMobile && <div style={{ width: 1, height: 22, background: '#292524', flexShrink: 0 }} />}
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              {recentTickers.slice(0, 3).map((t: string) => (
+                <button
+                  key={t}
+                  onClick={() => { setTicker(t); navigate(`/research?ticker=${t}`) }}
+                  style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 500, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer' }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={handleResearch}
             style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
@@ -133,12 +137,12 @@ export default function Home() {
         </div>
 
         {/* SUMMARY STRIP */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '2fr 1fr 1fr 1fr', gap: isMobile ? 10 : 16, marginBottom: 24 }}>
           {/* Primary */}
           <div style={{ background: '#1c1917', border: '1px solid rgba(214,211,209,0.15)', borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.totalPortfolioValue')}</div>
             {isLoading ? <Skeleton h={44} /> : (
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 38, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 38, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
                 {totals.total_value != null ? fmt(totals.total_value) : '$0'}
               </div>
             )}
@@ -156,7 +160,7 @@ export default function Home() {
           <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.unrealizedPnl')}</div>
             {isLoading ? <Skeleton h={32} /> : (
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
                 {totals.total_pnl != null ? fmt(totals.total_pnl) : '$0'}
               </div>
             )}
@@ -192,7 +196,7 @@ export default function Home() {
                   </div>
                 </div>
                 {isLoading ? <Skeleton h={32} /> : (
-                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
+                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
                     {displayVal !== 0 ? `${displayVal >= 0 ? '+' : ''}${fmt(displayVal)}` : '-'}
                   </div>
                 )}
@@ -209,7 +213,7 @@ export default function Home() {
           <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.activeAlerts')}</div>
             {isLoading ? <Skeleton h={32} /> : (
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
                 {alertsCount ?? 0}
               </div>
             )}
@@ -223,10 +227,10 @@ export default function Home() {
         </div>
 
         {/* MAIN GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 340px', gap: 20, alignItems: 'start' }}>
 
           {/* LEFT */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
             {/* Holdings table */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #292524' }}>
@@ -244,7 +248,8 @@ export default function Home() {
                     {[1, 2, 3].map(i => <Skeleton key={i} h={40} />)}
                   </div>
                 ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
                         {[
@@ -294,6 +299,7 @@ export default function Home() {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             </div>

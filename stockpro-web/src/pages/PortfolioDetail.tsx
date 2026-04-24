@@ -8,6 +8,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const fmtCompact = (n: number) => {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
@@ -240,6 +241,7 @@ export default function PortfolioDetail() {
   const api = useApiClient()
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
 
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n)
@@ -438,7 +440,7 @@ export default function PortfolioDetail() {
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
       {showCashModal && <CashModal portfolioId={id!} currentBalance={cashBalance} onClose={() => setShowCashModal(false)} />}
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {portfolioLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -450,7 +452,7 @@ export default function PortfolioDetail() {
 
         {!portfolioLoading && <>
         {/* HEADER */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Link to="/portfolio" style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -475,8 +477,8 @@ export default function PortfolioDetail() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 20, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
 
             {/* CHART CARD */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
@@ -486,7 +488,7 @@ export default function PortfolioDetail() {
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>
                       {t('portfolioDetail.portfolioValue')}{isFiltered && <span style={{ marginLeft: 6, fontSize: 10, color: '#78716c', textTransform: 'none', letterSpacing: 'normal' }}>(filtered)</span>}
                     </div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
+                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
@@ -546,7 +548,8 @@ export default function PortfolioDetail() {
                   </div>
                 </div>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 640 : undefined }}>
                 <thead>
                   <tr style={{ padding: '0 24px' }}>
                     {COLUMNS.map(col => {
@@ -637,6 +640,7 @@ export default function PortfolioDetail() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
 

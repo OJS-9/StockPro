@@ -1,10 +1,13 @@
 import { SignUp as ClerkSignUp } from '@clerk/clerk-react'
 import Icon from '../components/Icon'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 export default function SignUp() {
+  const { isMobile } = useBreakpoint()
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
       {/* Left branding panel */}
+      {!isMobile && (
       <div
         style={{
           background: '#1c1917',
@@ -67,9 +70,10 @@ export default function SignUp() {
 
         <div style={{ fontSize: 12, color: '#a8a29e' }}>&copy; 2026 StockPro. Built for retail investors.</div>
       </div>
+      )}
 
       {/* Right auth panel */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '24px 16px' : 48, background: isMobile ? '#1c1917' : undefined }}>
         <ClerkSignUp
           routing="path"
           path={`${import.meta.env.BASE_URL}sign-up`}

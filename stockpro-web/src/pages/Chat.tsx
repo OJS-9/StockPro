@@ -6,6 +6,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 interface Source {
   index: number
@@ -237,6 +238,8 @@ export default function Chat() {
   const [highlightedSource, setHighlightedSource] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
+  const { isMobile } = useBreakpoint()
+  const [asideOpen, setAsideOpen] = useState(false)
 
   const SUGGESTIONS = [
     t('chat.suggestion1'),
@@ -514,7 +517,26 @@ export default function Chat() {
       <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
 
         {/* CONTEXT PANEL */}
-        <aside style={{ width: 280, flexShrink: 0, borderInlineEnd: '1px solid #292524', display: 'flex', flexDirection: 'column', background: '#0c0a09', overflow: 'hidden' }}>
+        {isMobile && asideOpen && (
+          <div onClick={() => setAsideOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 150 }} />
+        )}
+        <aside style={{
+          width: 280,
+          flexShrink: 0,
+          borderInlineEnd: '1px solid #292524',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#0c0a09',
+          overflow: 'hidden',
+          ...(isMobile ? {
+            position: 'fixed',
+            top: 60,
+            bottom: 0,
+            insetInlineStart: asideOpen ? 0 : -300,
+            zIndex: 160,
+            transition: 'inset-inline-start 0.25s',
+          } : {}),
+        }}>
           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #292524' }}>
             <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 12 }}>{t('chat.reportContext')}</div>
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 10, padding: 14 }}>
@@ -556,8 +578,13 @@ export default function Chat() {
 
         {/* CHAT PANEL */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 28px', borderBottom: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div style={{ padding: isMobile ? '12px 16px' : '16px 28px', borderBottom: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {isMobile && (
+                <button onClick={() => setAsideOpen(o => !o)} style={{ background: 'none', border: '1px solid #292524', borderRadius: 8, padding: 6, color: '#a8a29e', cursor: 'pointer', display: 'flex' }}>
+                  <Icon name="menu_book" size={18} />
+                </button>
+              )}
               <AIAvatar />
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{t('chat.stockproAi')}</div>
@@ -579,7 +606,7 @@ export default function Chat() {
           </div>
 
           {/* MESSAGES */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '28px 28px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 16px 12px' : '28px 28px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             {messages.map((msg) => (
               <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 0, maxWidth: 680, alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <div style={{ display: 'flex', gap: 12, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
@@ -645,7 +672,7 @@ export default function Chat() {
           </div>
 
           {/* SUGGESTIONS */}
-          <div style={{ padding: '0 28px 12px', flexShrink: 0 }}>
+          <div style={{ padding: isMobile ? '0 16px 10px' : '0 28px 12px', flexShrink: 0 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {SUGGESTIONS.map(s => (
                 <button
@@ -661,7 +688,7 @@ export default function Chat() {
           </div>
 
           {/* INPUT */}
-          <div style={{ padding: '0 28px 24px', flexShrink: 0 }}>
+          <div style={{ padding: isMobile ? '0 16px 16px' : '0 28px 24px', flexShrink: 0 }}>
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, display: 'flex', alignItems: 'flex-end', gap: 10, padding: '12px 14px' }}>
               <textarea
                 value={input}

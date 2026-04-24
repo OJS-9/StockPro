@@ -7,12 +7,14 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 export default function Alerts() {
   const api = useApiClient()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const { isMobile } = useBreakpoint()
   const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
   const [showCreate, setShowCreate] = useState(false)
   // API create fields: symbol, direction (above|below), target_price, asset_type (stock|crypto)
@@ -91,7 +93,7 @@ export default function Alerts() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1000, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
@@ -110,7 +112,7 @@ export default function Alerts() {
         {/* STATS */}
         {isLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 12 }}>
               {[1, 2, 3, 4].map(i => (
                 <div key={i} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: '16px 18px' }}>
                   <Skeleton height={14} width={60} />
@@ -121,7 +123,7 @@ export default function Alerts() {
             {[1, 2, 3].map(i => <Skeleton key={i} height={64} borderRadius={14} />)}
           </div>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 12, marginBottom: 32 }}>
           {[
             { label: t('alerts.active'), val: activeCount, color: '#22c55e' as string },
             { label: t('alerts.triggered'), val: triggeredCount, color: '#f59e0b' as string },
@@ -130,7 +132,7 @@ export default function Alerts() {
           ].map(({ label, val, color }) => (
             <div key={label} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: '16px 18px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 600, lineHeight: 1, color }}>{val}</div>
+              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 600, lineHeight: 1, color }}>{val}</div>
             </div>
           ))}
         </div>
@@ -139,7 +141,7 @@ export default function Alerts() {
         {showCreate && (
           <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '24px', marginBottom: 24 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>{t('alerts.createAlert')}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>{t('alerts.ticker')}</label>
                 <input value={newAlert.symbol} onChange={e => setNewAlert(a => ({ ...a, symbol: e.target.value.toUpperCase() }))} placeholder="NVDA" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
@@ -196,7 +198,7 @@ export default function Alerts() {
             const statusLabel = isTriggered ? t('alerts.triggered') : isActive ? t('alerts.active') : t('alerts.paused')
             return (
               <div key={alertId} style={{ background: '#1c1917', border: `1px solid #292524`, borderRadius: 14, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 16, padding: isMobile ? '14px 14px' : '16px 20px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
                   {/* Status */}
                   <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, minWidth: 80 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, boxShadow: isActive && !isTriggered ? `0 0 8px ${statusColor}` : 'none' }} />
@@ -224,7 +226,7 @@ export default function Alerts() {
                   </div>
                   {/* Progress */}
                   {currentPrice > 0 && targetPrice > 0 && (
-                    <div style={{ minWidth: 180 }}>
+                    <div style={{ minWidth: isMobile ? 100 : 180 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#a8a29e', marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
                         <span>{fmt(currentPrice)}</span>
                         <span>{fmt(targetPrice)}</span>

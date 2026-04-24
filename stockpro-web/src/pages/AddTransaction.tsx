@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
@@ -12,6 +13,7 @@ export default function AddTransaction() {
   const { id } = useParams()
   const navigate = useNavigate()
   const api = useApiClient()
+  const { isMobile } = useBreakpoint()
   const [form, setForm] = useState({ symbol: '', type: 'BUY', shares: '', price: '', date: new Date().toISOString().split('T')[0] })
 
   const total = parseFloat(form.shares || '0') * parseFloat(form.price || '0')
@@ -51,7 +53,7 @@ export default function AddTransaction() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 640, margin: '0 auto', padding: '48px 48px 80px' }}>
+      <main style={{ maxWidth: 640, margin: '0 auto', padding: isMobile ? '24px 16px 60px' : '48px 48px 80px' }}>
 
         {/* HEADER */}
         <div style={{ marginBottom: 32 }}>
@@ -63,7 +65,7 @@ export default function AddTransaction() {
           <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Add Transaction</h1>
         </div>
 
-        <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 32, marginBottom: 20 }}>
+        <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: isMobile ? 20 : 32, marginBottom: 20 }}>
           {/* BUY / SELL TOGGLE */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 24, padding: 4, background: '#232120', borderRadius: 10 }}>
             {['BUY', 'SELL'].map(t => (
