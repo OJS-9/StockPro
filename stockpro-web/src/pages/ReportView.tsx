@@ -29,6 +29,7 @@ export default function ReportView() {
   const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
   const [tocOpen, setTocOpen] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   // /report/<id>?format=json returns {report: {report_id, ticker, trade_type, report_text, created_at, ...}}
   const { data } = useQuery({
@@ -174,14 +175,35 @@ export default function ReportView() {
               <span style={{ fontSize: 13, color: '#a8a29e' }}>{report.created_at}</span>
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              {(isMobile ? [] : [
-                { icon: 'share', label: t('reportView.share') },
-                { icon: 'download', label: t('reportView.exportPdf') },
-              ]).map(({ icon, label }) => (
-                <button key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>
-                  <Icon name={icon} size={15} /> {label}
-                </button>
-              ))}
+              {!isMobile && (
+                <>
+                  <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: 'pointer' }}>
+                    <Icon name="share" size={15} /> {t('reportView.share')}
+                  </button>
+                  <button
+                    disabled={exportingPdf}
+                    onClick={async () => {
+                      setExportingPdf(true)
+                      try {
+                        const res = await api.get(`/report/${id}/pdf`)
+                        if (!res.ok) return
+                        const blob = await res.blob()
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `${report.symbol}_report.pdf`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      } finally {
+                        setExportingPdf(false)
+                      }
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.5 : 1 }}
+                  >
+                    <Icon name="download" size={15} /> {exportingPdf ? t('reportView.exporting', 'Exporting...') : t('reportView.exportPdf')}
+                  </button>
+                </>
+              )}
               <Link
                 to={`/chat/${id}`}
                 style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
