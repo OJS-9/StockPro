@@ -229,7 +229,7 @@ class DatabaseManager:
                         name          VARCHAR(100)  NOT NULL DEFAULT 'My Portfolio',
                         description   TEXT,
                         user_id       VARCHAR(36)   REFERENCES users(user_id) ON DELETE SET NULL,
-                        track_cash    BOOLEAN       NOT NULL DEFAULT FALSE,
+                        track_cash    BOOLEAN       NOT NULL DEFAULT TRUE,
                         cash_balance  NUMERIC(18,2) NOT NULL DEFAULT 0,
                         created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
                         updated_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
@@ -580,6 +580,22 @@ class DatabaseManager:
         finally:
             self._release(conn)
 
+        # Run data migrations in a separate transaction so they succeed
+        # even when the schema transaction hits a concurrent-update conflict.
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE portfolios SET track_cash = TRUE WHERE track_cash = FALSE"
+                )
+            conn.commit()
+        except Exception:
+            if conn:
+                conn.rollback()
+        finally:
+            self._release(conn)
+
     def add_waitlist_email(self, email: str) -> None:
         """Persist a waitlist signup. Duplicate emails are ignored (idempotent)."""
         conn = None
@@ -919,7 +935,7 @@ class DatabaseManager:
         name: str = "My Portfolio",
         description: str = "",
         user_id: Optional[str] = None,
-        track_cash: bool = False,
+        track_cash: bool = True,
         cash_balance: float = 0.0,
     ):
         """Create a new portfolio."""
@@ -987,6 +1003,26 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to update cash balance: {e}")
+        finally:
+            self._release(conn)
+
+    def enable_cash_tracking(self, portfolio_id: str) -> None:
+        """Enable cash tracking for a portfolio."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE portfolios SET track_cash = TRUE WHERE portfolio_id = %s
+                """,
+                    (portfolio_id,),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to enable cash tracking: {e}")
         finally:
             self._release(conn)
 

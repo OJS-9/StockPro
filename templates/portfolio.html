@@ -156,10 +156,31 @@
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
-                                <td class="px-5 py-4 text-right font-mono text-sm font-semibold cursor-pointer cash-edit-cell text-zinc-950 dark:text-zinc-50" data-portfolio-id="{{ portfolio.portfolio_id }}" data-cash-balance="{{ summary.cash_balance|float }}" title="Click to edit">${{ summary.cash_balance|currency }}</td>
+                                <td class="px-5 py-4 text-right font-mono text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <span id="cash-balance-display">${{ summary.cash_balance|currency }}</span>
+                                        <button type="button" onclick="document.getElementById('cash-modal').classList.remove('hidden')"
+                                            class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer">
+                                            <span class="material-symbols-outlined" style="font-size:14px;">swap_vert</span>
+                                        </button>
+                                    </div>
+                                </td>
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                                 <td class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
                                 <td id="cash-portfolio-pct" class="px-5 py-4 text-right font-mono text-sm text-zinc-400">—</td>
+                            </tr>
+                            {% elif not summary.track_cash %}
+                            <tr>
+                                <td colspan="8" class="px-5 py-3">
+                                    <div class="flex items-center justify-between bg-zinc-100 dark:bg-zinc-800 rounded-md px-4 py-2.5">
+                                        <span class="text-sm text-zinc-600 dark:text-zinc-300">Cash tracking is disabled for this portfolio.</span>
+                                        <button type="button" id="enable-cash-btn"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 rounded hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
+                                            <span class="material-symbols-outlined" style="font-size:14px;">payments</span>
+                                            Enable Cash Tracking
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                             {% endif %}
                             {% for holding in holdings %}
@@ -220,6 +241,42 @@
 
         </div>
     </main>
+
+{% if summary.track_cash %}
+<!-- Deposit / Withdraw Cash Modal -->
+<div id="cash-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl p-6 w-full max-w-sm mx-4">
+        <h3 class="text-base font-semibold text-zinc-950 dark:text-zinc-50 mb-4">Deposit / Withdraw Cash</h3>
+        <p class="text-xs text-zinc-500 mb-4">Current balance: <span class="font-mono font-semibold text-zinc-700 dark:text-zinc-300">${{ summary.cash_balance|currency }}</span></p>
+        <form id="cash-form">
+            <div class="flex gap-4 mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="cash_action" value="deposit" checked class="text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400">
+                    <span class="text-sm text-zinc-700 dark:text-zinc-300">Deposit</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="cash_action" value="withdraw" class="text-zinc-900 dark:text-zinc-50 focus:ring-zinc-400">
+                    <span class="text-sm text-zinc-700 dark:text-zinc-300">Withdraw</span>
+                </label>
+            </div>
+            <div class="space-y-1.5 mb-4">
+                <label for="cash-amount" class="block text-xs font-medium text-zinc-500">Amount ($)</label>
+                <input type="text" id="cash-amount" inputmode="decimal" placeholder="0.00" required autofocus
+                    class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2.5 min-h-11 text-base sm:text-sm font-mono placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-400/30 focus:border-zinc-500 outline-none transition-all"/>
+            </div>
+            <p id="cash-error" class="hidden text-xs text-red-500 mb-3"></p>
+            <div class="flex items-center justify-end gap-3">
+                <button type="button" onclick="document.getElementById('cash-modal').classList.add('hidden')" class="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50 font-medium transition-colors cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer">
+                    Confirm
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 {% include '_footer.html' %}
 
@@ -416,69 +473,68 @@
         });
 }());
 
+// Deposit / Withdraw cash modal
 (function () {
-    var cell = document.querySelector('.cash-edit-cell');
-    if (!cell) return;
-    var portfolioId = cell.getAttribute('data-portfolio-id');
+    var modal = document.getElementById('cash-modal');
+    if (!modal) return;
+    var portfolioId = '{{ portfolio.portfolio_id }}';
     var csrfToken = {{ csrf_token() | tojson }};
-    function formatCash(n) {
-        return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    function parseCash(s) {
-        var n = parseFloat(String(s).replace(/[,$\s]/g, ''));
-        return isNaN(n) ? null : Math.max(0, n);
-    }
-    cell.addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (cell.querySelector('input')) return;
-        var current = cell.getAttribute('data-cash-balance') || '0';
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.value = current;
-        input.className = 'w-24 px-2 py-1 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-600 rounded-md text-right font-mono text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-400';
-        input.style.fontSize = 'inherit';
-        function save() {
-            var val = parseCash(input.value);
-            if (val === null) {
-                cell.textContent = formatCash(current);
-                cell.removeChild(input);
-                return;
+    var form = document.getElementById('cash-form');
+    var errorEl = document.getElementById('cash-error');
+
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+        var action = form.querySelector('input[name="cash_action"]:checked').value;
+        var amount = parseFloat(form.querySelector('#cash-amount').value);
+        if (isNaN(amount) || amount <= 0) {
+            errorEl.textContent = 'Enter a positive amount';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+        fetch('/portfolio/' + portfolioId + '/cash', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ action: action, amount: amount })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                location.reload();
+            } else {
+                errorEl.textContent = data.error || 'Failed to update';
+                errorEl.classList.remove('hidden');
             }
-            fetch('/portfolio/' + portfolioId + '/cash', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken },
-                body: JSON.stringify({ cash_balance: val })
-            })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.ok) {
-                    cell.setAttribute('data-cash-balance', data.cash_balance);
-                    cell.textContent = formatCash(data.cash_balance);
-                    location.reload();
-                } else {
-                    cell.textContent = formatCash(current);
-                    alert(data.error || 'Failed to update');
-                }
-            })
-            .catch(function () {
-                cell.textContent = formatCash(current);
-                alert('Failed to update cash balance');
-            });
-            cell.removeChild(input);
-        }
-        function cancel() {
-            cell.textContent = formatCash(current);
-            cell.removeChild(input);
-        }
-        input.addEventListener('blur', save);
-        input.addEventListener('keydown', function (ev) {
-            if (ev.key === 'Enter') { ev.preventDefault(); save(); }
-            if (ev.key === 'Escape') { ev.preventDefault(); cancel(); }
+        })
+        .catch(function () {
+            errorEl.textContent = 'Failed to update cash balance';
+            errorEl.classList.remove('hidden');
         });
-        cell.textContent = '';
-        cell.appendChild(input);
-        input.focus();
-        input.select();
+    });
+})();
+
+// Enable cash tracking button
+(function () {
+    var btn = document.getElementById('enable-cash-btn');
+    if (!btn) return;
+    var portfolioId = '{{ portfolio.portfolio_id }}';
+    var csrfToken = {{ csrf_token() | tojson }};
+    btn.addEventListener('click', function () {
+        fetch('/portfolio/' + portfolioId + '/toggle-cash', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrfToken }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.ok) location.reload();
+            else alert(data.error || 'Failed to enable cash tracking');
+        })
+        .catch(function () { alert('Failed to enable cash tracking'); });
     });
 })();
 </script>

@@ -1196,6 +1196,7 @@ def api_reports_generate():
     ticker = (data.get("ticker") or "").strip().upper()
     trade_type = (data.get("trade_type") or "").strip()
     context_str = (data.get("context") or "").strip()
+    no_questions = bool(data.get("no_questions"))
 
     if not ticker or not trade_type:
         return jsonify({"error": "ticker and trade_type are required"}), 400
@@ -1241,6 +1242,49 @@ def api_reports_generate():
     from spend_budget import get_spend_budget_usd
     spend_budget_usd = get_spend_budget_usd(agent.user_id)
 
+    # Always surface clarifying questions + subject areas so the CLI flow
+    # matches the web flow. Callers that want to skip (headless automation)
+    # can pass no_questions=True.
+    pending = agent.pending_questions if isinstance(agent.pending_questions, list) else []
+    if not pending:
+        # Fallback matches /ask_questions — ensure the user always gets a prompt.
+        pending = [
+            {
+                "question": f"What is your primary goal for researching {ticker}?",
+                "options": [
+                    "Long-term investment",
+                    "Swing trade",
+                    "Day trade",
+                    "General analysis",
+                ],
+            }
+        ]
+
+    from research_subjects import get_research_subjects_for_trade_type
+    subjects = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "description": s.description,
+            "priority": s.priority.get(trade_type, 99),
+        }
+        for s in get_research_subjects_for_trade_type(trade_type)
+    ]
+
+    if not no_questions:
+        _generation_status[session_id] = {
+            "status": "needs_input",
+            "questions": pending,
+            "subjects": subjects,
+            "_owner_user_id": user_id,
+        }
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "questions": pending,
+            "subjects": subjects,
+        })
+
     _generation_status[session_id] = {
         "status": "in_progress",
         "report_id": None,
@@ -1249,6 +1293,12 @@ def api_reports_generate():
         "_owner_user_id": user_id,
     }
 
+    _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd)
+    return jsonify({"success": True, "session_id": session_id, "questions": []})
+
+
+def _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd, selected_subjects=None):
+    """Spawn the background report-generation thread for CLI/headless flows."""
     def run_generation():
         import threading as _threading
 
@@ -1282,6 +1332,7 @@ def api_reports_generate():
         try:
             agent.generate_report(
                 context=context_str,
+                selected_subjects=selected_subjects,
                 spend_budget_usd=spend_budget_usd,
             )
             _generation_status[session_id] = {
@@ -1302,6 +1353,68 @@ def api_reports_generate():
             agent.set_progress_fn(None)
 
     threading.Thread(target=run_generation, daemon=True).start()
+
+
+@app.route("/api/reports/answer", methods=["POST"])
+@csrf.exempt
+@login_required
+def api_reports_answer():
+    """Submit answers to clarifying questions and kick off generation.
+
+    Accepts JSON body: {session_id, answers: [str, ...] or [{question, answer}, ...]}
+    Reads the paused session (status == needs_input), builds context_str from
+    Q&A pairs, and starts the background generation thread.
+    """
+    data = request.get_json(force=True) or {}
+    session_id = (data.get("session_id") or "").strip()
+    answers_in = data.get("answers") or []
+    selected_subject_ids = data.get("selected_subject_ids") or None
+
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+
+    status = _generation_status.get(session_id)
+    user_id = session.get("user_id")
+
+    if status is None:
+        return jsonify({"error": "unknown session"}), 404
+    if status.get("_owner_user_id") != user_id:
+        return jsonify({"error": "forbidden"}), 403
+    if status.get("status") != "needs_input":
+        return jsonify({"error": f"session not awaiting input (status={status.get('status')})"}), 409
+
+    questions = status.get("questions") or []
+
+    # Accept either a flat list of answer strings (aligned with questions order)
+    # or a list of {question, answer} dicts.
+    lines = []
+    for i, q in enumerate(questions):
+        q_text = q.get("question") if isinstance(q, dict) else str(q)
+        ans = ""
+        if i < len(answers_in):
+            a = answers_in[i]
+            ans = a.get("answer", "") if isinstance(a, dict) else str(a)
+        lines.append(f"Q: {q_text}")
+        lines.append(f"A: {ans}")
+    context_str = "User context:\n" + "\n".join(lines) if lines else ""
+
+    agent = initialize_session(session_id)
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    _generation_status[session_id] = {
+        "status": "in_progress",
+        "report_id": None,
+        "progress": 5,
+        "step": "Starting...",
+        "_owner_user_id": user_id,
+    }
+
+    _start_report_generation_thread(
+        session_id, agent, context_str, user_id, spend_budget_usd,
+        selected_subjects=selected_subject_ids,
+    )
     return jsonify({"success": True, "session_id": session_id})
 
 
@@ -1428,10 +1541,25 @@ def create_portfolio_route():
     return redirect(url_for("portfolio_detail", portfolio_id=portfolio_id))
 
 
-@app.route("/portfolio/<portfolio_id>/cash", methods=["POST"])
+@app.route("/api/portfolio/<portfolio_id>/toggle-cash", methods=["POST"])
+@login_required
+def toggle_cash_tracking(portfolio_id: str):
+    """Enable cash tracking for a portfolio."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
+        return {"ok": False, "error": "Not found"}, 404
+    try:
+        portfolio_service.enable_cash_tracking(portfolio_id)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
+
+@app.route("/api/portfolio/<portfolio_id>/cash", methods=["POST"])
 @login_required
 def update_portfolio_cash(portfolio_id: str):
-    """Update cash balance for a portfolio (JSON body: { \"cash_balance\": number })."""
+    """Update cash balance for a portfolio. Supports deposit, withdraw, or set."""
     portfolio_service = get_portfolio_service()
     portfolio_data = portfolio_service.get_portfolio(portfolio_id)
     if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
@@ -1439,15 +1567,21 @@ def update_portfolio_cash(portfolio_id: str):
     if not portfolio_data.get("track_cash"):
         return {"ok": False, "error": "Portfolio does not track cash"}, 400
     data = request.get_json(silent=True) or {}
+    action = data.get("action", "set")
     try:
-        cash_balance = float(data.get("cash_balance", 0))
-        if cash_balance < 0:
-            return {"ok": False, "error": "Cash balance cannot be negative"}, 400
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "Invalid cash_balance"}, 400
-    try:
-        portfolio_service.update_cash_balance(portfolio_id, cash_balance)
-        return {"ok": True, "cash_balance": cash_balance}
+        amount = float(data.get("amount", data.get("cash_balance", 0)))
+        if action == "deposit":
+            new_balance = portfolio_service.deposit_cash(portfolio_id, amount)
+        elif action == "withdraw":
+            new_balance = portfolio_service.withdraw_cash(portfolio_id, amount)
+        else:
+            if amount < 0:
+                return {"ok": False, "error": "Cash balance cannot be negative"}, 400
+            portfolio_service.update_cash_balance(portfolio_id, amount)
+            new_balance = amount
+        return {"ok": True, "cash_balance": new_balance}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}, 400
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
@@ -1859,6 +1993,31 @@ def api_delete_transaction(portfolio_id: str, transaction_id: str):
     return jsonify({"success": False, "error": "Delete failed"}), 500
 
 
+@app.route("/api/portfolios", methods=["POST"])
+@login_required
+def api_create_portfolio():
+    """Create a new portfolio (JSON API for React SPA)."""
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Portfolio name is required"}), 400
+    track_cash = data.get("track_cash", True)
+    cash_balance = 0.0
+    if track_cash:
+        try:
+            cash_balance = max(0.0, float(data.get("cash_balance", 0)))
+        except (ValueError, TypeError):
+            cash_balance = 0.0
+    portfolio_service = get_portfolio_service()
+    portfolio_id = portfolio_service.create_portfolio(
+        name=name,
+        user_id=session["user_id"],
+        track_cash=track_cash,
+        cash_balance=cash_balance,
+    )
+    return jsonify({"ok": True, "portfolio_id": portfolio_id})
+
+
 @app.route("/api/portfolios/prices")
 @login_required
 def portfolios_prices():
@@ -1989,6 +2148,8 @@ def portfolio_prices(portfolio_id):
             ),
             "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
             "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
+            "track_cash": bool(summary.get("track_cash")),
+            "cash_balance": to_float(summary.get("cash_balance")),
             "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
             "breakdowns": {
                 "sector": breakdowns.get("sector", []),

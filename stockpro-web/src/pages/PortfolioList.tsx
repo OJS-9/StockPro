@@ -35,13 +35,19 @@ interface NewPortfolioModalProps {
 
 function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
   const [name, setName] = useState('')
+  const [trackCash, setTrackCash] = useState(true)
+  const [cashBalance, setCashBalance] = useState('')
   const api = useApiClient()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/api/portfolios', { name })
+      const body: Record<string, unknown> = { name, track_cash: trackCash }
+      if (trackCash && cashBalance.trim()) {
+        body.cash_balance = parseFloat(cashBalance) || 0
+      }
+      const res = await api.post('/api/portfolios', body)
       if (!res.ok) throw new Error('Failed to create portfolio')
       return res.json()
     },
@@ -71,6 +77,24 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
             style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '10px 14px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
           />
         </div>
+        <div style={{ marginBottom: trackCash ? 12 : 20 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={trackCash} onChange={e => setTrackCash(e.target.checked)} style={{ accentColor: '#d6d3d1' }} />
+            <span style={{ fontSize: 13, color: '#d6d3d1' }}>Track cash in this portfolio</span>
+          </label>
+        </div>
+        {trackCash && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#a8a29e', marginBottom: 6 }}>Initial cash balance (optional)</label>
+            <input
+              value={cashBalance}
+              onChange={e => setCashBalance(e.target.value)}
+              placeholder="0"
+              inputMode="decimal"
+              style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '10px 14px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 14, fontVariantNumeric: 'tabular-nums', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer', fontSize: 13 }}>{t('portfolio.cancel')}</button>
           <button
