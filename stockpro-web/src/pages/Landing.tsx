@@ -157,9 +157,9 @@ export default function Landing() {
           <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for people who want to understand companies</h2>
           <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 480, margin: '0 auto' }}>Every feature designed to help you understand companies deeply.</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 14 : 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 14 : 20 }}>
           {features.map(({ icon, name, desc }) => (
-            <div key={name} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 28, transition: 'border-color 0.2s' }}>
+            <div key={name} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 28, transition: 'border-color 0.2s', width: isMobile ? '100%' : 'calc(33.333% - 14px)', flexShrink: 0 }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
                 <Icon name={icon} size={22} />
               </div>
