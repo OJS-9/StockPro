@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
@@ -9,6 +9,7 @@ import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useResearchProgress } from '../ResearchProgressContext'
 
 const TRADE_TYPES = [
   { id: 'day', icon: 'bolt', iconStyle: 'bull', name: 'Day Trade', nameKey: 'research.dayTrade', descKey: 'research.dayTradeDesc' },
@@ -33,7 +34,7 @@ const iconColor: Record<string, string> = {
   full: '#60a5fa',
 }
 
-type Phase = 'setup' | 'position' | 'loading' | 'subjects' | 'questions' | 'generating'
+type Phase = 'setup' | 'position' | 'loading' | 'subjects' | 'questions'
 
 interface PopupQuestion {
   question: string
@@ -76,7 +77,7 @@ export default function ResearchWizard() {
 
   const api = useApiClient()
   const { getToken } = useAuth()
-  const navigate = useNavigate()
+  const researchProgress = useResearchProgress()
 
   const { data: recentData } = useQuery({
     queryKey: ['recent-tickers'],
@@ -110,6 +111,7 @@ export default function ResearchWizard() {
       const formData = new FormData()
       formData.append('ticker', ticker.toUpperCase())
       formData.append('trade_type', tradeTypeFullForApi)
+      formData.append('language', lang)
       if (posSummary) formData.append('position_summary', posSummary)
       if (posGoal) formData.append('position_goal', posGoal)
 
@@ -158,38 +160,16 @@ export default function ResearchWizard() {
         credentials: 'include',
       })
       if (!res.ok) throw new Error('Failed to start research generation')
-      setPhase('generating')
-      toast.success('Research started! Generating report...')
-      pollForReport(data.session_id)
+      researchProgress.start(data.session_id, ticker.toUpperCase())
+      setPhase('setup')
+      setPopupData(null)
+      setSelectedSubjectIds([])
+      setAnswers([])
+      toast.success('Research started! Track progress in the top bar.')
     } catch (e: any) {
       toast.error(e.message || 'Failed to start research')
       setPhase('setup')
     }
-  }
-
-  const pollForReport = (sessionId: string) => {
-    const poll = async () => {
-      try {
-        const token = await getToken()
-        const r = await fetch(`/api/report_status/${sessionId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          credentials: 'include',
-        })
-        if (!r.ok) { setTimeout(poll, 3000); return }
-        const status = await r.json()
-        if (status.status === 'ready' && status.report_id) {
-          navigate(`/report/${status.report_id}`)
-        } else if (status.status === 'error') {
-          setPhase('setup')
-          toast.error('Research failed. Please try again.')
-        } else {
-          setTimeout(poll, 3000)
-        }
-      } catch {
-        setTimeout(poll, 5000)
-      }
-    }
-    setTimeout(poll, 3000)
   }
 
   // Launch button clicked — check position first
@@ -316,11 +296,7 @@ export default function ResearchWizard() {
         <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: isMobile ? 20 : 28, display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: isMobile ? 14 : 20, opacity: canLaunch ? 1 : 0.5, flexDirection: isMobile ? 'column' : 'row' }}>
           <div>
             <h3 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 600, marginBottom: 6 }}>
-              {phase === 'generating'
-                ? t('research.generatingReport', { ticker })
-                : canLaunch
-                  ? t('research.readyToResearch', { ticker })
-                  : t('research.completeSteps')}
+              {canLaunch ? t('research.readyToResearch', { ticker }) : t('research.completeSteps')}
             </h3>
             <p style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.5 }}>
               {tradeType ? tradeTypeFull : t('research.selectTradeType')} &middot; {t('research.fullPipeline')}
@@ -336,7 +312,7 @@ export default function ResearchWizard() {
             style={{ background: canLaunch && phase === 'setup' ? '#d6d3d1' : '#292524', color: canLaunch && phase === 'setup' ? '#0c0a09' : '#a8a29e', fontSize: 15, fontWeight: 700, padding: '14px 28px', borderRadius: 10, border: 'none', cursor: canLaunch && phase === 'setup' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', fontFamily: 'Nunito, sans-serif', flexShrink: 0 }}
           >
             <Icon name="auto_awesome" size={20} filled />
-            {phase === 'generating' ? t('research.generating') : launchMutation.isPending ? t('research.checking') : t('research.launchResearch')}
+            {launchMutation.isPending ? t('research.checking') : t('research.launchResearch')}
           </button>
         </div>
       </main>
@@ -459,8 +435,8 @@ export default function ResearchWizard() {
                         {checked && <Icon name="check" size={12} />}
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: checked ? '#fafaf9' : '#d6d3d1', marginBottom: 2 }}>{s.name}</div>
-                        <div style={{ fontSize: 12, color: '#a8a29e', lineHeight: 1.4 }}>{s.description}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: checked ? '#fafaf9' : '#d6d3d1', marginBottom: 2 }}>{t(`subject.${s.id}`, s.name)}</div>
+                        <div style={{ fontSize: 12, color: '#a8a29e', lineHeight: 1.4 }}>{t(`subject.${s.id}.desc`, s.description)}</div>
                       </div>
                     </label>
                   )

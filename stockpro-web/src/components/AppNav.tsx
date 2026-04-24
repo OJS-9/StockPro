@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useUser, useClerk } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from './Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useResearchProgress } from '../ResearchProgressContext'
 
 const navLinks = [
   { to: '/home', icon: 'dashboard', tKey: 'nav.dashboard' },
@@ -38,6 +39,8 @@ export default function AppNav() {
   const panelRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLButtonElement>(null)
   const { isMobile } = useBreakpoint()
+  const navigate = useNavigate()
+  const research = useResearchProgress()
 
   // Read notification data from shared query (NotificationListener in App.tsx handles toasts)
   // Provides its own queryFn so it works even if it renders before NotificationListener
@@ -105,12 +108,12 @@ export default function AppNav() {
     return location.pathname.startsWith(to)
   }
 
+  const showProgressStrip = research.status === 'generating' || research.status === 'ready' || research.status === 'error'
+
   return (
+    <div style={{ position: 'sticky', top: 0, zIndex: 100 }}>
     <nav
       style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -118,7 +121,7 @@ export default function AppNav() {
         height: 60,
         background: 'rgba(12,10,9,0.95)',
         backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid #292524',
+        borderBottom: showProgressStrip ? 'none' : '1px solid #292524',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
@@ -416,5 +419,99 @@ export default function AppNav() {
         </Link>
       </div>
     </nav>
+    {showProgressStrip && (
+      <div
+        style={{
+          background: 'rgba(12,10,9,0.95)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid #292524',
+          padding: isMobile ? '8px 16px' : '10px 48px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, minWidth: 0 }}>
+          <Icon name={research.status === 'ready' ? 'check_circle' : research.status === 'error' ? 'error' : 'auto_awesome'} size={16} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#fafaf9', fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap' }}>
+            {research.ticker || 'Report'}
+          </span>
+          {!isMobile && (() => {
+            const codeKey = research.stepCode ? `research.step.${research.stepCode}` : ''
+            let label = ''
+            if (codeKey) {
+              const translated = t(codeKey, { done: research.done ?? 0, total: research.total ?? 0 })
+              if (translated !== codeKey) label = translated
+            }
+            if (!label) label = research.step
+            return label ? (
+              <span style={{ fontSize: 12, color: '#a8a29e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>
+                · {label}
+              </span>
+            ) : null
+          })()}
+        </div>
+        <div style={{ flex: 1, height: 6, background: '#292524', borderRadius: 999, overflow: 'hidden', minWidth: 60 }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${research.progress}%`,
+              borderRadius: 999,
+              background: research.status === 'error' ? '#ef4444' : research.status === 'ready' ? '#22c55e' : '#d6d3d1',
+              transition: 'width 0.4s ease',
+            }}
+          />
+        </div>
+        <span style={{ fontSize: 12, color: '#a8a29e', fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'end', flexShrink: 0 }}>
+          {research.progress}%
+        </span>
+        {research.status === 'ready' && research.reportId && (
+          <button
+            onClick={() => { const id = research.reportId!; research.dismiss(); navigate(`/report/${id}`) }}
+            style={{
+              background: '#d6d3d1',
+              color: '#0c0a09',
+              border: 'none',
+              borderRadius: 8,
+              padding: isMobile ? '6px 10px' : '6px 14px',
+              fontSize: 12.5,
+              fontWeight: 700,
+              fontFamily: 'Nunito, sans-serif',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Icon name="arrow_forward" size={14} />
+            {t('nav.showReport')}
+          </button>
+        )}
+        {(research.status === 'ready' || research.status === 'error') && (
+          <button
+            onClick={() => research.dismiss()}
+            title={t('nav.dismiss')}
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              border: '1px solid #292524',
+              background: 'transparent',
+              color: '#a8a29e',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Icon name="close" size={14} />
+          </button>
+        )}
+      </div>
+    )}
+    </div>
   )
 }

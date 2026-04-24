@@ -6,6 +6,7 @@ import { ClerkProvider } from '@clerk/clerk-react'
 import { Toaster } from 'react-hot-toast'
 import App from './App.tsx'
 import { LanguageProvider, useLanguage } from './LanguageContext'
+import { ResearchProgressProvider } from './ResearchProgressContext'
 import './i18n'
 import './index.css'
 
@@ -34,8 +35,10 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <LanguageProvider>
           <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-            <App />
-            <AppToaster />
+            <ResearchProgressProvider>
+              <App />
+              <AppToaster />
+            </ResearchProgressProvider>
           </BrowserRouter>
         </LanguageProvider>
       </QueryClientProvider>
