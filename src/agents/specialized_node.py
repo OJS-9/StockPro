@@ -7,8 +7,9 @@ Called in parallel for each research subject via the Send() API in research_grap
 
 import logging
 import os
+from typing import Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.errors import GraphRecursionError
 
@@ -23,6 +24,88 @@ SPECIALIZED_MAX_TURNS = int(os.getenv("SPECIALIZED_AGENT_MAX_TURNS", "8"))
 SPECIALIZED_MAX_OUTPUT_TOKENS = int(
     os.getenv("SPECIALIZED_AGENT_MAX_OUTPUT_TOKENS", "6000")
 )
+
+
+_EMPTY_PHRASES = (
+    "sorry, need more steps",
+    "need more steps to process",
+    "i need more steps",
+)
+
+
+def _extract_gathered_data(messages: list) -> str:
+    """Dump all ToolMessage contents + reasoning AIMessages into a single blob."""
+    parts = []
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            content = msg.content
+            if isinstance(content, list):
+                text = "\n".join(
+                    (p.get("text", "") if isinstance(p, dict) else str(p))
+                    for p in content
+                )
+            else:
+                text = str(content) if content else ""
+            if text.strip():
+                parts.append(f"[Tool result] {text}")
+        elif isinstance(msg, AIMessage):
+            # Include prior reasoning text (not tool-call-only messages).
+            content = msg.content
+            if isinstance(content, list):
+                text = "\n".join(
+                    (p.get("text", "") if isinstance(p, dict) else str(p))
+                    for p in content
+                )
+            else:
+                text = str(content) if content else ""
+            if text.strip():
+                parts.append(f"[Analyst note] {text}")
+    return "\n\n".join(parts)
+
+
+def _rescue_finalize(
+    llm,
+    subject: ResearchSubject,
+    ticker: str,
+    trade_type: str,
+    focus_hint: str,
+    messages: list,
+) -> tuple[str, int, int]:
+    """Run a single no-tools LLM call to synthesize findings from gathered data.
+
+    Returns (output_text, input_tokens, output_tokens).
+    """
+    gathered = _extract_gathered_data(messages)
+    if not gathered.strip():
+        return "", 0, 0
+
+    focus_line = f"\nFocus: {focus_hint}\n" if focus_hint else ""
+    rescue_prompt = (
+        f"You are wrapping up research on {subject.name} for {ticker} ({trade_type}).{focus_line}\n"
+        f"You already gathered the following data:\n\n{gathered}\n\n"
+        "Write the final research output NOW using this data. This is your final response — "
+        "do not call any more tools and do NOT say 'I need more steps'. "
+        "Structure: **Key Findings**, **Supporting Data**, **Key Takeaways** "
+        "(3-5 bullets with specific metrics). Quantify every claim."
+    )
+    try:
+        resp = llm.invoke([HumanMessage(content=rescue_prompt)])
+    except Exception as exc:
+        logger.warning("%s: rescue finalize failed: %s", subject.id, exc)
+        return "", 0, 0
+
+    usage = getattr(resp, "usage_metadata", None) or {}
+    in_tok = usage.get("input_tokens", 0)
+    out_tok = usage.get("output_tokens", 0)
+
+    content = resp.content
+    if isinstance(content, list):
+        text = "\n".join(
+            (p.get("text", "") if isinstance(p, dict) else str(p)) for p in content
+        )
+    else:
+        text = str(content) if content else ""
+    return text, in_tok, out_tok
 
 
 def _get_clients():
@@ -51,7 +134,11 @@ def _get_clients():
 
 
 def _get_instructions(
-    subject: ResearchSubject, ticker: str, trade_type: str, focus_hint: str = ""
+    subject: ResearchSubject,
+    ticker: str,
+    trade_type: str,
+    focus_hint: str = "",
+    effective_max_turns: int = SPECIALIZED_MAX_TURNS,
 ) -> str:
     datetime_context = get_datetime_context_string()
     focus_block = ""
@@ -112,7 +199,9 @@ Your specific research task: {subject.description}
 **Fallback Rule:**
 If a tool returns {{"status": "failed"}} or an error, immediately try the next tool in priority order.
 Do NOT retry the same tool. Once you have data from at least one successful tool call, write your research output.
-Never end your response with "I need more steps" — always produce findings from whatever data you have.
+
+**Hard Turn Budget:**
+You have at most {effective_max_turns} tool calls total for this subject. After your final tool call, you MUST write Key Findings / Supporting Data / Key Takeaways in the same response. Never say "I need more steps", "Sorry, need more steps", or any similar phrase — Gemini is penalized for this phrase and the run will be wasted. If you are near the turn limit, stop calling tools and write findings from the data you already have.
 
 **Output:** Structure findings with Key Findings, Supporting Data, and Sources. Quantify every claim — no vague language. End with a **Key Takeaways** section (3-5 bullets, each with a specific metric or fact).
 
@@ -155,7 +244,9 @@ def specialized_node(state: dict) -> dict:
 
     try:
         focus_hint = plan.subject_focus.get(subject_id, "")
-        instructions = _get_instructions(subject, ticker, trade_type, focus_hint)
+        instructions = _get_instructions(
+            subject, ticker, trade_type, focus_hint, effective_max_turns
+        )
         research_prompt = subject.prompt_template.format(ticker=ticker)
         if focus_hint:
             research_prompt += f"\n\nSpecific focus for this analysis: {focus_hint}"
@@ -175,46 +266,51 @@ def specialized_node(state: dict) -> dict:
         max_retries = int(os.getenv("AGENT_RATE_LIMIT_MAX_RETRIES", "3"))
         base_delay = float(os.getenv("AGENT_RATE_LIMIT_BACKOFF_SECONDS", "2.0"))
 
+        # Per-agent soft cost ceiling. Each subject gets a slice of the total
+        # budget; parallel agents don't coordinate, so we allow 1.5x headroom.
+        spend_budget_usd = state.get("spend_budget_usd")
+        subject_count_state = state.get("effective_subject_count") or 1
+        per_subject_ceiling_usd: Optional[float] = None
+        if spend_budget_usd and spend_budget_usd > 0 and subject_count_state > 0:
+            per_subject_ceiling_usd = (spend_budget_usd / subject_count_state) * 1.5
+
         def _run_specialized_once() -> dict:
             agent = create_react_agent(
                 llm,
                 tools,
                 prompt=instructions,
             )
+            # Stream so we can capture partial messages if recursion limit fires.
+            collected_messages: list = []
+            hit_recursion = False
             try:
-                result = agent.invoke(
+                for step_state in agent.stream(
                     {"messages": [HumanMessage(content=research_prompt)]},
                     config={"recursion_limit": int(effective_max_turns) * 2},
-                )
+                    stream_mode="values",
+                ):
+                    msgs = step_state.get("messages") if isinstance(step_state, dict) else None
+                    if msgs:
+                        collected_messages = list(msgs)
             except GraphRecursionError:
-                logger.warning("%s: hit recursion limit", subject_id)
-                output_text = ""
-                return {
-                    "research_outputs": {
-                        subject_id: {
-                            "subject_id": subject_id,
-                            "subject_name": subject.name,
-                            "research_output": output_text,
-                            "sources": [],
-                            "ticker": ticker,
-                            "trade_type": trade_type,
-                            "focus_hint": focus_hint,
-                        }
-                    },
-                    "actual_input_tokens": 0,
-                    "actual_output_tokens": 0,
-                }
-            # Extract the last AI message as the research output.
-            # AIMessage.content can be str or list[dict] (multimodal format) in newer LangChain.
-            output_text = ""
+                hit_recursion = True
+                logger.warning(
+                    "%s: hit recursion limit after %s messages — rescuing",
+                    subject_id,
+                    len(collected_messages),
+                )
+
+            # Tally token usage from all collected messages.
             input_tok = 0
             output_tok = 0
-            for msg in result["messages"]:
+            for msg in collected_messages:
                 usage = getattr(msg, "usage_metadata", None) or {}
                 input_tok += usage.get("input_tokens", 0)
                 output_tok += usage.get("output_tokens", 0)
 
-            for msg in reversed(result["messages"]):
+            # Extract last non-tool AI message as the normal research output.
+            output_text = ""
+            for msg in reversed(collected_messages):
                 if (
                     isinstance(msg, AIMessage)
                     and msg.content
@@ -234,14 +330,39 @@ def specialized_node(state: dict) -> dict:
                         output_text = str(content)
                     break
 
-            _empty_phrases = ["sorry, need more steps", "need more steps to process"]
-            if any(p in output_text.lower() for p in _empty_phrases):
+            empty_output = any(p in output_text.lower() for p in _EMPTY_PHRASES)
+            needs_rescue = hit_recursion or empty_output or not output_text.strip()
+
+            if needs_rescue and collected_messages:
                 logger.warning(
-                    "%s: agent hit recursion limit (output: %r), clearing output",
-                    subject_id,
-                    output_text[:80],
+                    "%s: rescuing output (recursion=%s, empty_phrase=%s, blank=%s)",
+                    subject_id, hit_recursion, empty_output, not output_text.strip(),
                 )
-                output_text = ""
+                rescued, r_in, r_out = _rescue_finalize(
+                    llm, subject, ticker, trade_type, focus_hint, collected_messages
+                )
+                if rescued.strip():
+                    output_text = rescued
+                    input_tok += r_in
+                    output_tok += r_out
+
+            # Soft per-agent cost-ceiling logging (Part 2b).
+            if per_subject_ceiling_usd is not None:
+                try:
+                    from spend_budget import get_gemini_usd_rates
+
+                    rates = get_gemini_usd_rates()
+                    if rates:
+                        local_cost = (input_tok / 1000.0) * rates["input_rate"] + (
+                            output_tok / 1000.0
+                        ) * rates["output_rate"]
+                        if local_cost > per_subject_ceiling_usd:
+                            logger.info(
+                                "%s: exceeded per-subject soft ceiling ($%.4f > $%.4f)",
+                                subject_id, local_cost, per_subject_ceiling_usd,
+                            )
+                except Exception:
+                    pass
 
             logger.info(
                 "%s: %s chars, %s/%s tokens",

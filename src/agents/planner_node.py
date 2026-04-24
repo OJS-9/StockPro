@@ -190,16 +190,17 @@ def planner_node(state: dict) -> dict:
         emitter.emit("Building research plan...")
 
     eligible = get_research_subjects_for_trade_type(trade_type)
-    eligible = eligible[:PLANNER_MAX_SUBJECTS]
 
-    # Honour user's subject selection from popup
+    # Honour user's subject selection from popup. The cap only applies when
+    # there is no explicit selection — the user's pick IS their cap, and
+    # capping the eligible list first would silently drop valid selections
+    # that fall outside the top PLANNER_MAX_SUBJECTS by priority.
     user_selected = state.get("user_selected_subjects")
     if user_selected:
-        selected_set = set(user_selected)
-        eligible_filtered = [s for s in eligible if s.id in selected_set]
-        # Restore user's ordering
-        id_to_subject = {s.id: s for s in eligible_filtered}
+        id_to_subject = {s.id: s for s in eligible}
         eligible = [id_to_subject[sid] for sid in user_selected if sid in id_to_subject]
+    else:
+        eligible = eligible[:PLANNER_MAX_SUBJECTS]
 
     system_prompt = _build_system_prompt(
         ticker, trade_type, eligible, locked=bool(user_selected)
