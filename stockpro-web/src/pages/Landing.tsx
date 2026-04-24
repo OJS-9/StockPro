@@ -6,16 +6,15 @@ const features = [
   { icon: 'query_stats', name: 'Deep AI Research', desc: '12 specialized AI agents research fundamentals, technicals, risk, and news in parallel — synthesized into a structured investment report.' },
   { icon: 'pie_chart', name: 'Portfolio Tracking', desc: 'Track multiple portfolios with real-time P&L, cost basis, sector allocation, and performance analytics.' },
   { icon: 'visibility', name: 'Smart Watchlists', desc: 'Organize symbols in custom lists with live prices, sparklines, earnings calendar, and AI-powered news briefings.' },
-  { icon: 'notifications_active', name: 'Price Alerts', desc: 'Set price level alerts for any stock or crypto. Get instant Telegram notifications the moment a condition triggers.' },
+  { icon: 'notifications_active', name: 'Price Alerts', desc: 'Set price level alerts for any stock or crypto. Get notified the moment a condition triggers.' },
   { icon: 'forum', name: 'Report Chat', desc: 'After every research report, chat with the AI to dig deeper — it answers questions grounded in the report analysis.' },
-  { icon: 'send', name: 'Telegram Bot', desc: 'Connect your Telegram to receive real-time alerts, daily portfolio summaries, and market briefings wherever you are.' },
 ]
 
 const proof = [
   { num: '500+', label: 'Reports generated' },
   { num: '12', label: 'AI research agents' },
   { num: '<3 min', label: 'Avg report time' },
-  { num: 'Real-time', label: 'Company updates via Telegram' },
+  { num: 'Real-time', label: 'Price alert notifications' },
 ]
 
 export default function Landing() {
@@ -74,7 +73,7 @@ export default function Landing() {
           <em style={{ fontStyle: 'normal', color: '#22c55e' }}>curious learners</em>
         </h1>
         <p style={{ fontSize: isMobile ? 15 : 18, color: '#a8a29e', lineHeight: 1.7, maxWidth: 540, margin: '0 auto 40px' }}>
-          Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and Telegram notifications built for people who want to understand companies.
+          Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and price alerts built for people who want to understand companies.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Link
