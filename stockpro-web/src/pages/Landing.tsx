@@ -15,7 +15,7 @@ const proof = [
   { num: '500+', label: 'Reports generated' },
   { num: '12', label: 'AI research agents' },
   { num: '<3 min', label: 'Avg report time' },
-  { num: 'Real-time', label: 'Price alerts via Telegram' },
+  { num: 'Real-time', label: 'Company updates via Telegram' },
 ]
 
 export default function Landing() {
@@ -70,11 +70,11 @@ export default function Landing() {
           Powered by Gemini AI + LangGraph
         </div>
         <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 36 : 60, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 24, maxWidth: 760, marginInlineStart: 'auto', marginInlineEnd: 'auto' }}>
-          Institutional-grade research for{' '}
-          <em style={{ fontStyle: 'normal', color: '#22c55e' }}>every investor</em>
+          Deep company research for{' '}
+          <em style={{ fontStyle: 'normal', color: '#22c55e' }}>curious learners</em>
         </h1>
         <p style={{ fontSize: isMobile ? 15 : 18, color: '#a8a29e', lineHeight: 1.7, maxWidth: 540, margin: '0 auto 40px' }}>
-          Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, price alerts, and Telegram notifications built for serious retail investors.
+          Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and Telegram notifications built for people who want to understand companies.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Link
@@ -114,7 +114,7 @@ export default function Landing() {
       <section style={{ padding: isMobile ? '48px 20px' : '80px 64px', textAlign: 'center' }}>
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>The platform</div>
         <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 16 }}>
-          Everything you need to invest smarter
+          Everything you need to research smarter
         </h2>
         <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 460, margin: '0 auto 48px' }}>
           Portfolio tracking, AI research, watchlists and price alerts in one dark, data-dense interface.
@@ -155,8 +155,8 @@ export default function Landing() {
       <section id="features" style={{ padding: isMobile ? '48px 20px' : '80px 64px', maxWidth: 1100, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: isMobile ? 32 : 56 }}>
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>Features</div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for serious retail investors</h2>
-          <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 480, margin: '0 auto' }}>Every feature designed to give you the edge that was previously reserved for institutional traders.</p>
+          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for people who want to understand companies</h2>
+          <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 480, margin: '0 auto' }}>Every feature designed to help you understand companies deeply.</p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 14 : 20 }}>
           {features.map(({ icon, name, desc }) => (
