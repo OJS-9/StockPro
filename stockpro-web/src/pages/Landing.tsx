@@ -3,19 +3,18 @@ import Icon from '../components/Icon'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 
 const features = [
-  { icon: 'query_stats', name: 'Deep AI Research', desc: '12 specialized AI agents research fundamentals, technicals, risk, and news in parallel — synthesized into a structured investment report.' },
+  { icon: 'query_stats', name: 'Deep AI Research', desc: '12 specialized AI agents research fundamentals, technicals, risk, and news in parallel — synthesized into a structured research report.' },
   { icon: 'pie_chart', name: 'Portfolio Tracking', desc: 'Track multiple portfolios with real-time P&L, cost basis, sector allocation, and performance analytics.' },
   { icon: 'visibility', name: 'Smart Watchlists', desc: 'Organize symbols in custom lists with live prices, sparklines, earnings calendar, and AI-powered news briefings.' },
-  { icon: 'notifications_active', name: 'Price Alerts', desc: 'Set price level alerts for any stock or crypto. Get instant Telegram notifications the moment a condition triggers.' },
+  { icon: 'notifications_active', name: 'Price Alerts', desc: 'Set price level alerts for any stock or crypto. Get notified the moment a condition triggers.' },
   { icon: 'forum', name: 'Report Chat', desc: 'After every research report, chat with the AI to dig deeper — it answers questions grounded in the report analysis.' },
-  { icon: 'send', name: 'Telegram Bot', desc: 'Connect your Telegram to receive real-time alerts, daily portfolio summaries, and market briefings wherever you are.' },
 ]
 
 const proof = [
   { num: '500+', label: 'Reports generated' },
   { num: '12', label: 'AI research agents' },
   { num: '<3 min', label: 'Avg report time' },
-  { num: 'Real-time', label: 'Price alerts via Telegram' },
+  { num: 'Real-time', label: 'Price alert notifications' },
 ]
 
 export default function Landing() {
@@ -70,11 +69,11 @@ export default function Landing() {
           Powered by Gemini AI + LangGraph
         </div>
         <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 36 : 60, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 24, maxWidth: 760, marginInlineStart: 'auto', marginInlineEnd: 'auto' }}>
-          Institutional-grade research for{' '}
-          <em style={{ fontStyle: 'normal', color: '#22c55e' }}>every investor</em>
+          Deep company research for{' '}
+          <em style={{ fontStyle: 'normal', color: '#22c55e' }}>curious learners</em>
         </h1>
         <p style={{ fontSize: isMobile ? 15 : 18, color: '#a8a29e', lineHeight: 1.7, maxWidth: 540, margin: '0 auto 40px' }}>
-          Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, price alerts, and Telegram notifications built for serious retail investors.
+          Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and price alerts built for people who want to understand companies.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Link
@@ -114,7 +113,7 @@ export default function Landing() {
       <section style={{ padding: isMobile ? '48px 20px' : '80px 64px', textAlign: 'center' }}>
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>The platform</div>
         <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 16 }}>
-          Everything you need to invest smarter
+          Everything you need to research smarter
         </h2>
         <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 460, margin: '0 auto 48px' }}>
           Portfolio tracking, AI research, watchlists and price alerts in one dark, data-dense interface.
@@ -155,12 +154,12 @@ export default function Landing() {
       <section id="features" style={{ padding: isMobile ? '48px 20px' : '80px 64px', maxWidth: 1100, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: isMobile ? 32 : 56 }}>
           <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>Features</div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for serious retail investors</h2>
-          <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 480, margin: '0 auto' }}>Every feature designed to give you the edge that was previously reserved for institutional traders.</p>
+          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 14 }}>Built for people who want to understand companies</h2>
+          <p style={{ fontSize: 15, color: '#a8a29e', maxWidth: 480, margin: '0 auto' }}>Every feature designed to help you understand companies deeply.</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 14 : 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 14 : 20 }}>
           {features.map(({ icon, name, desc }) => (
-            <div key={name} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 28, transition: 'border-color 0.2s' }}>
+            <div key={name} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 28, transition: 'border-color 0.2s', width: isMobile ? '100%' : 'calc(33.333% - 14px)', flexShrink: 0 }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
                 <Icon name={icon} size={22} />
               </div>
@@ -181,7 +180,7 @@ export default function Landing() {
             {[
               { n: '1', title: 'Enter a ticker', desc: 'Type any stock or crypto symbol and select your research focus — long, short, or comprehensive.' },
               { n: '2', title: 'AI agents research', desc: '12 parallel AI agents gather fundamentals, news, technicals, risk factors, and competitive landscape.' },
-              { n: '3', title: 'Read & chat', desc: 'Get a full investment report and chat with the AI to explore any section in depth.' },
+              { n: '3', title: 'Read & chat', desc: 'Get a full research report and chat with the AI to explore any section in depth.' },
             ].map(({ n, title, desc }) => (
               <div key={n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
                 <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#0c0a09', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, color: '#d6d3d1', position: 'relative', zIndex: 1 }}>{n}</div>
