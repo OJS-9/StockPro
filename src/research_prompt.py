@@ -5,7 +5,7 @@ Research prompt templates and system instructions for the stock research agent.
 from date_utils import get_datetime_context_string
 
 
-def get_orchestration_instructions(ticker: str, trade_type: str) -> str:
+def get_orchestration_instructions(ticker: str, trade_type: str, language: str = "en") -> str:
     """
     Generate orchestration instructions for the main agent (conversation handler/orchestrator).
 
@@ -58,5 +58,13 @@ def get_orchestration_instructions(ticker: str, trade_type: str) -> str:
 
 [TICKER]: {ticker}
 [TYPE_OF_TRADE]: {trade_type}"""
+
+    lang_map = {"he": "Hebrew", "en": "English"}
+    lang_name = lang_map.get((language or "en").lower(), "English")
+    if lang_name != "English":
+        instructions += (
+            f"\n\n**Language:** Write every question text and every option string "
+            f"in {lang_name}. Ticker symbols and numeric values stay as-is."
+        )
 
     return instructions

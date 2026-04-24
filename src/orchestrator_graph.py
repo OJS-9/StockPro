@@ -59,7 +59,7 @@ class OrchestratorSession:
         self.current_trade_type = trade_type
         self.conversation_history = []
 
-        system_instructions = get_orchestration_instructions(ticker, trade_type)
+        system_instructions = get_orchestration_instructions(ticker, trade_type, self.language or "en")
         user_message = (
             f"I want to research {ticker} for a {trade_type} strategy. "
             "Please help me create a fundamental research report."

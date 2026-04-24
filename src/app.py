@@ -377,6 +377,29 @@ _sse_queues: dict = {}
 # Background generation status — keyed by session_id
 _generation_status: dict = {}
 
+
+def _step_code_for(progress, english_step: str) -> str:
+    """Map an English step string from the agent into a stable, locale-free code.
+
+    Frontend uses this to render a translated label.
+    """
+    if progress is None:
+        return "researching"
+    s = (english_step or "").lower()
+    if "starting" in s:
+        return "starting"
+    if "planning" in s:
+        return "planning"
+    if "researching" in s and "subjects" in s:
+        return "researching"
+    if "synthesiz" in s:
+        return "synthesizing"
+    if "saving" in s:
+        return "saving"
+    if "ready" in s:
+        return "ready"
+    return "working"
+
 # Session creation timestamps for TTL eviction
 _session_created_at: dict = {}
 
@@ -994,6 +1017,11 @@ def popup_start():
     session["current_ticker"] = ticker
     session["current_trade_type"] = trade_type
 
+    language = (request.form.get("language") or "").strip().lower()
+    if language in ("en", "he"):
+        agent.language = language
+        session["language"] = language
+
     position_summary = (request.form.get("position_summary") or "").strip()
     position_goal = (request.form.get("position_goal") or "").strip()
     if position_summary:
@@ -1099,6 +1127,7 @@ def start_generation():
         "report_id": None,
         "progress": 5,
         "step": "Starting...",
+        "step_code": "starting",
     }
 
     def run_generation():
@@ -1120,13 +1149,18 @@ def start_generation():
                     pct = 20 + int((done / total) * 55)
                     status["progress"] = min(pct, 75)
                     status["step"] = f"Researching: {done}/{total} subjects done"
+                    status["step_code"] = "researching"
+                    status["done"] = done
+                    status["total"] = total
             else:
                 status["progress"] = progress
                 status["step"] = step
+                status["step_code"] = _step_code_for(progress, step)
                 if progress == 20 and "subjects" in step:
                     # Extract subject count from "Researching N subjects..."
                     try:
                         subject_counter["total"] = int(step.split()[1])
+                        status["total"] = subject_counter["total"]
                     except (IndexError, ValueError):
                         pass
 
@@ -1144,9 +1178,10 @@ def start_generation():
                 "report_id": agent.current_report_id,
                 "progress": 100,
                 "step": "Report ready",
+                "step_code": "ready",
             }
         except Exception as e:
-            _generation_status[session_id] = {"status": "error", "message": str(e)}
+            _generation_status[session_id] = {"status": "error", "message": str(e), "step_code": "error"}
         finally:
             agent.set_emitter(None)
             agent.set_progress_fn(None)
@@ -1290,6 +1325,7 @@ def api_reports_generate():
         "report_id": None,
         "progress": 5,
         "step": "Starting...",
+        "step_code": "starting",
         "_owner_user_id": user_id,
     }
 
@@ -1340,12 +1376,14 @@ def _start_report_generation_thread(session_id, agent, context_str, user_id, spe
                 "report_id": agent.current_report_id,
                 "progress": 100,
                 "step": "Report ready",
+                "step_code": "ready",
                 "_owner_user_id": user_id,
             }
         except Exception as e:
             _generation_status[session_id] = {
                 "status": "error",
                 "message": str(e),
+                "step_code": "error",
                 "_owner_user_id": user_id,
             }
         finally:
@@ -1408,6 +1446,7 @@ def api_reports_answer():
         "report_id": None,
         "progress": 5,
         "step": "Starting...",
+        "step_code": "starting",
         "_owner_user_id": user_id,
     }
 
