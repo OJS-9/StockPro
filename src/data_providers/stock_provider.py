@@ -95,16 +95,28 @@ class StockDataProvider(BaseDataProvider):
 
     def _get_price_from_yfinance(self, symbol: str) -> dict:
         """yfinance lookup for current price and change%. Fast, no API key needed."""
-        result = {"price": None, "change_percent": None}
+        result = {"price": None, "change_percent": None, "currency": "USD"}
         try:
             import yfinance as yf
 
-            fi = yf.Ticker(symbol).fast_info
+            ticker = yf.Ticker(symbol)
+            fi = ticker.fast_info
             last = fi.last_price
             if last:
+                currency = getattr(fi, "currency", None) or "USD"
+                if currency == "ILA":
+                    last = last / 100
+                    result["currency"] = "ILS"
+                elif currency == "ILS":
+                    result["currency"] = "ILS"
+                else:
+                    result["currency"] = "USD"
+
                 result["price"] = Decimal(str(last))
                 prev = fi.regular_market_previous_close
                 if prev and prev > 0:
+                    if currency == "ILA":
+                        prev = prev / 100
                     pct = (last - prev) / prev * 100
                     result["change_percent"] = Decimal(str(round(pct, 4)))
         except Exception:
@@ -217,7 +229,7 @@ class StockDataProvider(BaseDataProvider):
     def _fetch_price_waterfall(self, symbol: str) -> dict:
         """
         Canonical waterfall: yfinance → concurrent(Nimble MW + SA) → Alpha Vantage.
-        Returns {'price': Decimal|None, 'change_percent': Decimal|None}.
+        Returns {'price': Decimal|None, 'change_percent': Decimal|None, 'currency': str}.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 

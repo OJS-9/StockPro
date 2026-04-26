@@ -82,6 +82,7 @@ class WatchlistService:
             item["price"] = cache.get("price")
             item["change_percent"] = cache.get("change_percent")
             item["price_last_updated"] = cache.get("last_updated")
+            item["currency"] = cache.get("currency", "USD")
             return item
 
         items = [enrich(item) for item in items]

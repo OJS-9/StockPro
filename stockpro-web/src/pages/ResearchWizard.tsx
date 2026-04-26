@@ -10,6 +10,8 @@ import { useAuth } from '@clerk/clerk-react'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useResearchProgress } from '../ResearchProgressContext'
+import { formatCurrency } from '../utils/currency'
+import ExchangePicker, { appendExchangeSuffix, type Exchange } from '../components/ExchangePicker'
 
 const TRADE_TYPES = [
   { id: 'day', icon: 'bolt', iconStyle: 'bull', name: 'Day Trade', nameKey: 'research.dayTrade', descKey: 'research.dayTradeDesc' },
@@ -57,13 +59,15 @@ interface PopupData {
 export default function ResearchWizard() {
   const [searchParams] = useSearchParams()
   const [ticker, setTicker] = useState(searchParams.get('ticker') || '')
+  const [exchange, setExchange] = useState<Exchange>('US')
   const [tradeType, setTradeType] = useState<string | null>(null)
   const [tickerInfo, setTickerInfo] = useState<any>(null)
   const [phase, setPhase] = useState<Phase>('setup')
   const { t } = useTranslation()
   const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
-  const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
+  const fmt = (n: number) => formatCurrency(n, 'USD', locale)
 
   // Position pre-screen state
   const [positionData, setPositionData] = useState<any>(null)
@@ -94,12 +98,12 @@ export default function ResearchWizard() {
     if (!ticker || ticker.length < 1) { setTickerInfo(null); return }
     const timer = setTimeout(async () => {
       try {
-        const res = await api.get(`/api/ticker/search?q=${ticker.toUpperCase()}`)
+        const res = await api.get(`/api/ticker/search?q=${appendExchangeSuffix(ticker, exchange)}`)
         if (res.ok) setTickerInfo(await res.json())
       } catch {}
     }, 400)
     return () => clearTimeout(timer)
-  }, [ticker])
+  }, [ticker, exchange])
 
   // Call /popup_start and advance to subjects or questions phase
   const callPopupStart = async (posSummary: string, posGoal: string) => {
@@ -109,7 +113,7 @@ export default function ResearchWizard() {
       // Always send English name to the API regardless of display language
       const tradeTypeFullForApi = TRADE_TYPES.find(tt => tt.id === tradeType)?.name || tradeType || ''
       const formData = new FormData()
-      formData.append('ticker', ticker.toUpperCase())
+      formData.append('ticker', appendExchangeSuffix(ticker, exchange))
       formData.append('trade_type', tradeTypeFullForApi)
       formData.append('language', lang)
       if (posSummary) formData.append('position_summary', posSummary)
@@ -175,7 +179,7 @@ export default function ResearchWizard() {
   // Launch button clicked — check position first
   const launchMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.get(`/api/position_check/${ticker.toUpperCase()}`)
+      const res = await api.get(`/api/position_check/${appendExchangeSuffix(ticker, exchange)}`)
       if (!res.ok) return { holding: false, positions: [] }
       return res.json()
     },
@@ -240,14 +244,15 @@ export default function ResearchWizard() {
             <input
               value={ticker}
               onChange={e => setTicker(e.target.value.toUpperCase())}
-              placeholder={t('research.enterTicker')}
+              placeholder={exchange === 'TASE' ? 'TEVA' : t('research.enterTicker')}
               style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600, color: '#fafaf9', letterSpacing: '0.02em' }}
             />
+            <ExchangePicker value={exchange} onChange={setExchange} />
             {tickerInfo && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, padding: '6px 14px', background: '#232120', border: '1px solid #292524', borderRadius: 8, fontSize: 13 }}>
                 <span style={{ fontWeight: 600, color: '#d6d3d1' }}>{tickerInfo.symbol}</span>
                 <span style={{ color: '#a8a29e' }}>{tickerInfo.name}</span>
-                {tickerInfo.price && <span style={{ fontVariantNumeric: 'tabular-nums' }}>${tickerInfo.price}</span>}
+                {tickerInfo.price && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{tickerInfo.currency === 'ILS' ? '₪' : '$'}{tickerInfo.price}</span>}
                 {tickerInfo.change_pct !== undefined && (
                   <span style={{ color: tickerInfo.change_pct >= 0 ? '#22c55e' : '#ef4444' }}>
                     <bdi>{tickerInfo.change_pct >= 0 ? '+' : ''}{tickerInfo.change_pct}%</bdi>

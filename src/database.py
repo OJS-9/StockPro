@@ -424,6 +424,9 @@ class DatabaseManager:
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_price_cache_last_updated ON price_cache (last_updated)"
                 )
+                cur.execute(
+                    "ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'USD'"
+                )
 
                 # Price alerts (user-defined targets vs cached quotes; evaluation in jobs later)
                 cur.execute("""
@@ -2079,22 +2082,23 @@ class DatabaseManager:
     # ── Price Cache ──────────────────────────────────────────────
 
     def upsert_price_cache(
-        self, symbol, asset_type, price, change_percent, display_name=None
+        self, symbol, asset_type, price, change_percent, display_name=None, currency="USD"
     ):
         conn = self.get_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO price_cache (symbol, asset_type, price, change_percent, display_name, last_updated)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    INSERT INTO price_cache (symbol, asset_type, price, change_percent, display_name, currency, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (symbol) DO UPDATE SET
                         price          = EXCLUDED.price,
                         change_percent = EXCLUDED.change_percent,
                         display_name   = COALESCE(EXCLUDED.display_name, price_cache.display_name),
+                        currency       = EXCLUDED.currency,
                         last_updated   = NOW()
                 """,
-                    (symbol, asset_type, price, change_percent, display_name),
+                    (symbol, asset_type, price, change_percent, display_name, currency),
                 )
             conn.commit()
         finally:

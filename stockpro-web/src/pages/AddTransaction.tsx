@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -7,15 +7,17 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-
-const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+import { formatCurrency } from '../utils/currency'
+import ExchangePicker, { appendExchangeSuffix, type Exchange } from '../components/ExchangePicker'
 
 export default function AddTransaction() {
   const { id } = useParams()
   const navigate = useNavigate()
   const api = useApiClient()
+  const queryClient = useQueryClient()
   const { isMobile } = useBreakpoint()
   const { t } = useTranslation()
+  const [exchange, setExchange] = useState<Exchange>('US')
   const [form, setForm] = useState({ symbol: '', type: 'BUY', shares: '', price: '', date: new Date().toISOString().split('T')[0] })
 
   const total = parseFloat(form.shares || '0') * parseFloat(form.price || '0')
@@ -23,7 +25,7 @@ export default function AddTransaction() {
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await api.post(`/api/portfolio/${id}/transaction`, {
-        symbol: form.symbol.toUpperCase(),
+        symbol: appendExchangeSuffix(form.symbol, exchange),
         type: form.type,
         shares: parseFloat(form.shares),
         price: parseFloat(form.price),
@@ -33,6 +35,8 @@ export default function AddTransaction() {
       return res.json()
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio', id] })
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] })
       toast.success(t('transactions.toasts.added'))
       navigate(`/portfolio/${id}`)
     },
@@ -84,12 +88,18 @@ export default function AddTransaction() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#a8a29e', marginBottom: 6, letterSpacing: '0.02em' }}>Ticker symbol</label>
-              <input
-                value={form.symbol}
-                onChange={e => setForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
-                placeholder="NVDA"
-                style={{ ...inputStyle, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.02em' }}
-              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={form.symbol}
+                  onChange={e => setForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
+                  placeholder={exchange === 'TASE' ? 'TEVA' : 'NVDA'}
+                  style={{ ...inputStyle, flex: 1, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.02em' }}
+                />
+                <ExchangePicker value={exchange} onChange={setExchange} />
+              </div>
+              {exchange === 'TASE' && (
+                <span style={{ fontSize: 11, color: '#78716c', marginTop: 4, display: 'block' }}>Enter price in ILS (shekels)</span>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
@@ -97,7 +107,7 @@ export default function AddTransaction() {
                 <input type="number" value={form.shares} onChange={e => setForm(f => ({ ...f, shares: e.target.value }))} placeholder="0" min="0" step="0.0001" style={inputStyle} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#a8a29e', marginBottom: 6 }}>Price per share ($)</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#a8a29e', marginBottom: 6 }}>Price per share ({exchange === 'TASE' ? '₪' : '$'})</label>
                 <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" min="0" step="0.01" style={inputStyle} />
               </div>
             </div>
@@ -120,7 +130,7 @@ export default function AddTransaction() {
                 </div>
               </div>
               <div style={{ textAlign: 'end' }}>
-                <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 22, fontWeight: 600 }}>{fmt(total)}</div>
+                <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 22, fontWeight: 600 }}>{formatCurrency(total)}</div>
                 <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2 }}>Total {form.type === 'BUY' ? 'cost' : 'proceeds'}</div>
               </div>
             </div>

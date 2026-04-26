@@ -7,8 +7,7 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useLanguage } from '../LanguageContext'
-
-const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+import { formatCurrency } from '../utils/currency'
 
 function LineChart({ data, gain = true }: { data: number[]; gain?: boolean }) {
   if (!data || data.length < 2) return <div style={{ height: 140, background: '#232120', borderRadius: 8 }} />
@@ -145,11 +144,11 @@ export default function HoldingDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>Market Value</div>
-                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 24 : 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 24 : 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{formatCurrency(holding.market_value, holding.currency ?? 'USD')}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444' }}>
-                      <bdi>{gain ? '+' : ''}{fmt(holding.pnl)}</bdi>
+                      <bdi>{gain ? '+' : ''}{formatCurrency(holding.pnl, holding.currency ?? 'USD')}</bdi>
                     </div>
                     <div style={{ fontSize: 12, color: gain ? '#22c55e' : '#ef4444' }}>
                       <bdi>{gain ? '+' : ''}{holding.pnl_pct}%</bdi> all time
@@ -178,10 +177,10 @@ export default function HoldingDetail() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{t.type} {t.shares} shares</div>
-                      <div style={{ fontSize: 12, color: '#a8a29e' }}>@ {fmt(t.price)} each &nbsp;&middot;&nbsp; {t.date}</div>
+                      <div style={{ fontSize: 12, color: '#a8a29e' }}>@ {formatCurrency(t.price, holding.currency ?? 'USD')} each &nbsp;&middot;&nbsp; {t.date}</div>
                     </div>
                     <div style={{ textAlign: 'end' }}>
-                      <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13, fontWeight: 500 }}>{fmt(t.total || t.shares * t.price)}</div>
+                      <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13, fontWeight: 500 }}>{formatCurrency(t.total || t.shares * t.price, holding.currency ?? 'USD')}</div>
                     </div>
                     <button
                       onClick={() => confirm('Delete this transaction?') && deleteMutation.mutate(t.id)}
@@ -201,12 +200,12 @@ export default function HoldingDetail() {
             <div>
               {[
                 { label: 'Shares held', val: String(holding.shares) },
-                { label: 'Avg cost basis', val: fmt(holding.avg_cost) },
-                { label: 'Current price', val: fmt(holding.current_price) },
-                { label: 'Market value', val: fmt(holding.market_value) },
-                { label: 'Unrealized P&L', val: `${gain ? '+' : ''}${fmt(holding.pnl)}`, color: gain ? '#22c55e' : '#ef4444' },
+                { label: 'Avg cost basis', val: formatCurrency(holding.avg_cost, holding.currency ?? 'USD') },
+                { label: 'Current price', val: formatCurrency(holding.current_price, holding.currency ?? 'USD') },
+                { label: 'Market value', val: formatCurrency(holding.market_value, holding.currency ?? 'USD') },
+                { label: 'Unrealized P&L', val: `${gain ? '+' : ''}${formatCurrency(holding.pnl, holding.currency ?? 'USD')}`, color: gain ? '#22c55e' : '#ef4444' },
                 { label: 'Return', val: `${gain ? '+' : ''}${holding.pnl_pct}%`, color: gain ? '#22c55e' : '#ef4444' },
-                { label: 'Cost basis total', val: fmt(holding.shares * holding.avg_cost) },
+                { label: 'Cost basis total', val: formatCurrency(holding.shares * holding.avg_cost, holding.currency ?? 'USD') },
               ].map(({ label, val, color }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)' }}>
                   <span style={{ fontSize: 13, color: '#a8a29e' }}>{label}</span>
