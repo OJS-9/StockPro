@@ -75,8 +75,9 @@ export default function HoldingDetail() {
     market_value: rawHolding.market_value != null ? Number(rawHolding.market_value) : 0,
     pnl: rawHolding.unrealized_gain != null ? Number(rawHolding.unrealized_gain) : 0,
     pnl_pct: rawHolding.unrealized_gain_pct != null ? Number(rawHolding.unrealized_gain_pct) : 0,
+    currency: rawHolding.currency || 'USD',
   } : {
-    symbol: symbol || '', name: symbol || '', shares: 0, avg_cost: 0, current_price: 0, market_value: 0, pnl: 0, pnl_pct: 0,
+    symbol: symbol || '', name: symbol || '', shares: 0, avg_cost: 0, current_price: 0, market_value: 0, pnl: 0, pnl_pct: 0, currency: 'USD',
   }
 
   // Normalize transactions from API response
