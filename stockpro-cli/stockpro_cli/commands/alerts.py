@@ -2,6 +2,7 @@
 
 import click
 from stockpro_cli.client import get_client
+from stockpro_cli.exchanges import EXCHANGES, apply_exchange_suffix
 from stockpro_cli.output import output
 
 
@@ -21,16 +22,17 @@ def list_alerts(ctx):
 
 
 @alerts.command("create")
-@click.option("--symbol", required=True, help="Ticker symbol")
+@click.option("--symbol", required=True, help="Ticker symbol (or symbol.TA for TASE)")
+@click.option("--exchange", default="US", type=click.Choice(EXCHANGES, case_sensitive=False), help="US (default) or TASE. TASE target prices must be in ILS.")
 @click.option("--direction", required=True, type=click.Choice(["above", "below"]))
 @click.option("--target-price", required=True, type=float)
 @click.option("--asset-type", default=None, help="stock or crypto")
 @click.pass_context
-def create_alert(ctx, symbol, direction, target_price, asset_type):
+def create_alert(ctx, symbol, exchange, direction, target_price, asset_type):
     """Create a new price alert."""
     client = get_client(ctx.obj.get("api_url"))
     payload = {
-        "symbol": symbol.upper(),
+        "symbol": apply_exchange_suffix(symbol, exchange),
         "direction": direction,
         "target_price": target_price,
     }

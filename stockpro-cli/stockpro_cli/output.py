@@ -3,6 +3,8 @@
 import json
 import sys
 
+from stockpro_cli.exchanges import currency_symbol
+
 
 def output(data, pretty: bool = False):
     if not pretty:
@@ -100,8 +102,9 @@ def _print_portfolios(data):
             mv = h.get("market_value", 0)
             ug = h.get("unrealized_gain", 0)
             ugp = h.get("unrealized_gain_pct", 0)
+            cs = currency_symbol(h.get("currency"))
             sign = "+" if ug >= 0 else ""
-            print(f"  {sym:<8} ${price:>9.2f} {qty:>8.2f} ${mv:>11,.2f} {sign}${ug:>10,.2f} {sign}{ugp:>6.1f}%")
+            print(f"  {sym:<8} {cs}{price:>9.2f} {qty:>8.2f} {cs}{mv:>11,.2f} {sign}{cs}{ug:>10,.2f} {sign}{ugp:>6.1f}%")
 
         print()
 
@@ -126,7 +129,8 @@ def _print_alerts(alerts):
         cp = a.get("current_price", 0)
         active = "yes" if a.get("active") else "no"
         aid = a.get("alert_id", a.get("id", "?"))[:8]
-        print(f"  {sym:<8} {d:<6} ${tp:>9.2f} ${cp:>9.2f} {active:>7}  {aid}...")
+        cs = currency_symbol(a.get("currency"))
+        print(f"  {sym:<8} {d:<6} {cs}{tp:>9.2f} {cs}{cp:>9.2f} {active:>7}  {aid}...")
 
 
 def _print_watchlist_active(wl):
@@ -149,8 +153,9 @@ def _print_watchlist_active(wl):
         price = float(item.get("price", 0))
         change = float(item.get("change_pct", 0))
         pinned = "yes" if item.get("is_pinned") else ""
+        cs = currency_symbol(item.get("currency"))
         sign = "+" if change >= 0 else ""
-        print(f"  {sym:<8} ${price:>9.2f} {sign}{change:>6.1f}%  {pinned}")
+        print(f"  {sym:<8} {cs}{price:>9.2f} {sign}{change:>6.1f}%  {pinned}")
 
 
 def _print_news(articles):
@@ -206,8 +211,9 @@ def _print_home(data):
             ug = h.get("unrealized_gain", 0)
             ugp = h.get("unrealized_gain_pct", 0)
             avg = h.get("average_cost", 0)
+            cs = currency_symbol(h.get("currency"))
             sign = "+" if ug >= 0 else ""
-            print(f"  {sym:<8} ${avg:>9.2f} ${mv:>11,.2f} {sign}${ug:>10,.2f} {sign}{ugp:>6.1f}%")
+            print(f"  {sym:<8} {cs}{avg:>9.2f} {cs}{mv:>11,.2f} {sign}{cs}{ug:>10,.2f} {sign}{ugp:>6.1f}%")
         print()
 
     # Watchlist preview
@@ -219,8 +225,9 @@ def _print_home(data):
             name = item.get("name", "")
             price = float(item.get("price", 0))
             change = float(item.get("change_pct", 0))
+            cs = currency_symbol(item.get("currency"))
             sign = "+" if change >= 0 else ""
-            print(f"  {sym:<8} ${price:>9.2f}  {sign}{change:.1f}%  {name}")
+            print(f"  {sym:<8} {cs}{price:>9.2f}  {sign}{change:.1f}%  {name}")
         print()
 
     # News
