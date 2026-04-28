@@ -9,10 +9,8 @@ import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-
-function fmtPrice(n: number | null | undefined, _locale: string) {
-  return n != null ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n) : '—'
-}
+import { formatCurrency } from '../utils/currency'
+import ExchangePicker, { appendExchangeSuffix, type Exchange } from '../components/ExchangePicker'
 
 function ItemMenu({ item, watchlistId: _watchlistId, onClose }: { item: any; watchlistId: string; onClose: () => void }) {
   const api = useApiClient()
@@ -57,13 +55,16 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const [symbol, setSymbol] = useState('')
+  const [exchange, setExchange] = useState<Exchange>('US')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
+  const finalSymbol = appendExchangeSuffix(symbol, exchange)
+
   const addMutation = useMutation({
-    mutationFn: () => api.post(`/api/watchlist/${watchlistId}/symbol`, { symbol: symbol.toUpperCase() }).then(r => { if (!r.ok) throw new Error() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(t('watchlist.toasts.added', { symbol: symbol.toUpperCase() })); onDone() },
+    mutationFn: () => api.post(`/api/watchlist/${watchlistId}/symbol`, { symbol: finalSymbol }).then(r => { if (!r.ok) throw new Error() }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(t('watchlist.toasts.added', { symbol: finalSymbol })); onDone() },
     onError: () => toast.error(t('watchlist.toasts.addFailed')),
   })
 
@@ -78,9 +79,10 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
             value={symbol}
             onChange={e => setSymbol(e.target.value.toUpperCase())}
             onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onDone() }}
-            placeholder={t('watchlist.tickerPlaceholder')}
+            placeholder={exchange === 'TASE' ? 'TEVA' : t('watchlist.tickerPlaceholder')}
             style={{ flex: 1, background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '7px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none' }}
           />
+          <ExchangePicker value={exchange} onChange={setExchange} />
           <button
             onClick={submit}
             disabled={!symbol.trim() || addMutation.isPending}
@@ -206,7 +208,7 @@ export default function Watchlist() {
                         </Link>
                       </td>
                       <td style={{ padding: '14px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', fontSize: 13.5, color: '#fafaf9' }}>
-                        {item.price != null ? fmtPrice(item.price, locale) : '—'}
+                        {item.price != null ? formatCurrency(item.price, item.currency ?? 'USD', locale) : '---'}
                       </td>
                       <td style={{ padding: '14px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                         {item.change_pct != null ? (

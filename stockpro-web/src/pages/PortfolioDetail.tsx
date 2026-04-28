@@ -9,12 +9,7 @@ import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-
-const fmtCompact = (n: number) => {
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
-  return `$${n.toFixed(0)}`
-}
+import { formatCurrency, formatCompact } from '../utils/currency'
 
 const RANGES = ['1W', '1M', '3M', 'YTD', '1Y']
 
@@ -101,7 +96,7 @@ function LineChart({ data, dates, gain = true, loading = false, locale = 'en-US'
       {yTicks.map(({ val, y }) => (
         <g key={val}>
           <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke="#292524" strokeWidth="1" />
-          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, Heebo, sans-serif">{fmtCompact(val)}</text>
+          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, Heebo, sans-serif">{formatCompact(val)}</text>
         </g>
       ))}
       {/* X labels */}
@@ -244,7 +239,7 @@ export default function PortfolioDetail() {
   const { isMobile } = useBreakpoint()
 
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number, currency = 'USD') => formatCurrency(n, currency, locale)
 
   // /api/portfolio/<id>/history returns {history: [{date, value}], granularity}
   const { data: historyData, isLoading: historyLoading } = useQuery({
@@ -625,11 +620,11 @@ export default function PortfolioDetail() {
                         </Link>
                       </td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{Number(h.shares).toFixed(2)}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.avg_cost)}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.current_price != null ? fmt(h.current_price) : <span style={{ color: '#57534e' }}>--</span>}</td>
-                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.market_value)}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.avg_cost, h.currency ?? 'USD')}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.current_price != null ? fmt(h.current_price, h.currency ?? 'USD') : <span style={{ color: '#57534e' }}>--</span>}</td>
+                      <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.market_value, h.currency ?? 'USD')}</td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: h.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                        <bdi>{h.pnl >= 0 ? '+' : ''}{fmt(h.pnl)}</bdi>
+                        <bdi>{h.pnl >= 0 ? '+' : ''}{fmt(h.pnl, h.currency ?? 'USD')}</bdi>
                       </td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                         <span style={{ display: 'inline-flex', fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: h.pnl_pct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: h.pnl_pct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${h.pnl_pct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>

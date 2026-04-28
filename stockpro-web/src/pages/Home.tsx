@@ -8,6 +8,7 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { formatCurrency } from '../utils/currency'
 
 function Sparkline({ gain = true }: { gain?: boolean }) {
   const color = gain ? '#22c55e' : '#ef4444'
@@ -40,7 +41,7 @@ export default function Home() {
   const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number, currency = 'USD') => formatCurrency(n, currency, locale)
   const [ticker, setTicker] = useState('')
   const [changeMode, setChangeMode] = useState<'D' | 'W'>('D')
 
@@ -283,11 +284,11 @@ export default function Home() {
                               </div>
                             </Link>
                           </td>
-                          {[shares, avgCost ? fmt(avgCost) : '-', mv ? fmt(mv) : '-'].map((v, i) => (
+                          {[shares, avgCost ? fmt(avgCost, h.currency ?? 'USD') : '-', mv ? fmt(mv, h.currency ?? 'USD') : '-'].map((v, i) => (
                             <td key={i} style={{ padding: '14px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', fontSize: 13.5, textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{v}</td>
                           ))}
                           <td style={{ padding: '14px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', fontSize: 13.5, textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                            <bdi>{pnl >= 0 ? '+' : ''}{fmt(pnl)}</bdi>
+                            <bdi>{pnl >= 0 ? '+' : ''}{fmt(pnl, h.currency ?? 'USD')}</bdi>
                           </td>
                           <td style={{ padding: '14px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: pnlPct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: pnlPct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${pnlPct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
@@ -374,7 +375,7 @@ export default function Home() {
                       </div>
                     </div>
                     <div style={{ textAlign: 'end' }}>
-                      <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(w.price)}</div>
+                      <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(w.price, w.currency ?? 'USD')}</div>
                       <div style={{ fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: w.change_pct >= 0 ? '#22c55e' : '#ef4444' }}>
                         <bdi>{w.change_pct >= 0 ? '+' : ''}{w.change_pct}%</bdi>
                       </div>

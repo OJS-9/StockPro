@@ -6,13 +6,7 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useLanguage } from '../LanguageContext'
-
-const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-const fmtCompact = (n: number) => {
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`
-  return `$${n.toFixed(0)}`
-}
+import { formatCurrency, formatCompact } from '../utils/currency'
 
 function LineChart({ data, dates, costBasis, gain = true, locale = 'en-US' }: { data: number[]; dates?: string[]; costBasis?: number[]; gain?: boolean; locale?: string }) {
   if (!data || data.length < 2) return <div style={{ height: 200, background: '#232120', borderRadius: 8 }} />
@@ -59,7 +53,7 @@ function LineChart({ data, dates, costBasis, gain = true, locale = 'en-US' }: { 
       {yTicks.map(({ val, y }) => (
         <g key={val}>
           <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke="#292524" strokeWidth="1" />
-          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, Heebo, sans-serif">{fmtCompact(val)}</text>
+          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, Heebo, sans-serif">{formatCompact(val)}</text>
         </g>
       ))}
       {/* X labels */}
@@ -197,10 +191,10 @@ export default function Analytics() {
         {/* KPI STRIP */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 1, background: '#292524', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden', marginBottom: 24 }}>
           {[
-            { label: 'Total Value', val: analytics.total_value ? fmt(analytics.total_value) : '-', sub: '', subColor: '#a8a29e' },
-            { label: 'Total Return', val: analytics.total_return ? `${analytics.total_return >= 0 ? '+' : ''}${fmt(analytics.total_return)}` : '-', sub: analytics.return_pct != null ? `${analytics.return_pct >= 0 ? '+' : ''}${typeof analytics.return_pct === 'number' ? analytics.return_pct.toFixed(1) : analytics.return_pct}%` : '', subColor: analytics.total_return >= 0 ? '#22c55e' : '#ef4444' },
+            { label: 'Total Value', val: analytics.total_value ? formatCurrency(analytics.total_value) : '-', sub: '', subColor: '#a8a29e' },
+            { label: 'Total Return', val: analytics.total_return ? `${analytics.total_return >= 0 ? '+' : ''}${formatCurrency(analytics.total_return)}` : '-', sub: analytics.return_pct != null ? `${analytics.return_pct >= 0 ? '+' : ''}${typeof analytics.return_pct === 'number' ? analytics.return_pct.toFixed(1) : analytics.return_pct}%` : '', subColor: analytics.total_return >= 0 ? '#22c55e' : '#ef4444' },
             { label: 'Holdings', val: String(kpis.holdings_count ?? analytics.allocation.length), sub: 'positions tracked', subColor: '#a8a29e' },
-            { label: 'Cost Basis', val: analytics.cost_basis ? fmt(analytics.cost_basis) : '-', sub: 'Total invested', subColor: '#a8a29e' },
+            { label: 'Cost Basis', val: analytics.cost_basis ? formatCurrency(analytics.cost_basis) : '-', sub: 'Total invested', subColor: '#a8a29e' },
           ].map(({ label, val, sub, subColor }) => (
             <div key={label} style={{ background: '#1c1917', padding: '20px 24px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
@@ -258,7 +252,7 @@ export default function Analytics() {
                     <div key={a.symbol} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 10, height: 10, borderRadius: 2, background: a.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{a.symbol}</div>
-                      <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#a8a29e' }}>{fmt(a.value)}</div>
+                      <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#a8a29e' }}>{formatCurrency(a.value)}</div>
                       <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'end' }}>{a.pct}%</div>
                     </div>
                   ))}
@@ -285,7 +279,7 @@ export default function Analytics() {
                         +{Number(p.pnl_pct).toFixed(2)}%
                       </div>
                       <div style={{ fontSize: 11.5, color: '#a8a29e', fontVariantNumeric: 'tabular-nums' }}>
-                        +{fmt(p.pnl)}
+                        +{formatCurrency(p.pnl)}
                       </div>
                     </div>
                   </div>
@@ -310,7 +304,7 @@ export default function Analytics() {
                         {Number(p.pnl_pct).toFixed(2)}%
                       </div>
                       <div style={{ fontSize: 11.5, color: '#a8a29e', fontVariantNumeric: 'tabular-nums' }}>
-                        {fmt(p.pnl)}
+                        {formatCurrency(p.pnl)}
                       </div>
                     </div>
                   </div>

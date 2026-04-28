@@ -2098,6 +2098,7 @@ def portfolios_prices():
                     "market_value": to_float(h.get("market_value")),
                     "unrealized_gain": to_float(h.get("unrealized_gain")),
                     "unrealized_gain_pct": to_float(h.get("unrealized_gain_pct")),
+                    "currency": h.get("currency", "USD"),
                 })
             row["holdings"] = holdings_out
             row["day_change"] = day_change
@@ -2162,7 +2163,11 @@ def portfolio_prices(portfolio_id):
         return float(v) if v is not None else None
 
     holdings_out = []
+    has_ils = False
     for h in summary["holdings"]:
+        cur = h.get("currency", "USD")
+        if cur == "ILS":
+            has_ils = True
         holdings_out.append(
             {
                 "symbol": h["symbol"],
@@ -2174,29 +2179,32 @@ def portfolio_prices(portfolio_id):
                 "market_value": to_float(h.get("market_value")),
                 "unrealized_gain": to_float(h.get("unrealized_gain")),
                 "unrealized_gain_pct": to_float(h.get("unrealized_gain_pct")),
+                "currency": cur,
             }
         )
 
-    return jsonify(
-        {
-            "holdings": holdings_out,
-            "total_market_value": to_float(summary.get("total_market_value")),
-            "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
-            "total_unrealized_gain_pct": to_float(
-                summary.get("total_unrealized_gain_pct")
-            ),
-            "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
-            "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
-            "track_cash": bool(summary.get("track_cash")),
-            "cash_balance": to_float(summary.get("cash_balance")),
-            "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
-            "breakdowns": {
-                "sector": breakdowns.get("sector", []),
-                "market": breakdowns.get("market", []),
-                "prices_loaded": bool(breakdowns.get("prices_loaded")),
-            },
-        }
-    )
+    resp = {
+        "holdings": holdings_out,
+        "total_market_value": to_float(summary.get("total_market_value")),
+        "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
+        "total_unrealized_gain_pct": to_float(
+            summary.get("total_unrealized_gain_pct")
+        ),
+        "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
+        "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
+        "track_cash": bool(summary.get("track_cash")),
+        "cash_balance": to_float(summary.get("cash_balance")),
+        "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
+        "breakdowns": {
+            "sector": breakdowns.get("sector", []),
+            "market": breakdowns.get("market", []),
+            "prices_loaded": bool(breakdowns.get("prices_loaded")),
+        },
+    }
+    if has_ils:
+        from currency_utils import get_usd_ils_rate
+        resp["fx_rates"] = {"ILS_USD": to_float(Decimal("1") / get_usd_ils_rate())}
+    return jsonify(resp)
 
 
 @app.route("/api/portfolio/<portfolio_id>/history")
@@ -3489,23 +3497,37 @@ def api_ticker_fundamentals(symbol: str):
 
     try:
         info = yf.Ticker(symbol.upper()).info
+        raw_currency = info.get("currency", "USD")
+        if raw_currency == "ILA":
+            currency = "ILS"
+            ila_convert = lambda v: v / 100 if v is not None else None
+        else:
+            currency = raw_currency if raw_currency else "USD"
+            ila_convert = lambda v: v
+
+        current_price = _safe(info.get("currentPrice") or info.get("regularMarketPrice"))
+        w52_high = _safe(info.get("fiftyTwoWeekHigh"))
+        w52_low = _safe(info.get("fiftyTwoWeekLow"))
+
         return jsonify({
             "success": True,
             "symbol": symbol.upper(),
             "name": info.get("longName") or info.get("shortName"),
             "sector": info.get("sector"),
             "industry": info.get("industry"),
+            "exchange": info.get("exchange"),
+            "currency": currency,
             "market_cap": _safe(info.get("marketCap")),
             "pe_ratio": _safe(info.get("trailingPE")),
             "eps": _safe(info.get("trailingEps")),
             "revenue": _safe(info.get("totalRevenue")),
             "gross_margin": _safe(info.get("grossMargins")),
-            "week_52_high": _safe(info.get("fiftyTwoWeekHigh")),
-            "week_52_low": _safe(info.get("fiftyTwoWeekLow")),
+            "week_52_high": _safe(ila_convert(w52_high)),
+            "week_52_low": _safe(ila_convert(w52_low)),
             "avg_volume": _safe(info.get("averageVolume")),
             "beta": _safe(info.get("beta")),
             "dividend_yield": _safe(info.get("dividendYield")),
-            "current_price": _safe(info.get("currentPrice") or info.get("regularMarketPrice")),
+            "current_price": _safe(ila_convert(current_price)),
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3539,6 +3561,7 @@ def api_ticker_search():
                 "name": c.get("display_name", q),
                 "price": float(c["price"]) if c.get("price") else None,
                 "change_pct": float(c["change_percent"]) if c.get("change_percent") else None,
+                "currency": c.get("currency", "USD"),
             })
     except Exception:
         pass
@@ -3549,6 +3572,10 @@ def api_ticker_search():
         name = info.get("longName") or info.get("shortName") or q
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         change_pct = info.get("regularMarketChangePercent")
+        raw_currency = info.get("currency", "USD")
+        currency = "ILS" if raw_currency == "ILA" else (raw_currency or "USD")
+        if raw_currency == "ILA" and price:
+            price = price / 100
         if not name or name == q:
             return jsonify({"success": True, "valid": False, "symbol": q})
         return jsonify({
@@ -3558,6 +3585,7 @@ def api_ticker_search():
             "name": name,
             "price": float(price) if price else None,
             "change_pct": float(change_pct) if change_pct else None,
+            "currency": currency,
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

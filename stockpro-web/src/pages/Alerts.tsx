@@ -8,6 +8,8 @@ import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { formatCurrency } from '../utils/currency'
+import ExchangePicker, { appendExchangeSuffix, type Exchange } from '../components/ExchangePicker'
 
 export default function Alerts() {
   const api = useApiClient()
@@ -15,9 +17,10 @@ export default function Alerts() {
   const { t } = useTranslation()
   const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
+  const fmt = (n: number) => formatCurrency(n, 'USD', locale)
   const [showCreate, setShowCreate] = useState(false)
-  // API create fields: symbol, direction (above|below), target_price, asset_type (stock|crypto)
+  const [alertExchange, setAlertExchange] = useState<Exchange>('US')
   const [newAlert, setNewAlert] = useState({ symbol: '', direction: 'above', target: '', asset_type: 'stock' })
 
   const { data, isLoading } = useQuery({
@@ -57,7 +60,7 @@ export default function Alerts() {
     // POST /api/alerts with {symbol, direction, target_price, asset_type}
     mutationFn: async () => {
       const res = await api.post('/api/alerts', {
-        symbol: newAlert.symbol.toUpperCase(),
+        symbol: appendExchangeSuffix(newAlert.symbol, alertExchange),
         direction: newAlert.direction,
         target_price: parseFloat(newAlert.target),
         asset_type: newAlert.asset_type,
@@ -144,7 +147,10 @@ export default function Alerts() {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>{t('alerts.ticker')}</label>
-                <input value={newAlert.symbol} onChange={e => setNewAlert(a => ({ ...a, symbol: e.target.value.toUpperCase() }))} placeholder="NVDA" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={newAlert.symbol} onChange={e => setNewAlert(a => ({ ...a, symbol: e.target.value.toUpperCase() }))} placeholder={alertExchange === 'TASE' ? 'TEVA' : 'NVDA'} style={{ flex: 1, background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                  <ExchangePicker value={alertExchange} onChange={setAlertExchange} />
+                </div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>{t('alerts.condition')}</label>

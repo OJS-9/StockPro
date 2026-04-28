@@ -64,16 +64,19 @@ class PriceCacheService:
             for sym, data in fetched.items():
                 price = data.get("price")
                 if price is not None:
+                    currency = data.get("currency", "USD")
                     self.db.upsert_price_cache(
                         sym,
                         "stock",
                         float(price),
                         data.get("change_percent"),
                         display_names.get(sym),
+                        currency=currency,
                     )
                     result[sym] = {
                         "price": price,
                         "change_percent": data.get("change_percent"),
+                        "currency": currency,
                     }
 
         if cryptos:

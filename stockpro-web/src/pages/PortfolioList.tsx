@@ -7,6 +7,8 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useLanguage } from '../LanguageContext'
+import { formatCurrency } from '../utils/currency'
 
 function Sparkline({ gain = true }: { gain?: boolean }) {
   const color = gain ? '#22c55e' : '#ef4444'
@@ -115,8 +117,10 @@ export default function PortfolioList() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { isMobile } = useBreakpoint()
+  const { lang } = useLanguage()
 
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
+  const fmt = (n: number) => formatCurrency(n, 'USD', locale)
 
   const { data, isLoading } = useQuery({
     queryKey: ['portfolios'],

@@ -273,15 +273,19 @@ class PortfolioService:
             ).start()
 
         # Apply prices to holdings
+        from currency_utils import detect_currency, convert_to_usd
+
         for h in stocks:
             price = price_map.get(h["symbol"])
             h["current_price"] = price if price is not None else Decimal("0")
             h["price_available"] = price is not None
+            h["currency"] = detect_currency(h["symbol"])
 
         for h in cryptos:
             price = price_map.get(h["symbol"])
             h["current_price"] = price if price is not None else Decimal("0")
             h["price_available"] = price is not None
+            h["currency"] = "USD"
 
         # Calculate market value and gains for all holdings
         for h in holdings:
@@ -604,8 +608,18 @@ class PortfolioService:
             total_cost_basis += cash_balance
 
         if with_prices:
+            from currency_utils import convert_to_usd
+
+            for h in holdings:
+                mv = h.get("market_value")
+                cur = h.get("currency", "USD")
+                if mv is not None and cur != "USD":
+                    h["market_value_usd"] = convert_to_usd(mv, cur)
+                else:
+                    h["market_value_usd"] = mv
+
             total_market_value = sum(
-                h.get("market_value") or Decimal("0") for h in holdings
+                h.get("market_value_usd") or Decimal("0") for h in holdings
             )
             if track_cash:
                 total_market_value += cash_balance
@@ -616,12 +630,12 @@ class PortfolioService:
                 else Decimal("0")
             )
             stock_value = sum(
-                h.get("market_value") or Decimal("0")
+                h.get("market_value_usd") or Decimal("0")
                 for h in holdings
                 if h["asset_type"] == "stock"
             )
             crypto_value = sum(
-                h.get("market_value") or Decimal("0")
+                h.get("market_value_usd") or Decimal("0")
                 for h in holdings
                 if h["asset_type"] == "crypto"
             )
