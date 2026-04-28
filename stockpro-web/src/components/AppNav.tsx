@@ -7,6 +7,7 @@ import Icon from './Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useResearchProgress } from '../ResearchProgressContext'
+import { useLanguage } from '../LanguageContext'
 
 const navLinks = [
   { to: '/home', icon: 'dashboard', tKey: 'nav.dashboard' },
@@ -16,15 +17,15 @@ const navLinks = [
   { to: '/alerts', icon: 'notifications', tKey: 'nav.alerts' },
 ]
 
-function timeAgo(iso: string) {
+function timeAgo(iso: string, locale: string) {
   const diff = Date.now() - new Date(iso).getTime()
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return rtf.format(0, 'minute')
+  if (mins < 60) return rtf.format(-mins, 'minute')
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
+  if (hrs < 24) return rtf.format(-hrs, 'hour')
+  return rtf.format(-Math.floor(hrs / 24), 'day')
 }
 
 export default function AppNav() {
@@ -34,6 +35,8 @@ export default function AppNav() {
   const api = useApiClient()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [showPanel, setShowPanel] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -128,7 +131,7 @@ export default function AppNav() {
         <Link
           to="/home"
           style={{
-            fontFamily: 'Nunito, sans-serif',
+            fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
             fontSize: 17,
             fontWeight: 700,
             color: '#d6d3d1',
@@ -321,7 +324,7 @@ export default function AppNav() {
                         <span style={{
                           fontSize: 11,
                           fontWeight: 700,
-                          fontFamily: 'Nunito, sans-serif',
+                          fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
                           padding: '2px 8px',
                           borderRadius: 5,
                           background: '#232120',
@@ -331,7 +334,7 @@ export default function AppNav() {
                           {n.symbol}
                         </span>
                         <span style={{ fontSize: 11, color: '#57534e' }}>
-                          {n.created_at ? timeAgo(n.created_at) : ''}
+                          {n.created_at ? timeAgo(n.created_at, locale) : ''}
                         </span>
                         {!n.read_at && (
                           <span style={{
@@ -407,7 +410,7 @@ export default function AppNav() {
               fontWeight: 600,
               color: '#d6d3d1',
               cursor: 'pointer',
-              fontFamily: 'Nunito, sans-serif',
+              fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
             }}
           >
             {user?.imageUrl ? (

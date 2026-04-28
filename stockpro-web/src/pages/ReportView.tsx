@@ -166,7 +166,8 @@ export default function ReportView() {
                   <Icon name="menu_book" size={18} />
                 </button>
               )}
-              <span style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 6, letterSpacing: '0.02em', fontFamily: 'Nunito, sans-serif' }}>
+              <span style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 6, letterSpacing: '0.02em', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}>
+
                 {report.symbol}
               </span>
               <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 999, background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}>
@@ -215,7 +216,8 @@ export default function ReportView() {
 
           {/* CONTENT */}
           <div ref={contentRef} style={{ padding: isMobile ? '24px 16px 60px' : '40px 48px 100px', maxWidth: 740 }}>
-            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
+            <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
+
               {report.title || `${report.symbol} ${t('reportView.researchReport')}`}
             </h1>
 
@@ -241,7 +243,7 @@ export default function ReportView() {
             ) : (
               sections.map((s: any, i: number) => (
                 <div key={s.id} id={`section-${i}`} data-section={i} style={{ marginBottom: 40 }}>
-                  <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '44px 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h2 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '44px 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: '#a8a29e', minWidth: 24 }}>{String(i + 1).padStart(2, '0')}</span>
                     {s.title}
                   </h2>

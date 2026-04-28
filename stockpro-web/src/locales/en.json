@@ -309,6 +309,50 @@
 
   "common.cancel": "Cancel",
 
+  "common.toasts.copied": "Copied",
+
+  "portfolio.toasts.created": "Portfolio created",
+  "portfolio.toasts.createFailed": "Failed to create portfolio",
+
+  "alerts.toasts.created": "Alert created",
+  "alerts.toasts.deleted": "Alert deleted",
+  "alerts.toasts.createFailed": "Failed to create alert",
+  "alerts.toasts.deleteFailed": "Failed to delete alert",
+  "alerts.toasts.updateFailed": "Failed to update alert",
+
+  "watchlist.toasts.added": "{{symbol}} added",
+  "watchlist.toasts.removed": "{{symbol}} removed",
+  "watchlist.toasts.addFailed": "Failed to add symbol",
+  "watchlist.toasts.removeFailed": "Failed to remove",
+  "watchlist.toasts.updateFailed": "Failed to update",
+
+  "transactions.toasts.added": "Transaction added",
+  "transactions.toasts.addFailed": "Failed to add transaction",
+  "transactions.toasts.deleted": "Transaction deleted",
+  "transactions.toasts.deleteFailed": "Failed to delete",
+
+  "csv.toasts.imported": "CSV imported successfully",
+  "csv.toasts.importFailed": "Failed to import CSV",
+
+  "research.toasts.started": "Research started! Generating report...",
+  "research.toasts.startFailed": "Failed to start research",
+  "research.toasts.initFailed": "Failed to initialize research",
+  "research.toasts.failed": "Research failed. Please try again.",
+
+  "reports.toasts.deleted": "Report deleted",
+  "reports.toasts.deleteFailed": "Failed to delete report",
+
+  "settings.toasts.saved": "Changes saved",
+  "settings.toasts.saveFailed": "Failed to save",
+  "settings.toasts.telegramDisconnected": "Telegram disconnected",
+  "settings.toasts.telegramFailed": "Failed to disconnect",
+  "settings.toasts.tokenCreateFailed": "Failed to create token",
+  "settings.toasts.tokenRevoked": "Token revoked",
+  "settings.toasts.tokenRevokeFailed": "Failed to revoke token",
+  "settings.toasts.checkoutFailed": "Checkout failed",
+  "settings.toasts.portalFailed": "Portal unavailable",
+  "settings.toasts.subscriptionActivated": "Subscription activated",
+
   "legal.label": "Legal",
   "legal.lastUpdatedLabel": "Last updated",
   "legal.lastUpdated": "April 28, 2026",

@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAuth } from '@clerk/clerk-react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 
@@ -10,6 +11,7 @@ export default function ImportCSV() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { getToken } = useAuth()
+  const { t } = useTranslation()
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<any[]>([])
@@ -46,10 +48,10 @@ export default function ImportCSV() {
       return res.json()
     },
     onSuccess: () => {
-      toast.success('CSV imported successfully')
+      toast.success(t('csv.toasts.imported'))
       navigate(`/portfolio/${id}`)
     },
-    onError: () => toast.error('Failed to import CSV'),
+    onError: () => toast.error(t('csv.toasts.importFailed')),
   })
 
   return (
@@ -64,7 +66,7 @@ export default function ImportCSV() {
               <Icon name="arrow_back" size={16} /> Portfolio
             </Link>
           </div>
-          <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>Import from CSV</h1>
+          <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>Import from CSV</h1>
           <p style={{ fontSize: 13, color: '#a8a29e' }}>Upload a CSV file with columns: date, symbol, type, shares, price.</p>
         </div>
 

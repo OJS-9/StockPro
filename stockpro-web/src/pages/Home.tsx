@@ -40,7 +40,7 @@ export default function Home() {
   const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
-  const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
   const [ticker, setTicker] = useState('')
   const [changeMode, setChangeMode] = useState<'D' | 'W'>('D')
 
@@ -78,7 +78,7 @@ export default function Home() {
   if (isLoading) {
     return (
       <div style={{ background: '#0c0a09', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <div style={{ fontSize: 28, fontFamily: 'Nunito, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
+        <div style={{ fontSize: 28, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
         <div style={{ width: 32, height: 32, border: '3px solid #292524', borderTopColor: '#d6d3d1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       </div>
     )
@@ -92,7 +92,7 @@ export default function Home() {
         {/* GREETING */}
         <div style={{ marginBottom: 32, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
-            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>
+            <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>
               {greeting}, {firstName}
             </h1>
             <p style={{ fontSize: 13, color: '#a8a29e' }}>
@@ -111,7 +111,7 @@ export default function Home() {
             onChange={e => setTicker(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleResearch()}
             placeholder={t('home.researchPlaceholder')}
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#fafaf9' }}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 14, color: '#fafaf9' }}
           />
           {!isMobile && <div style={{ width: 1, height: 22, background: '#292524', flexShrink: 0 }} />}
           {!isMobile && (
@@ -142,14 +142,14 @@ export default function Home() {
           <div style={{ background: '#1c1917', border: '1px solid rgba(214,211,209,0.15)', borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.totalPortfolioValue')}</div>
             {isLoading ? <Skeleton h={44} /> : (
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 38, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-                {totals.total_value != null ? fmt(totals.total_value) : '$0'}
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 38, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                <bdi>{totals.total_value != null ? fmt(totals.total_value) : '$0'}</bdi>
               </div>
             )}
             {!isLoading && totals.day_change != null && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: totals.day_change >= 0 ? '#22c55e' : '#ef4444' }}>
                 <Icon name={totals.day_change >= 0 ? 'trending_up' : 'trending_down'} size={15} />
-                {totals.day_change >= 0 ? '+' : ''}{fmt(totals.day_change)} ({totals.day_change_pct >= 0 ? '+' : ''}{totals.day_change_pct?.toFixed(2)}%) {t('home.today')}
+                <bdi>{totals.day_change >= 0 ? '+' : ''}{fmt(totals.day_change)} ({totals.day_change_pct >= 0 ? '+' : ''}{totals.day_change_pct?.toFixed(2)}%)</bdi> {t('home.today')}
               </div>
             )}
             <div style={{ position: 'absolute', bottom: 0, right: 0, width: 120, height: 60, opacity: 0.35 }}>
@@ -160,8 +160,8 @@ export default function Home() {
           <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.unrealizedPnl')}</div>
             {isLoading ? <Skeleton h={32} /> : (
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                {totals.total_pnl != null ? fmt(totals.total_pnl) : '$0'}
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                <bdi>{totals.total_pnl != null ? fmt(totals.total_pnl) : '$0'}</bdi>
               </div>
             )}
             {!isLoading && (
@@ -196,14 +196,14 @@ export default function Home() {
                   </div>
                 </div>
                 {isLoading ? <Skeleton h={32} /> : (
-                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
-                    {displayVal !== 0 ? `${displayVal >= 0 ? '+' : ''}${fmt(displayVal)}` : '-'}
+                  <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
+                    <bdi>{displayVal !== 0 ? `${displayVal >= 0 ? '+' : ''}${fmt(displayVal)}` : '-'}</bdi>
                   </div>
                 )}
                 {!isLoading && displayVal !== 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: changeColor }}>
                     <Icon name={displayVal >= 0 ? 'arrow_upward' : 'arrow_downward'} size={15} />
-                    {displayPct >= 0 ? '+' : ''}{displayPct.toFixed(2)}% {changeMode === 'D' ? t('home.today') : t('home.thisWeek')}
+                    <bdi>{displayPct >= 0 ? '+' : ''}{displayPct.toFixed(2)}%</bdi> {changeMode === 'D' ? t('home.today') : t('home.thisWeek')}
                   </div>
                 )}
               </div>
@@ -213,7 +213,7 @@ export default function Home() {
           <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: '20px 22px' }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.activeAlerts')}</div>
             {isLoading ? <Skeleton h={32} /> : (
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
                 {alertsCount ?? 0}
               </div>
             )}
@@ -287,11 +287,11 @@ export default function Home() {
                             <td key={i} style={{ padding: '14px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', fontSize: 13.5, textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{v}</td>
                           ))}
                           <td style={{ padding: '14px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', fontSize: 13.5, textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                            {pnl >= 0 ? '+' : ''}{fmt(pnl)}
+                            <bdi>{pnl >= 0 ? '+' : ''}{fmt(pnl)}</bdi>
                           </td>
                           <td style={{ padding: '14px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: pnlPct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: pnlPct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${pnlPct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-                              {pnlPct >= 0 ? '+' : ''}{typeof pnlPct === 'number' ? pnlPct.toFixed(1) : pnlPct}%
+                              <bdi>{pnlPct >= 0 ? '+' : ''}{typeof pnlPct === 'number' ? pnlPct.toFixed(1) : pnlPct}%</bdi>
                             </span>
                           </td>
                         </tr>
@@ -324,7 +324,7 @@ export default function Home() {
                   const symbol = r.ticker || r.symbol || '?'
                   const title = r.title || `${symbol} research report`
                   const type = r.trade_type || r.type || ''
-                  const createdAt = r.created_at ? new Date(r.created_at).toLocaleDateString() : ''
+                  const createdAt = r.created_at ? new Date(r.created_at).toLocaleDateString(locale) : ''
                   return (
                   <Link key={reportId} to={`/report/${reportId}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', cursor: 'pointer', textDecoration: 'none' }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -365,7 +365,7 @@ export default function Home() {
                 {(watchlist as any[]).map((w: any) => (
                   <Link key={w.symbol} to={`/ticker/${w.symbol}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid rgba(41,37,36,0.5)', cursor: 'pointer', textDecoration: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 8, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#d6d3d1', fontFamily: 'Nunito, sans-serif', letterSpacing: '-0.02em' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#d6d3d1', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', letterSpacing: '-0.02em' }}>
                         {w.symbol.slice(0, 2)}
                       </div>
                       <div>
@@ -376,7 +376,7 @@ export default function Home() {
                     <div style={{ textAlign: 'end' }}>
                       <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(w.price)}</div>
                       <div style={{ fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: w.change_pct >= 0 ? '#22c55e' : '#ef4444' }}>
-                        {w.change_pct >= 0 ? '+' : ''}{w.change_pct}%
+                        <bdi>{w.change_pct >= 0 ? '+' : ''}{w.change_pct}%</bdi>
                       </div>
                     </div>
                   </Link>

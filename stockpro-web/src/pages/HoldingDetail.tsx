@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useLanguage } from '../LanguageContext'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
@@ -39,6 +41,9 @@ export default function HoldingDetail() {
   const api = useApiClient()
   const queryClient = useQueryClient()
   const { isMobile } = useBreakpoint()
+  const { t } = useTranslation()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
 
   // /portfolio/<id>/holding/<symbol>?format=json returns {portfolio, holding, transactions}
   const { data: holdData } = useQuery({
@@ -82,7 +87,7 @@ export default function HoldingDetail() {
     type: (t.transaction_type || t.type || 'BUY').toUpperCase(),
     shares: t.quantity ?? t.shares ?? 0,
     price: t.price_per_unit ?? t.price ?? 0,
-    date: t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (t.date || ''),
+    date: t.transaction_date ? new Date(t.transaction_date).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' }) : (t.date || ''),
     total: (t.quantity ?? t.shares ?? 0) * (t.price_per_unit ?? t.price ?? 0),
   }))
 
@@ -97,9 +102,9 @@ export default function HoldingDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['holding', id, symbol] })
-      toast.success('Transaction deleted')
+      toast.success(t('transactions.toasts.deleted'))
     },
-    onError: (e: any) => toast.error(e.message || 'Failed to delete'),
+    onError: (e: any) => toast.error(e.message || t('transactions.toasts.deleteFailed')),
   })
 
   return (
@@ -118,7 +123,7 @@ export default function HoldingDetail() {
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{symbol}</h1>
+              <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{symbol}</h1>
               <div style={{ fontSize: 13, color: '#a8a29e' }}>{holding.name} &nbsp;&middot;&nbsp; {holding.shares} shares</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -140,14 +145,14 @@ export default function HoldingDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>Market Value</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 24 : 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 24 : 32, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(holding.market_value)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444' }}>
-                      {gain ? '+' : ''}{fmt(holding.pnl)}
+                      <bdi>{gain ? '+' : ''}{fmt(holding.pnl)}</bdi>
                     </div>
                     <div style={{ fontSize: 12, color: gain ? '#22c55e' : '#ef4444' }}>
-                      {gain ? '+' : ''}{holding.pnl_pct}% all time
+                      <bdi>{gain ? '+' : ''}{holding.pnl_pct}%</bdi> all time
                     </div>
                   </div>
                 </div>
@@ -205,7 +210,7 @@ export default function HoldingDetail() {
               ].map(({ label, val, color }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)' }}>
                   <span style={{ fontSize: 13, color: '#a8a29e' }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: color || '#fafaf9' }}>{val}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: color || '#fafaf9' }}><bdi>{val}</bdi></span>
                 </div>
               ))}
             </div>

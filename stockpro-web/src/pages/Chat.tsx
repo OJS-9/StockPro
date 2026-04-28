@@ -7,6 +7,7 @@ import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useLanguage } from '../LanguageContext'
 
 interface Source {
   index: number
@@ -36,7 +37,7 @@ const SOURCE_TYPE_STYLES: Record<string, { bg: string; color: string; label: str
 
 function UserInitials() {
   return (
-    <div style={{ width: 32, height: 32, borderRadius: 10, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#d6d3d1', fontFamily: 'Nunito, sans-serif', flexShrink: 0 }}>
+    <div style={{ width: 32, height: 32, borderRadius: 10, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#d6d3d1', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', flexShrink: 0 }}>
       U
     </div>
   )
@@ -229,6 +230,8 @@ export default function Chat() {
   const { reportId } = useParams()
   const api = useApiClient()
   const { getToken } = useAuth()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -262,7 +265,7 @@ export default function Chat() {
   const report = rawReport ? {
     symbol: rawReport.ticker || rawReport.symbol || '?',
     type: rawReport.trade_type || rawReport.type || '',
-    created_at: rawReport.created_at ? new Date(rawReport.created_at).toLocaleDateString() : '',
+    created_at: rawReport.created_at ? new Date(rawReport.created_at).toLocaleDateString(locale) : '',
     word_count: rawReport.report_text ? Math.round(rawReport.report_text.split(/\s+/).length) : 0,
   } : { symbol: '', type: '', created_at: '', word_count: 0 }
 
@@ -399,7 +402,7 @@ export default function Chat() {
       id: Date.now().toString(),
       role: 'user',
       content: text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
     }
     setMessages(prev => [...prev, userMsg])
     setInput('')
@@ -444,7 +447,7 @@ export default function Chat() {
               role: 'assistant',
               content: data.assistant_message || '',
               sources: data.sources || [],
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
             }])
 
             // Persist conversation history back to Flask session for next turn
@@ -540,7 +543,7 @@ export default function Chat() {
           <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #292524' }}>
             <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 12 }}>{t('chat.reportContext')}</div>
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 10, padding: 14 }}>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {report.symbol || '...'}
                 {report.type && (
                   <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}>
@@ -697,7 +700,7 @@ export default function Chat() {
                 placeholder={t('chat.askAnything')}
                 rows={1}
                 disabled={isStreaming}
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#fafaf9', minHeight: 24, maxHeight: 120, lineHeight: 1.6 }}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 14, color: '#fafaf9', minHeight: 24, maxHeight: 120, lineHeight: 1.6 }}
               />
               <button
                 onClick={() => sendMessage(input)}

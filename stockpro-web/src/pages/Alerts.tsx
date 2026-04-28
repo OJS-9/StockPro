@@ -15,7 +15,7 @@ export default function Alerts() {
   const { t } = useTranslation()
   const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
-  const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
   const [showCreate, setShowCreate] = useState(false)
   // API create fields: symbol, direction (above|below), target_price, asset_type (stock|crypto)
   const [newAlert, setNewAlert] = useState({ symbol: '', direction: 'above', target: '', asset_type: 'stock' })
@@ -38,7 +38,7 @@ export default function Alerts() {
       if (!res.ok) throw new Error('Failed')
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['alerts'] }),
-    onError: () => toast.error('Failed to update alert'),
+    onError: () => toast.error(t('alerts.toasts.updateFailed')),
   })
 
   const deleteMutation = useMutation({
@@ -48,9 +48,9 @@ export default function Alerts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
-      toast.success('Alert deleted')
+      toast.success(t('alerts.toasts.deleted'))
     },
-    onError: () => toast.error('Failed to delete alert'),
+    onError: () => toast.error(t('alerts.toasts.deleteFailed')),
   })
 
   const createMutation = useMutation({
@@ -69,9 +69,9 @@ export default function Alerts() {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
       setNewAlert({ symbol: '', direction: 'above', target: '', asset_type: 'stock' })
       setShowCreate(false)
-      toast.success('Alert created')
+      toast.success(t('alerts.toasts.created'))
     },
-    onError: () => toast.error('Failed to create alert'),
+    onError: () => toast.error(t('alerts.toasts.createFailed')),
   })
 
   // API fields: alert_id, symbol, direction (above|below), target_price, active (bool), created_at
@@ -98,7 +98,7 @@ export default function Alerts() {
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
-            <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('alerts.priceAlerts')}</div>
+            <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('alerts.priceAlerts')}</div>
             <div style={{ fontSize: 13, color: '#a8a29e' }}>{activeCount} {t('alerts.active')} &nbsp;&middot;&nbsp; {triggeredCount} {t('alerts.triggered')} &nbsp;&middot;&nbsp; {pausedCount} {t('alerts.paused')}</div>
           </div>
           <button
@@ -132,7 +132,7 @@ export default function Alerts() {
           ].map(({ label, val, color }) => (
             <div key={label} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: '16px 18px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 600, lineHeight: 1, color }}>{val}</div>
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 600, lineHeight: 1, color }}>{val}</div>
             </div>
           ))}
         </div>
@@ -144,18 +144,18 @@ export default function Alerts() {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>{t('alerts.ticker')}</label>
-                <input value={newAlert.symbol} onChange={e => setNewAlert(a => ({ ...a, symbol: e.target.value.toUpperCase() }))} placeholder="NVDA" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                <input value={newAlert.symbol} onChange={e => setNewAlert(a => ({ ...a, symbol: e.target.value.toUpperCase() }))} placeholder="NVDA" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>{t('alerts.condition')}</label>
-                <select value={newAlert.direction} onChange={e => setNewAlert(a => ({ ...a, direction: e.target.value }))} style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, outline: 'none' }}>
+                <select value={newAlert.direction} onChange={e => setNewAlert(a => ({ ...a, direction: e.target.value }))} style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none' }}>
                   <option value="above">{t('alerts.priceAbove')}</option>
                   <option value="below">{t('alerts.priceBelow')}</option>
                 </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>{t('alerts.targetPrice')}</label>
-                <input type="number" value={newAlert.target} onChange={e => setNewAlert(a => ({ ...a, target: e.target.value }))} placeholder="0.00" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+                <input type="number" value={newAlert.target} onChange={e => setNewAlert(a => ({ ...a, target: e.target.value }))} placeholder="0.00" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -205,7 +205,7 @@ export default function Alerts() {
                     <span style={{ fontSize: 11, fontWeight: 500, color: statusColor }}>{statusLabel}</span>
                   </div>
                   {/* Ticker */}
-                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 15, fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#232120', border: '1px solid #292524', letterSpacing: '0.02em', minWidth: 64, textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 15, fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#232120', border: '1px solid #292524', letterSpacing: '0.02em', minWidth: 64, textAlign: 'center', flexShrink: 0 }}>
                     {a.symbol}
                   </div>
                   {/* Condition */}
