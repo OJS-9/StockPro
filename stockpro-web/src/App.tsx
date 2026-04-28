@@ -9,6 +9,9 @@ import { useApiClient } from './api/client'
 import Landing from './pages/Landing'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
+import Terms from './pages/legal/Terms'
+import Privacy from './pages/legal/Privacy'
+import Refund from './pages/legal/Refund'
 
 // Lazy: all authenticated pages
 const Home = lazy(() => import('./pages/Home'))
@@ -319,6 +322,11 @@ export default function App() {
           </>
         }
       />
+
+      {/* Public legal pages */}
+      <Route path="/legal/terms" element={<Terms />} />
+      <Route path="/legal/privacy" element={<Privacy />} />
+      <Route path="/legal/refund" element={<Refund />} />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

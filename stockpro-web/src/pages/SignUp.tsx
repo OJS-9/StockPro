@@ -1,9 +1,12 @@
 import { SignUp as ClerkSignUp } from '@clerk/clerk-react'
+import { Link } from 'react-router'
+import { Trans, useTranslation } from 'react-i18next'
 import Icon from '../components/Icon'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 
 export default function SignUp() {
   const { isMobile } = useBreakpoint()
+  const { t } = useTranslation()
   return (
     <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
       {/* Left branding panel */}
@@ -73,7 +76,7 @@ export default function SignUp() {
       )}
 
       {/* Right auth panel */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '24px 16px' : 48, background: isMobile ? '#1c1917' : undefined }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: isMobile ? '24px 16px' : 48, background: isMobile ? '#1c1917' : undefined }}>
         <ClerkSignUp
           routing="path"
           path={`${import.meta.env.BASE_URL}sign-up`}
@@ -123,6 +126,16 @@ export default function SignUp() {
             },
           }}
         />
+        <p style={{ fontSize: 12, color: '#a8a29e', maxWidth: 360, textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+          <Trans
+            i18nKey="legal.signupAgreement"
+            t={t}
+            components={{
+              terms: <Link to="/legal/terms" style={{ color: '#d6d3d1', textDecoration: 'underline' }} />,
+              privacy: <Link to="/legal/privacy" style={{ color: '#d6d3d1', textDecoration: 'underline' }} />,
+            }}
+          />
+        </p>
       </div>
     </div>
   )
