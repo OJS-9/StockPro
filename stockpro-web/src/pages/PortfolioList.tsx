@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
-import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 
 function Sparkline({ gain = true }: { gain?: boolean }) {
@@ -53,10 +52,10 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolios'] })
-      toast.success('Portfolio created')
+      toast.success(t('portfolio.toasts.created'))
       onClose()
     },
-    onError: () => toast.error('Failed to create portfolio'),
+    onError: () => toast.error(t('portfolio.toasts.createFailed')),
   })
 
   return (
@@ -65,7 +64,7 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 32, width: 400, maxWidth: '90vw' }}>
-        <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600, marginBottom: 20, letterSpacing: '-0.02em' }}>{t('portfolio.newPortfolio')}</h2>
+        <h2 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600, marginBottom: 20, letterSpacing: '-0.02em' }}>{t('portfolio.newPortfolio')}</h2>
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#a8a29e', marginBottom: 6, letterSpacing: '0.02em' }}>{t('portfolio.portfolioName')}</label>
           <input
@@ -74,7 +73,7 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
             onChange={e => setName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && name.trim() && mutation.mutate()}
             placeholder="e.g. Tech Growth"
-            style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '10px 14px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '10px 14px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
           />
         </div>
         <div style={{ marginBottom: trackCash ? 12 : 20 }}>
@@ -115,10 +114,9 @@ export default function PortfolioList() {
   const api = useApiClient()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { lang } = useLanguage()
   const { isMobile } = useBreakpoint()
 
-  const fmt = (n: number) => new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
   const { data, isLoading } = useQuery({
     queryKey: ['portfolios'],
@@ -154,7 +152,7 @@ export default function PortfolioList() {
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 36 }}>
           <div>
-            <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('portfolio.myPortfolios')}</div>
+            <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('portfolio.myPortfolios')}</div>
             <div style={{ fontSize: 13, color: '#a8a29e' }}>
               {portfolios.length} {t('portfolio.portfolios')} &nbsp;&middot;&nbsp; {t('portfolio.lastUpdated')}
             </div>
@@ -180,7 +178,7 @@ export default function PortfolioList() {
           ].map(({ label, val, valColor, sub, subClass }) => (
             <div key={label} style={{ background: '#1c1917', padding: '20px 24px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: valColor || '#fafaf9' }}>{val}</div>
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: valColor || '#fafaf9' }}><bdi>{val}</bdi></div>
               <div style={{ fontSize: 12, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: subClass === 'up' ? '#22c55e' : subClass === 'down' ? '#ef4444' : '#a8a29e' }}>{sub}</div>
             </div>
           ))}
@@ -204,7 +202,7 @@ export default function PortfolioList() {
                   >
                     <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid #292524', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                       <div>
-                        <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 4 }}>{p.name}</div>
+                        <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 4 }}>{p.name}</div>
                         <div style={{ fontSize: 12, color: '#a8a29e', display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span>{p.holdings_count || 0} {t('portfolio.holdings')}</span>
                           <span>&middot;</span>
@@ -214,11 +212,11 @@ export default function PortfolioList() {
                     </div>
                     <div style={{ padding: '22px 24px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                        <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                           {fmt(p.value || 0)}
                         </div>
                         <span style={{ fontSize: 13, fontWeight: 500, padding: '5px 12px', borderRadius: 999, background: gain ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: gain ? '#22c55e' : '#ef4444', border: `1px solid ${gain ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, fontVariantNumeric: 'tabular-nums' }}>
-                          {gain ? '+' : ''}{p.pnl_pct || 0}% {t('portfolio.allTimeLabel')}
+                          <bdi>{gain ? '+' : ''}{p.pnl_pct || 0}%</bdi> {t('portfolio.allTimeLabel')}
                         </span>
                       </div>
                       <div style={{ marginBottom: 18, height: 56 }}>
@@ -228,7 +226,7 @@ export default function PortfolioList() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ display: 'flex', gap: 4 }}>
                             {p.holdings.slice(0, 5).map((h: any, i: number) => (
-                              <div key={h.symbol} style={{ width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 700, fontFamily: 'Nunito, sans-serif', background: `${dotColors[i % dotColors.length]}26`, color: dotColors[i % dotColors.length] }}>
+                              <div key={h.symbol} style={{ width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 700, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', background: `${dotColors[i % dotColors.length]}26`, color: dotColors[i % dotColors.length] }}>
                                 {h.symbol.slice(0, 2)}
                               </div>
                             ))}

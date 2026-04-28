@@ -45,7 +45,7 @@ export default function DevicePage() {
   }
 
   return (
-    <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#d6d3d1', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#d6d3d1', fontFamily: 'Inter, Heebo, sans-serif' }}>
       <AppNav />
       <div
         style={{
@@ -58,7 +58,7 @@ export default function DevicePage() {
         }}
       >
         <div>
-          <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 28, fontWeight: 700, margin: 0 }}>
+          <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 28, fontWeight: 700, margin: 0 }}>
             Authorize device
           </h1>
           <p style={{ color: '#a8a29e', marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>

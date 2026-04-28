@@ -101,12 +101,12 @@ function LineChart({ data, dates, gain = true, loading = false, locale = 'en-US'
       {yTicks.map(({ val, y }) => (
         <g key={val}>
           <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke="#292524" strokeWidth="1" />
-          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, sans-serif">{fmtCompact(val)}</text>
+          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, Heebo, sans-serif">{fmtCompact(val)}</text>
         </g>
       ))}
       {/* X labels */}
       {xLabels.map(({ label, x }) => (
-        <text key={label + x} x={x} y={h - 4} fill="#78716c" fontSize="10" textAnchor="middle" fontFamily="Inter, sans-serif">{label}</text>
+        <text key={label + x} x={x} y={h - 4} fill="#78716c" fontSize="10" textAnchor="middle" fontFamily="Inter, Heebo, sans-serif">{label}</text>
       ))}
       <polygon points={`${padLeft},${h - padBottom} ${pts} ${lastX},${h - padBottom}`} fill="url(#chartGrad)" />
       <polyline points={pts} stroke={color} strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round" />
@@ -244,7 +244,7 @@ export default function PortfolioDetail() {
   const { isMobile } = useBreakpoint()
 
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
-  const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
   // /api/portfolio/<id>/history returns {history: [{date, value}], granularity}
   const { data: historyData, isLoading: historyLoading } = useQuery({
@@ -461,7 +461,7 @@ export default function PortfolioDetail() {
               <Icon name="chevron_right" size={16} />
               <span style={{ fontSize: 13, color: '#fafaf9' }}>{portfolioName}</span>
             </div>
-            <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{portfolioName}</h1>
+            <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{portfolioName}</h1>
             <div style={{ fontSize: 13, color: '#a8a29e' }}>{holdings.length + (trackCash ? 1 : 0)} {t('portfolioDetail.holdings')}</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -488,14 +488,14 @@ export default function PortfolioDetail() {
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>
                       {t('portfolioDetail.portfolioValue')}{isFiltered && <span style={{ marginLeft: 6, fontSize: 10, color: '#78716c', textTransform: 'none', letterSpacing: 'normal' }}>(filtered)</span>}
                     </div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {pnl >= 0 ? '+' : ''}{fmt(pnl)}
+                      <bdi>{pnl >= 0 ? '+' : ''}{fmt(pnl)}</bdi>
                     </div>
                     <div style={{ fontSize: 13, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {pnl >= 0 ? '+' : ''}{Number(pnlPct).toFixed(2)}% all time
+                      <bdi>{pnl >= 0 ? '+' : ''}{Number(pnlPct).toFixed(2)}%</bdi> all time
                     </div>
                   </div>
                 </div>
@@ -629,11 +629,11 @@ export default function PortfolioDetail() {
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{h.current_price != null ? fmt(h.current_price) : <span style={{ color: '#57534e' }}>--</span>}</td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#fafaf9' }}>{fmt(h.market_value)}</td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: h.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                        {h.pnl >= 0 ? '+' : ''}{fmt(h.pnl)}
+                        <bdi>{h.pnl >= 0 ? '+' : ''}{fmt(h.pnl)}</bdi>
                       </td>
                       <td style={{ padding: '14px 24px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                         <span style={{ display: 'inline-flex', fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: h.pnl_pct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: h.pnl_pct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${h.pnl_pct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-                          {h.pnl_pct >= 0 ? '+' : ''}{Number(h.pnl_pct).toFixed(2)}%
+                          <bdi>{h.pnl_pct >= 0 ? '+' : ''}{Number(h.pnl_pct).toFixed(2)}%</bdi>
                         </span>
                       </td>
                     </tr>

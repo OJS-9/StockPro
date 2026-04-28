@@ -138,7 +138,7 @@ export default function ResearchWizard() {
         await callStartGeneration(data, [], [])
       }
     } catch (e: any) {
-      toast.error(e.message || 'Failed to initialize research')
+      toast.error(e.message || t('research.toasts.initFailed'))
       setPhase('setup')
     }
   }
@@ -165,9 +165,9 @@ export default function ResearchWizard() {
       setPopupData(null)
       setSelectedSubjectIds([])
       setAnswers([])
-      toast.success('Research started! Track progress in the top bar.')
+      toast.success(t('research.toasts.started'))
     } catch (e: any) {
-      toast.error(e.message || 'Failed to start research')
+      toast.error(e.message || t('research.toasts.startFailed'))
       setPhase('setup')
     }
   }
@@ -218,7 +218,7 @@ export default function ResearchWizard() {
             return (
               <div key={n} style={{ display: 'flex', alignItems: 'center', flex: i < 2 ? 1 : 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, fontFamily: 'Nunito, sans-serif', background: done ? '#22c55e' : active ? '#d6d3d1' : '#1c1917', color: done ? '#0c0a09' : active ? '#0c0a09' : '#a8a29e', border: done || active ? 'none' : '1px solid #292524' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', background: done ? '#22c55e' : active ? '#d6d3d1' : '#1c1917', color: done ? '#0c0a09' : active ? '#0c0a09' : '#a8a29e', border: done || active ? 'none' : '1px solid #292524' }}>
                     {done ? <Icon name="check" size={16} filled /> : n}
                   </div>
                   <span style={{ fontSize: 12.5, fontWeight: 500, color: active || done ? '#fafaf9' : '#a8a29e' }}>{label}</span>
@@ -241,7 +241,7 @@ export default function ResearchWizard() {
               value={ticker}
               onChange={e => setTicker(e.target.value.toUpperCase())}
               placeholder={t('research.enterTicker')}
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600, color: '#fafaf9', letterSpacing: '0.02em' }}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600, color: '#fafaf9', letterSpacing: '0.02em' }}
             />
             {tickerInfo && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, padding: '6px 14px', background: '#232120', border: '1px solid #292524', borderRadius: 8, fontSize: 13 }}>
@@ -250,7 +250,7 @@ export default function ResearchWizard() {
                 {tickerInfo.price && <span style={{ fontVariantNumeric: 'tabular-nums' }}>${tickerInfo.price}</span>}
                 {tickerInfo.change_pct !== undefined && (
                   <span style={{ color: tickerInfo.change_pct >= 0 ? '#22c55e' : '#ef4444' }}>
-                    {tickerInfo.change_pct >= 0 ? '+' : ''}{tickerInfo.change_pct}%
+                    <bdi>{tickerInfo.change_pct >= 0 ? '+' : ''}{tickerInfo.change_pct}%</bdi>
                   </span>
                 )}
               </div>
@@ -259,7 +259,7 @@ export default function ResearchWizard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: '#a8a29e' }}>{t('research.recent')}</span>
             {recentTickers.map((tt: string) => (
-              <button key={tt} onClick={() => setTicker(tt)} style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, border: '1px solid #292524', background: ticker === tt ? '#232120' : '#1c1917', color: ticker === tt ? '#fafaf9' : '#a8a29e', cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
+              <button key={tt} onClick={() => setTicker(tt)} style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, border: '1px solid #292524', background: ticker === tt ? '#232120' : '#1c1917', color: ticker === tt ? '#fafaf9' : '#a8a29e', cursor: 'pointer', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}>
                 {tt}
               </button>
             ))}
@@ -272,7 +272,7 @@ export default function ResearchWizard() {
             <Icon name="psychology" size={14} />
             {t('research.step2Label')}
           </div>
-          <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{t('research.whatsYourTradeType')}</h2>
+          <h2 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8 }}>{t('research.whatsYourTradeType')}</h2>
           <p style={{ fontSize: 14, color: '#a8a29e', marginBottom: 28 }}>{t('research.tradeTypeDesc')}</p>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
             {TRADE_TYPES.map(({ id, icon, iconStyle, nameKey, descKey }) => (
@@ -295,7 +295,7 @@ export default function ResearchWizard() {
         {/* LAUNCH */}
         <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: isMobile ? 20 : 28, display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: isMobile ? 14 : 20, opacity: canLaunch ? 1 : 0.5, flexDirection: isMobile ? 'column' : 'row' }}>
           <div>
-            <h3 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 600, marginBottom: 6 }}>
+            <h3 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 18, fontWeight: 600, marginBottom: 6 }}>
               {canLaunch ? t('research.readyToResearch', { ticker }) : t('research.completeSteps')}
             </h3>
             <p style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.5 }}>
@@ -309,7 +309,7 @@ export default function ResearchWizard() {
           <button
             onClick={() => canLaunch && phase === 'setup' && !launchMutation.isPending && launchMutation.mutate()}
             disabled={!canLaunch || launchMutation.isPending || phase !== 'setup'}
-            style={{ background: canLaunch && phase === 'setup' ? '#d6d3d1' : '#292524', color: canLaunch && phase === 'setup' ? '#0c0a09' : '#a8a29e', fontSize: 15, fontWeight: 700, padding: '14px 28px', borderRadius: 10, border: 'none', cursor: canLaunch && phase === 'setup' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', fontFamily: 'Nunito, sans-serif', flexShrink: 0 }}
+            style={{ background: canLaunch && phase === 'setup' ? '#d6d3d1' : '#292524', color: canLaunch && phase === 'setup' ? '#0c0a09' : '#a8a29e', fontSize: 15, fontWeight: 700, padding: '14px 28px', borderRadius: 10, border: 'none', cursor: canLaunch && phase === 'setup' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', flexShrink: 0 }}
           >
             <Icon name="auto_awesome" size={20} filled />
             {launchMutation.isPending ? t('research.checking') : t('research.launchResearch')}
@@ -342,7 +342,7 @@ export default function ResearchWizard() {
                       <Icon name="account_balance_wallet" size={20} />
                     </div>
                     <div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700 }}>
+                      <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 700 }}>
                         {t('research.youHold')} <span style={{ fontFamily: 'monospace' }}>{ticker}</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>{t('research.includePosition')}</div>
@@ -370,7 +370,7 @@ export default function ResearchWizard() {
                         setPositionSummary(summary)
                         setPositionStep(2)
                       }}
-                      style={{ flex: 2, padding: '12px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}
+                      style={{ flex: 2, padding: '12px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}
                     >
                       {t('research.yesConsider')}
                     </button>
@@ -389,7 +389,7 @@ export default function ResearchWizard() {
                       <Icon name="flag" size={20} />
                     </div>
                     <div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700 }}>{t('research.whatsYourGoal')}</div>
+                      <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 700 }}>{t('research.whatsYourGoal')}</div>
                       <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 2 }}>{t('research.goalDesc')}</div>
                     </div>
                   </div>
@@ -421,7 +421,7 @@ export default function ResearchWizard() {
           {phase === 'subjects' && popupData && (
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 18, padding: 32, maxWidth: 540, width: '100%', boxShadow: '0 24px 60px rgba(0,0,0,0.6)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 17, fontWeight: 700 }}>{t('research.selectTopics')}</div>
+                <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 17, fontWeight: 700 }}>{t('research.selectTopics')}</div>
                 <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a8a29e' }}>Step 1 of 2</span>
               </div>
               <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 16 }}>{t('research.chooseAreas')}</div>
@@ -463,7 +463,7 @@ export default function ResearchWizard() {
                       callStartGeneration(popupData, selectedSubjectIds, answers)
                     }
                   }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}
                 >
                   {t('research.next')} <Icon name="arrow_forward" size={16} />
                 </button>
@@ -479,7 +479,7 @@ export default function ResearchWizard() {
                   <div style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(214,211,209,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="psychology" size={18} />
                   </div>
-                  <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 17, fontWeight: 700 }}>{t('research.quickQuestions')}</div>
+                  <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 17, fontWeight: 700 }}>{t('research.quickQuestions')}</div>
                 </div>
                 {popupData.subjects.length > 0 && (
                   <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#a8a29e' }}>Step 2 of 2</span>
@@ -533,7 +533,7 @@ export default function ResearchWizard() {
                 </button>
                 <button
                   onClick={() => callStartGeneration(popupData, selectedSubjectIds, answers)}
-                  style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
                   <Icon name="auto_awesome" size={18} filled />
                   {t('research.generateReport')}

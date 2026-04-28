@@ -6,6 +6,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useLanguage } from '../LanguageContext'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtCompact = (n: number) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
@@ -43,6 +44,8 @@ export default function TickerPage() {
   const { symbol } = useParams()
   const api = useApiClient()
   const { isMobile } = useBreakpoint()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [range, setRange] = useState('3M')
 
   const { data: hist } = useQuery({
@@ -132,7 +135,7 @@ export default function TickerPage() {
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 16 : 0, marginBottom: 32 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 28 : 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
+              <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 28 : 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
               <div>
                 <div style={{ fontSize: 15, color: '#a8a29e' }}>{name !== symbol ? name : ''}</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
@@ -150,15 +153,15 @@ export default function TickerPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: isMobile ? 32 : 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 32 : 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {price ? fmt(price) : '-'}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
                 <span style={{ fontSize: 18, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
-                  {gain ? '+' : ''}{fmt(changeAbs)}
+                  <bdi>{gain ? '+' : ''}{fmt(changeAbs)}</bdi>
                 </span>
                 <span style={{ fontSize: 15, fontWeight: 500, color: gain ? '#22c55e' : '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
-                  ({gain ? '+' : ''}{changePct}%)
+                  <bdi>({gain ? '+' : ''}{changePct}%)</bdi>
                 </span>
               </div>
             </div>
@@ -172,7 +175,7 @@ export default function TickerPage() {
             </button>
             <Link
               to={`/research?ticker=${symbol}`}
-              style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', fontFamily: 'Nunito, sans-serif' }}
+              style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}
             >
               <Icon name="auto_awesome" size={18} /> Research {symbol}
             </Link>
@@ -214,7 +217,7 @@ export default function TickerPage() {
                 {statItems.map(({ label, val, highlight, small, muted }) => (
                   <div key={label} style={{ background: '#1c1917', padding: '14px 18px' }}>
                     <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>
                       {val}
                     </div>
                   </div>
@@ -246,7 +249,7 @@ export default function TickerPage() {
                 tickerReports.slice(0, 4).map((r: any) => {
                   const rid = r.report_id || r.id
                   const title = r.title || `${symbol} Research Report`
-                  const date = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+                  const date = r.created_at ? new Date(r.created_at).toLocaleDateString(locale, { month: 'short', day: 'numeric' }) : ''
                   const type = r.trade_type || r.type || ''
                   return (
                     <Link
@@ -285,11 +288,11 @@ export default function TickerPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Shares held</div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600 }}>{position.shares}</div>
+                      <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600 }}>{position.shares}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Mkt Value</div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600 }}>{fmt(position.market_value)}</div>
+                      <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600 }}>{fmt(position.market_value)}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Avg Cost</div>
@@ -298,7 +301,7 @@ export default function TickerPage() {
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Total Return</div>
                       <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: position.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                        {position.pnl >= 0 ? '+' : ''}{fmt(position.pnl)} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct}%)
+                        <bdi>{position.pnl >= 0 ? '+' : ''}{fmt(position.pnl)} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct}%)</bdi>
                       </div>
                     </div>
                   </div>

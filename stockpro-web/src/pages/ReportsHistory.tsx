@@ -35,9 +35,9 @@ export default function ReportsHistory() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] })
-      toast.success('Report deleted')
+      toast.success(t('reports.toasts.deleted'))
     },
-    onError: () => toast.error('Failed to delete report'),
+    onError: () => toast.error(t('reports.toasts.deleteFailed')),
   })
 
   const reportsRaw: any[] = data?.reports || []
@@ -84,7 +84,7 @@ export default function ReportsHistory() {
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
           <div>
-            <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('reports.researchReports')}</div>
+            <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('reports.researchReports')}</div>
             <div style={{ fontSize: 13, color: '#a8a29e' }}>
               {reportsRaw.length} reports &nbsp;&middot;&nbsp; {totalTickers} {t('reports.tickersResearched')}
             </div>
@@ -106,7 +106,7 @@ export default function ReportsHistory() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={view === 'tickers' ? t('reports.searchTickers') : t('reports.searchReports')}
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter, sans-serif', fontSize: 13.5, color: '#fafaf9' }}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13.5, color: '#fafaf9' }}
             />
           </div>
           <div style={{ display: 'flex', background: '#1c1917', border: '1px solid #292524', borderRadius: 8, overflow: 'hidden' }}>
@@ -163,9 +163,9 @@ export default function ReportsHistory() {
                     }}
                   >
                     <div style={{ width: 44, height: 44, borderRadius: 12, background: '#292524', border: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-                      <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: sym.length > 4 ? 11 : 13, fontWeight: 700, color: '#d6d3d1' }}>{sym.slice(0, 5)}</span>
+                      <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: sym.length > 4 ? 11 : 13, fontWeight: 700, color: '#d6d3d1' }}>{sym.slice(0, 5)}</span>
                     </div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 4 }}>{sym}</div>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 4 }}>{sym}</div>
                     <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 2 }}>
                       {t('reports.report_one', { count: info.reports.length, defaultValue_other: `${info.reports.length} reports`, defaultValue_one: `${info.reports.length} report` })}
                     </div>
@@ -187,7 +187,7 @@ export default function ReportsHistory() {
                     onClick={() => navigate(`/ticker/${r.symbol}`)}
                     style={{ width: 44, height: 44, borderRadius: 12, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}
                   >
-                    <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 11, fontWeight: 700, color: '#d6d3d1' }}>{r.symbol.slice(0, 5)}</span>
+                    <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 11, fontWeight: 700, color: '#d6d3d1' }}>{r.symbol.slice(0, 5)}</span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <Link to={`/report/${r.id}`} style={{ fontSize: 15, fontWeight: 600, color: '#fafaf9', textDecoration: 'none', display: 'block', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

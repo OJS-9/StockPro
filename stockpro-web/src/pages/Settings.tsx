@@ -79,10 +79,10 @@ export default function Settings() {
       if (!res.ok) throw new Error('Failed')
     },
     onSuccess: () => {
-      toast.success(t('settings.saveChanges'))
+      toast.success(t('settings.toasts.saved'))
       setHasChanges(false)
     },
-    onError: () => toast.error('Failed to save'),
+    onError: () => toast.error(t('settings.toasts.saveFailed')),
   })
 
   const disconnectTelegramMutation = useMutation({
@@ -90,8 +90,8 @@ export default function Settings() {
       const res = await api.post('/api/telegram/disconnect', {})
       if (!res.ok) throw new Error('Failed')
     },
-    onSuccess: () => toast.success('Telegram disconnected'),
-    onError: () => toast.error('Failed to disconnect'),
+    onSuccess: () => toast.success(t('settings.toasts.telegramDisconnected')),
+    onError: () => toast.error(t('settings.toasts.telegramFailed')),
   })
 
   const updateNotif = (key: string, val: boolean) => {
@@ -136,7 +136,7 @@ export default function Settings() {
 
         {/* CONTENT */}
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>
+          <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>
             {t(NAV_ITEMS.find(n => n.id === activeSection)?.tKey || 'settings.settings')}
           </h1>
           <p style={{ fontSize: 13, color: '#a8a29e', marginBottom: 36 }}>{t('settings.managePrefs')}</p>
@@ -146,11 +146,11 @@ export default function Settings() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px', borderBottom: '1px solid #292524' }}>
-                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #2d2b29, #3d3a37)', border: '2px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#d6d3d1', fontFamily: 'Nunito, sans-serif', flexShrink: 0, overflow: 'hidden' }}>
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #2d2b29, #3d3a37)', border: '2px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#d6d3d1', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', flexShrink: 0, overflow: 'hidden' }}>
                     {user?.imageUrl ? <img src={user.imageUrl} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
                       {user?.firstName} {user?.lastName}
                     </div>
                     <div style={{ fontSize: 13, color: '#a8a29e' }}>{user?.primaryEmailAddress?.emailAddress}</div>
@@ -164,14 +164,14 @@ export default function Settings() {
                     <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.displayName')}</div>
                     <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t('settings.displayNameDesc')}</div>
                   </div>
-                  <input defaultValue={`${user?.firstName || ''} ${user?.lastName || ''}`.trim()} style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '7px 12px', outline: 'none', width: 180 }} />
+                  <input defaultValue={`${user?.firstName || ''} ${user?.lastName || ''}`.trim()} style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, padding: '7px 12px', outline: 'none', width: 180 }} />
                 </div>
                 <div style={{ ...settingRowStyle, borderBottom: 'none' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.timezone')}</div>
                     <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t('settings.timezoneDesc')}</div>
                   </div>
-                  <select defaultValue="America/New_York" style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '7px 28px 7px 10px', outline: 'none' }}>
+                  <select defaultValue="America/New_York" style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, padding: '7px 28px 7px 10px', outline: 'none' }}>
                     <option value="America/New_York">Eastern Time</option>
                     <option value="America/Chicago">Central Time</option>
                     <option value="America/Los_Angeles">Pacific Time</option>
@@ -251,7 +251,7 @@ export default function Settings() {
                   <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{t('settings.defaultTradeType')}</div>
                   <div style={{ fontSize: 12.5, color: '#a8a29e' }}>{t('settings.defaultTradeTypeDesc')}</div>
                 </div>
-                <select value={researchDefaults.default_trade_type} onChange={e => { setResearchDefaults(d => ({ ...d, default_trade_type: e.target.value })); setHasChanges(true) }} style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '7px 28px 7px 10px', outline: 'none' }}>
+                <select value={researchDefaults.default_trade_type} onChange={e => { setResearchDefaults(d => ({ ...d, default_trade_type: e.target.value })); setHasChanges(true) }} style={{ background: '#232120', border: '1px solid #292524', borderRadius: 8, color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, padding: '7px 28px 7px 10px', outline: 'none' }}>
                   <option>Day Trade</option>
                   <option>Swing Trade</option>
                   <option>Investment</option>
@@ -296,7 +296,7 @@ export default function Settings() {
                     </button>
                   </div>
                 ) : (
-                  <button style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: '#232120', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                  <button style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: '#232120', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
                     {t('settings.connectTelegram')}
                   </button>
                 )}
@@ -351,6 +351,9 @@ export default function Settings() {
 function CliTokensSection() {
   const api = useApiClient()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [newName, setNewName] = useState('')
   const [newToken, setNewToken] = useState<string | null>(null)
 
@@ -374,7 +377,7 @@ function CliTokensSection() {
       setNewName('')
       queryClient.invalidateQueries({ queryKey: ['cli-tokens'] })
     },
-    onError: () => toast.error('Failed to create token'),
+    onError: () => toast.error(t('settings.toasts.tokenCreateFailed')),
   })
 
   const revokeMutation = useMutation({
@@ -383,10 +386,10 @@ function CliTokensSection() {
       if (!res.ok) throw new Error('Failed to revoke')
     },
     onSuccess: () => {
-      toast.success('Token revoked')
+      toast.success(t('settings.toasts.tokenRevoked'))
       queryClient.invalidateQueries({ queryKey: ['cli-tokens'] })
     },
-    onError: () => toast.error('Failed to revoke token'),
+    onError: () => toast.error(t('settings.toasts.tokenRevokeFailed')),
   })
 
   const tokens = data?.tokens ?? []
@@ -405,7 +408,7 @@ function CliTokensSection() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <code style={{ flex: 1, background: '#0c0a09', border: '1px solid #292524', borderRadius: 8, padding: '10px 12px', fontFamily: 'ui-monospace, monospace', fontSize: 12, color: '#fafaf9', wordBreak: 'break-all' }}>{newToken}</code>
             <button
-              onClick={() => { navigator.clipboard.writeText(newToken); toast.success('Copied') }}
+              onClick={() => { navigator.clipboard.writeText(newToken); toast.success(t('common.toasts.copied')) }}
               style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #292524', background: '#232120', color: '#fafaf9', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
             >
               Copy
@@ -437,17 +440,17 @@ function CliTokensSection() {
         {tokens.length === 0 ? (
           <div style={{ padding: 20, fontSize: 13, color: '#a8a29e', textAlign: 'center' }}>No tokens yet. Create one above, or run <code>stockpro auth device-login</code>.</div>
         ) : (
-          tokens.map((t, i) => (
-            <div key={t.id} style={{ ...rowStyle, borderBottom: i < tokens.length - 1 ? '1px solid #292524' : 'none' }}>
+          tokens.map((tok, i) => (
+            <div key={tok.id} style={{ ...rowStyle, borderBottom: i < tokens.length - 1 ? '1px solid #292524' : 'none' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{t.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{tok.name}</div>
                 <div style={{ fontSize: 12, color: '#a8a29e', marginTop: 3, fontFamily: 'ui-monospace, monospace' }}>
-                  {t.prefix}... &middot; created {new Date(t.created_at).toLocaleDateString()}
-                  {t.last_used_at && ` \u00B7 last used ${new Date(t.last_used_at).toLocaleDateString()}`}
+                  {tok.prefix}... &middot; created {new Date(tok.created_at).toLocaleDateString(locale)}
+                  {tok.last_used_at && ` \u00B7 last used ${new Date(tok.last_used_at).toLocaleDateString(locale)}`}
                 </div>
               </div>
               <button
-                onClick={() => { if (confirm(`Revoke ${t.name}?`)) revokeMutation.mutate(t.id) }}
+                onClick={() => { if (confirm(`Revoke ${tok.name}?`)) revokeMutation.mutate(tok.id) }}
                 style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
               >
                 Revoke

@@ -39,7 +39,7 @@ export default function SignIn() {
         />
         <div
           style={{
-            fontFamily: 'Nunito, sans-serif',
+            fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
             fontSize: 20,
             fontWeight: 700,
             color: '#d6d3d1',
@@ -52,7 +52,7 @@ export default function SignIn() {
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h2
             style={{
-              fontFamily: 'Nunito, sans-serif',
+              fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
               fontSize: 38,
               fontWeight: 600,
               lineHeight: 1.15,
@@ -105,11 +105,11 @@ export default function SignIn() {
               colorPrimary: '#d6d3d1',
               colorDanger: '#ef4444',
               borderRadius: '10px',
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: 'Inter, Heebo, sans-serif',
             },
             elements: {
               card: { border: 'none', boxShadow: 'none', background: 'transparent' },
-              headerTitle: { fontFamily: 'Nunito, sans-serif', fontWeight: 600 },
+              headerTitle: { fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 600 },
               formButtonPrimary: {
                 background: '#d6d3d1',
                 color: '#0c0a09',

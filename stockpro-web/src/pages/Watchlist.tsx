@@ -10,8 +10,8 @@ import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 
-function fmtPrice(n: number | null | undefined, locale: string) {
-  return n != null ? new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(n) : '—'
+function fmtPrice(n: number | null | undefined, _locale: string) {
+  return n != null ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n) : '—'
 }
 
 function ItemMenu({ item, watchlistId: _watchlistId, onClose }: { item: any; watchlistId: string; onClose: () => void }) {
@@ -21,14 +21,14 @@ function ItemMenu({ item, watchlistId: _watchlistId, onClose }: { item: any; wat
 
   const removeMutation = useMutation({
     mutationFn: () => api.delete(`/api/watchlist/item/${item.item_id}`).then(r => { if (!r.ok) throw new Error() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(`${item.symbol} removed`); onClose() },
-    onError: () => toast.error('Failed to remove'),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(t('watchlist.toasts.removed', { symbol: item.symbol })); onClose() },
+    onError: () => toast.error(t('watchlist.toasts.removeFailed')),
   })
 
   const pinMutation = useMutation({
     mutationFn: () => api.patch(`/api/watchlist/item/${item.item_id}/pin`, {}).then(r => { if (!r.ok) throw new Error() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); onClose() },
-    onError: () => toast.error('Failed to update'),
+    onError: () => toast.error(t('watchlist.toasts.updateFailed')),
   })
 
   return (
@@ -63,8 +63,8 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
 
   const addMutation = useMutation({
     mutationFn: () => api.post(`/api/watchlist/${watchlistId}/symbol`, { symbol: symbol.toUpperCase() }).then(r => { if (!r.ok) throw new Error() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(`${symbol.toUpperCase()} added`); onDone() },
-    onError: () => toast.error('Failed to add symbol'),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(t('watchlist.toasts.added', { symbol: symbol.toUpperCase() })); onDone() },
+    onError: () => toast.error(t('watchlist.toasts.addFailed')),
   })
 
   const submit = () => { if (symbol.trim()) addMutation.mutate() }
@@ -79,7 +79,7 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
             onChange={e => setSymbol(e.target.value.toUpperCase())}
             onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onDone() }}
             placeholder={t('watchlist.tickerPlaceholder')}
-            style={{ flex: 1, background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '7px 12px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 13, outline: 'none' }}
+            style={{ flex: 1, background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '7px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none' }}
           />
           <button
             onClick={submit}
@@ -147,7 +147,7 @@ export default function Watchlist() {
         {/* HEADER */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
-            <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('watchlist.watchlists')}</div>
+            <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4 }}>{t('watchlist.watchlists')}</div>
             <div style={{ fontSize: 13, color: '#a8a29e' }}>{watchlists.length} list{watchlists.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; {t('watchlist.updatedJustNow')}</div>
           </div>
         </div>
@@ -196,7 +196,7 @@ export default function Watchlist() {
                     <tr key={item.symbol}>
                       <td style={{ padding: '14px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)' }}>
                         <Link to={`/ticker/${item.symbol}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#d6d3d1', fontFamily: 'Nunito, sans-serif' }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#232120', border: '1px solid #292524', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#d6d3d1', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}>
                             {item.symbol.slice(0, 2)}
                           </div>
                           <div>
@@ -211,7 +211,7 @@ export default function Watchlist() {
                       <td style={{ padding: '14px 20px', borderBottom: '1px solid rgba(41,37,36,0.5)', textAlign: 'end' }}>
                         {item.change_pct != null ? (
                           <span style={{ fontSize: 12.5, fontWeight: 500, padding: '3px 8px', borderRadius: 999, background: item.change_pct >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: item.change_pct >= 0 ? '#22c55e' : '#ef4444', border: `1px solid ${item.change_pct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, fontVariantNumeric: 'tabular-nums' }}>
-                            {item.change_pct >= 0 ? '+' : ''}{item.change_pct?.toFixed(2)}%
+                            <bdi>{item.change_pct >= 0 ? '+' : ''}{item.change_pct?.toFixed(2)}%</bdi>
                           </span>
                         ) : <span style={{ color: '#a8a29e', fontSize: 12 }}>—</span>}
                       </td>

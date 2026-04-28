@@ -5,6 +5,7 @@ import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useLanguage } from '../LanguageContext'
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 const fmtCompact = (n: number) => {
@@ -13,7 +14,7 @@ const fmtCompact = (n: number) => {
   return `$${n.toFixed(0)}`
 }
 
-function LineChart({ data, dates, costBasis, gain = true }: { data: number[]; dates?: string[]; costBasis?: number[]; gain?: boolean }) {
+function LineChart({ data, dates, costBasis, gain = true, locale = 'en-US' }: { data: number[]; dates?: string[]; costBasis?: number[]; gain?: boolean; locale?: string }) {
   if (!data || data.length < 2) return <div style={{ height: 200, background: '#232120', borderRadius: 8 }} />
   const color = gain ? '#22c55e' : '#ef4444'
   const all = [...data, ...(costBasis || [])]
@@ -42,7 +43,7 @@ function LineChart({ data, dates, costBasis, gain = true }: { data: number[]; da
     for (let i = 0; i < dates.length; i += step) {
       const x = padLeft + (i / (dates.length - 1)) * (w - padLeft - padRight)
       const d = new Date(dates[i])
-      xLabels.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), x })
+      xLabels.push({ label: d.toLocaleDateString(locale, { month: 'short', day: 'numeric' }), x })
     }
   }
 
@@ -58,12 +59,12 @@ function LineChart({ data, dates, costBasis, gain = true }: { data: number[]; da
       {yTicks.map(({ val, y }) => (
         <g key={val}>
           <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke="#292524" strokeWidth="1" />
-          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, sans-serif">{fmtCompact(val)}</text>
+          <text x={padLeft - 8} y={y + 4} fill="#78716c" fontSize="10" textAnchor="end" fontFamily="Inter, Heebo, sans-serif">{fmtCompact(val)}</text>
         </g>
       ))}
       {/* X labels */}
       {xLabels.map(({ label, x }) => (
-        <text key={label + x} x={x} y={h - 6} fill="#78716c" fontSize="10" textAnchor="middle" fontFamily="Inter, sans-serif">{label}</text>
+        <text key={label + x} x={x} y={h - 6} fill="#78716c" fontSize="10" textAnchor="middle" fontFamily="Inter, Heebo, sans-serif">{label}</text>
       ))}
       {/* Cost basis dashed line */}
       {costBasis && costBasis.length > 1 && (
@@ -121,6 +122,8 @@ export default function Analytics() {
   const { id } = useParams()
   const api = useApiClient()
   const { isMobile, isTablet } = useBreakpoint()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
 
   const { data } = useQuery({
     queryKey: ['portfolio-analytics', id],
@@ -188,7 +191,7 @@ export default function Analytics() {
               <Icon name="arrow_back" size={16} /> Portfolio
             </Link>
           </div>
-          <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Portfolio Analytics</h1>
+          <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Portfolio Analytics</h1>
         </div>
 
         {/* KPI STRIP */}
@@ -201,7 +204,7 @@ export default function Analytics() {
           ].map(({ label, val, sub, subColor }) => (
             <div key={label} style={{ background: '#1c1917', padding: '20px 24px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{label}</div>
-              <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{val}</div>
+              <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}><bdi>{val}</bdi></div>
               {sub && <div style={{ fontSize: 12, marginTop: 4, color: subColor }}>{sub}</div>}
             </div>
           ))}
@@ -223,7 +226,7 @@ export default function Analytics() {
                 </div>
               </div>
               <div style={{ padding: '20px 24px' }}>
-                <LineChart data={analytics.chart} dates={chartDates} costBasis={analytics.cost_chart.length > 1 ? analytics.cost_chart : undefined} gain />
+                <LineChart data={analytics.chart} dates={chartDates} costBasis={analytics.cost_chart.length > 1 ? analytics.cost_chart : undefined} gain locale={locale} />
               </div>
             </div>
 

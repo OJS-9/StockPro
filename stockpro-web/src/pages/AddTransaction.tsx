@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import { useApiClient } from '../api/client'
@@ -14,6 +15,7 @@ export default function AddTransaction() {
   const navigate = useNavigate()
   const api = useApiClient()
   const { isMobile } = useBreakpoint()
+  const { t } = useTranslation()
   const [form, setForm] = useState({ symbol: '', type: 'BUY', shares: '', price: '', date: new Date().toISOString().split('T')[0] })
 
   const total = parseFloat(form.shares || '0') * parseFloat(form.price || '0')
@@ -31,10 +33,10 @@ export default function AddTransaction() {
       return res.json()
     },
     onSuccess: () => {
-      toast.success('Transaction added')
+      toast.success(t('transactions.toasts.added'))
       navigate(`/portfolio/${id}`)
     },
-    onError: () => toast.error('Failed to add transaction'),
+    onError: () => toast.error(t('transactions.toasts.addFailed')),
   })
 
   const inputStyle = {
@@ -44,7 +46,7 @@ export default function AddTransaction() {
     borderRadius: 10,
     padding: '12px 14px',
     color: '#fafaf9',
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: 'Inter, Heebo, sans-serif',
     fontSize: 14,
     outline: 'none',
     boxSizing: 'border-box' as const,
@@ -62,7 +64,7 @@ export default function AddTransaction() {
               <Icon name="arrow_back" size={16} /> Portfolio
             </Link>
           </div>
-          <h1 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Add Transaction</h1>
+          <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Add Transaction</h1>
         </div>
 
         <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: isMobile ? 20 : 32, marginBottom: 20 }}>
@@ -86,7 +88,7 @@ export default function AddTransaction() {
                 value={form.symbol}
                 onChange={e => setForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
                 placeholder="NVDA"
-                style={{ ...inputStyle, fontFamily: 'Nunito, sans-serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.02em' }}
+                style={{ ...inputStyle, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.02em' }}
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -118,7 +120,7 @@ export default function AddTransaction() {
                 </div>
               </div>
               <div style={{ textAlign: 'end' }}>
-                <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 600 }}>{fmt(total)}</div>
+                <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 22, fontWeight: 600 }}>{fmt(total)}</div>
                 <div style={{ fontSize: 11, color: '#a8a29e', marginTop: 2 }}>Total {form.type === 'BUY' ? 'cost' : 'proceeds'}</div>
               </div>
             </div>
