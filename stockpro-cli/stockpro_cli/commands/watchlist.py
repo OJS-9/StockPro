@@ -2,6 +2,7 @@
 
 import click
 from stockpro_cli.client import get_client
+from stockpro_cli.exchanges import EXCHANGES, apply_exchange_suffix
 from stockpro_cli.output import output
 
 
@@ -26,12 +27,13 @@ def list_watchlists(ctx, wl):
 
 @watchlist.command("add-symbol")
 @click.option("--id", "watchlist_id", required=True, help="Watchlist ID")
-@click.option("--symbol", required=True, help="Ticker symbol")
+@click.option("--symbol", required=True, help="Ticker symbol (or symbol.TA for TASE)")
+@click.option("--exchange", default="US", type=click.Choice(EXCHANGES, case_sensitive=False), help="US (default) or TASE")
 @click.pass_context
-def add_symbol(ctx, watchlist_id, symbol):
+def add_symbol(ctx, watchlist_id, symbol, exchange):
     """Add a symbol to a watchlist."""
     client = get_client(ctx.obj.get("api_url"))
-    data = client.post(f"/api/watchlist/{watchlist_id}/symbol", {"symbol": symbol.upper()})
+    data = client.post(f"/api/watchlist/{watchlist_id}/symbol", {"symbol": apply_exchange_suffix(symbol, exchange)})
     output(data, ctx.obj.get("pretty", False))
 
 

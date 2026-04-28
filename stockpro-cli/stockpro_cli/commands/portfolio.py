@@ -2,6 +2,7 @@
 
 import click
 from stockpro_cli.client import get_client
+from stockpro_cli.exchanges import EXCHANGES, apply_exchange_suffix
 from stockpro_cli.output import output
 
 
@@ -32,18 +33,19 @@ def get_portfolio(ctx, portfolio_id):
 
 @portfolio.command("add-transaction")
 @click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
-@click.option("--symbol", required=True, help="Ticker symbol")
+@click.option("--symbol", required=True, help="Ticker symbol (or symbol.TA for TASE)")
+@click.option("--exchange", default="US", type=click.Choice(EXCHANGES, case_sensitive=False), help="US (default) or TASE. TASE prices must be in ILS.")
 @click.option("--type", "tx_type", required=True, type=click.Choice(["buy", "sell"]))
 @click.option("--shares", required=True, type=float)
 @click.option("--price", required=True, type=float)
 @click.option("--date", default=None, help="Transaction date (YYYY-MM-DD)")
 @click.option("--notes", default=None)
 @click.pass_context
-def add_transaction(ctx, portfolio_id, symbol, tx_type, shares, price, date, notes):
+def add_transaction(ctx, portfolio_id, symbol, exchange, tx_type, shares, price, date, notes):
     """Add a buy/sell transaction."""
     client = get_client(ctx.obj.get("api_url"))
     payload = {
-        "symbol": symbol.upper(),
+        "symbol": apply_exchange_suffix(symbol, exchange),
         "type": tx_type,
         "shares": shares,
         "price": price,
@@ -121,10 +123,11 @@ def transactions(ctx, portfolio_id, limit):
 
 @portfolio.command("holding")
 @click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
-@click.option("--symbol", required=True, help="Ticker symbol")
+@click.option("--symbol", required=True, help="Ticker symbol (or symbol.TA for TASE)")
+@click.option("--exchange", default="US", type=click.Choice(EXCHANGES, case_sensitive=False), help="US (default) or TASE")
 @click.pass_context
-def holding(ctx, portfolio_id, symbol):
+def holding(ctx, portfolio_id, symbol, exchange):
     """Get details for a specific holding."""
     client = get_client(ctx.obj.get("api_url"))
-    data = client.get(f"/api/portfolio/{portfolio_id}/holding/{symbol.upper()}")
+    data = client.get(f"/api/portfolio/{portfolio_id}/holding/{apply_exchange_suffix(symbol, exchange)}")
     output(data, ctx.obj.get("pretty", False))
