@@ -3748,6 +3748,7 @@ def api_telegram_status():
 def api_home():
     """Aggregate home dashboard data in a single call."""
     from database import get_database_manager
+    from currency_utils import detect_currency
 
     uid = session["user_id"]
     db = get_database_manager()
@@ -3815,16 +3816,20 @@ def api_home():
                         "market_value": mv,
                         "unrealized_gain": ug,
                         "unrealized_gain_pct": ug_pct,
+                        "currency": detect_currency(sym),
                     })
                 total_value += p_total_value
                 total_pnl += p_total_pnl
             except Exception as _e:
                 app.logger.debug("api_home: portfolio summary error: %s", _e)
+        all_currencies = {h["currency"] for h in holdings_preview}
+        portfolio_currency = next(iter(all_currencies)) if len(all_currencies) == 1 else "USD"
         portfolio_totals = {
             "total_value": total_value,
             "total_pnl": total_pnl,
             "day_change": day_change,
             "day_change_pct": (day_change / total_value * 100) if total_value else 0,
+            "currency": portfolio_currency,
         }
     except Exception:
         portfolio_totals = {}
@@ -3862,6 +3867,7 @@ def api_home():
                     "name": c.get("display_name", sym),
                     "price": float(c["price"]) if c.get("price") else None,
                     "change_pct": float(c["change_percent"]) if c.get("change_percent") else None,
+                    "currency": detect_currency(sym),
                 })
     except Exception:
         watchlist_preview = []
