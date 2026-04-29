@@ -66,6 +66,7 @@ export default function Home() {
   // /api/home returns: portfolio_totals, holdings_preview, recent_reports,
   // active_alerts_count, watchlist_preview, news
   const totals = data?.portfolio_totals || {}
+  const portfolioCurrency: string = totals.currency ?? 'USD'
   const holdings = data?.holdings_preview || []
   const watchlist = data?.watchlist_preview || []
   const alertsCount = data?.active_alerts_count ?? null
@@ -144,13 +145,13 @@ export default function Home() {
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.totalPortfolioValue')}</div>
             {isLoading ? <Skeleton h={44} /> : (
               <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 38, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-                <bdi>{totals.total_value != null ? fmt(totals.total_value) : '$0'}</bdi>
+                <bdi>{totals.total_value != null ? fmt(totals.total_value, portfolioCurrency) : fmt(0, portfolioCurrency)}</bdi>
               </div>
             )}
             {!isLoading && totals.day_change != null && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: totals.day_change >= 0 ? '#22c55e' : '#ef4444' }}>
                 <Icon name={totals.day_change >= 0 ? 'trending_up' : 'trending_down'} size={15} />
-                <bdi>{totals.day_change >= 0 ? '+' : ''}{fmt(totals.day_change)} ({totals.day_change_pct >= 0 ? '+' : ''}{totals.day_change_pct?.toFixed(2)}%)</bdi> {t('home.today')}
+                <bdi>{totals.day_change >= 0 ? '+' : ''}{fmt(totals.day_change, portfolioCurrency)} ({totals.day_change_pct >= 0 ? '+' : ''}{totals.day_change_pct?.toFixed(2)}%)</bdi> {t('home.today')}
               </div>
             )}
             <div style={{ position: 'absolute', bottom: 0, right: 0, width: 120, height: 60, opacity: 0.35 }}>
@@ -162,7 +163,7 @@ export default function Home() {
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 8 }}>{t('home.unrealizedPnl')}</div>
             {isLoading ? <Skeleton h={32} /> : (
               <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: (totals.total_pnl ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                <bdi>{totals.total_pnl != null ? fmt(totals.total_pnl) : '$0'}</bdi>
+                <bdi>{totals.total_pnl != null ? fmt(totals.total_pnl, portfolioCurrency) : fmt(0, portfolioCurrency)}</bdi>
               </div>
             )}
             {!isLoading && (
@@ -198,7 +199,7 @@ export default function Home() {
                 </div>
                 {isLoading ? <Skeleton h={32} /> : (
                   <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 22 : 32, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.1, color: '#fafaf9' }}>
-                    <bdi>{displayVal !== 0 ? `${displayVal >= 0 ? '+' : ''}${fmt(displayVal)}` : '-'}</bdi>
+                    <bdi>{displayVal !== 0 ? `${displayVal >= 0 ? '+' : ''}${fmt(displayVal, portfolioCurrency)}` : '-'}</bdi>
                   </div>
                 )}
                 {!isLoading && displayVal !== 0 && (
