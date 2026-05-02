@@ -120,7 +120,7 @@ export default function PortfolioList() {
   const { lang } = useLanguage()
 
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
-  const fmt = (n: number) => formatCurrency(n, 'USD', locale)
+  const fmt = (n: number, currency = 'USD') => formatCurrency(n, currency, locale)
 
   const { data, isLoading } = useQuery({
     queryKey: ['portfolios'],
@@ -217,7 +217,7 @@ export default function PortfolioList() {
                     <div style={{ padding: '22px 24px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
                         <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 32, fontWeight: 600, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                          {fmt(p.value || 0)}
+                          {fmt(p.value || 0, p.display_currency || 'USD')}
                         </div>
                         <span style={{ fontSize: 13, fontWeight: 500, padding: '5px 12px', borderRadius: 999, background: gain ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: gain ? '#22c55e' : '#ef4444', border: `1px solid ${gain ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, fontVariantNumeric: 'tabular-nums' }}>
                           <bdi>{gain ? '+' : ''}{p.pnl_pct || 0}%</bdi> {t('portfolio.allTimeLabel')}

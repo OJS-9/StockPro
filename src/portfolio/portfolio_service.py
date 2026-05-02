@@ -603,8 +603,29 @@ class PortfolioService:
 
         from currency_utils import convert_to_usd, detect_currency
 
+        # Auto-detect display currency: ILS only when every holding is ILS and
+        # there is no cash balance (cash is USD-only for now). Anything else
+        # falls back to USD.
+        if (
+            holdings
+            and not track_cash
+            and all(
+                (h.get("currency") or detect_currency(h.get("symbol", ""))) == "ILS"
+                for h in holdings
+            )
+        ):
+            display_currency = "ILS"
+        else:
+            display_currency = "USD"
+
+        def _to_display(amount: Decimal, currency: str) -> Decimal:
+            if display_currency == "ILS":
+                # All holdings already ILS in this branch
+                return amount
+            return convert_to_usd(amount, currency)
+
         total_cost_basis = sum(
-            convert_to_usd(
+            _to_display(
                 Decimal(str(h.get("total_cost_basis", 0) or 0)),
                 h.get("currency") or detect_currency(h.get("symbol", "")),
             )
@@ -617,8 +638,8 @@ class PortfolioService:
             for h in holdings:
                 mv = h.get("market_value")
                 cur = h.get("currency", "USD")
-                if mv is not None and cur != "USD":
-                    h["market_value_usd"] = convert_to_usd(mv, cur)
+                if mv is not None:
+                    h["market_value_usd"] = _to_display(mv, cur)
                 else:
                     h["market_value_usd"] = mv
 
@@ -668,6 +689,7 @@ class PortfolioService:
         result = {
             "portfolio_id": portfolio_id,
             "prices_loaded": with_prices,
+            "display_currency": display_currency,
             "total_cost_basis": total_cost_basis,
             "total_market_value": total_market_value,
             "total_unrealized_gain": total_unrealized_gain,

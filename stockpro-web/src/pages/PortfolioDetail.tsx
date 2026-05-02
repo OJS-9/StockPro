@@ -345,6 +345,7 @@ export default function PortfolioDetail() {
   const pnlPct = isFiltered
     ? (filteredCostBasis > 0 ? (filteredPnl / filteredCostBasis) * 100 : 0)
     : (pricesData?.total_unrealized_gain_pct ?? 0)
+  const displayCurrency: string = pricesData?.display_currency ?? 'USD'
   const trackCash = pricesData?.track_cash ?? portfolioData?.summary?.track_cash ?? false
   const cashBalance = pricesData?.cash_balance ?? portfolioData?.summary?.cash_balance ?? 0
   // Per-ticker history — always fetched so the chart can recompute deterministically
@@ -483,11 +484,11 @@ export default function PortfolioDetail() {
                     <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 6 }}>
                       {t('portfolioDetail.portfolioValue')}{isFiltered && <span style={{ marginLeft: 6, fontSize: 10, color: '#78716c', textTransform: 'none', letterSpacing: 'normal' }}>(filtered)</span>}
                     </div>
-                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue)}</div>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{fmt(totalValue, displayCurrency)}</div>
                   </div>
                   <div style={{ textAlign: 'end' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                      <bdi>{pnl >= 0 ? '+' : ''}{fmt(pnl)}</bdi>
+                      <bdi>{pnl >= 0 ? '+' : ''}{fmt(pnl, displayCurrency)}</bdi>
                     </div>
                     <div style={{ fontSize: 13, color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
                       <bdi>{pnl >= 0 ? '+' : ''}{Number(pnlPct).toFixed(2)}%</bdi> all time

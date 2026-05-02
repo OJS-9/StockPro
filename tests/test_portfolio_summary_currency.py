@@ -76,3 +76,41 @@ def test_all_usd_portfolio_unchanged():
     assert summary["total_cost_basis"] == Decimal("200")
     assert summary["total_market_value"] == Decimal("240")
     assert summary["total_unrealized_gain"] == Decimal("40")
+    assert summary["display_currency"] == "USD"
+
+
+def test_all_ils_portfolio_displays_in_ils():
+    teva = _holding("TEVA.TA", 100, 10, 12)
+    icl = _holding("ICL.TA", 50, 20, 22)
+    svc = _make_service_with_holdings([teva, icl])
+
+    # FX rate should be irrelevant when display currency is ILS
+    with patch("currency_utils.get_usd_ils_rate", return_value=Decimal("4")):
+        summary = svc.get_portfolio_summary("p1", with_prices=True)
+
+    assert summary["display_currency"] == "ILS"
+    assert summary["total_cost_basis"] == Decimal("2000")
+    assert summary["total_market_value"] == Decimal("2300")
+    assert summary["total_unrealized_gain"] == Decimal("300")
+
+
+def test_mixed_portfolio_falls_back_to_usd():
+    teva = _holding("TEVA.TA", 100, 10, 12)
+    aapl = _holding("AAPL", 1, 100, 110)
+    svc = _make_service_with_holdings([teva, aapl])
+
+    with patch("currency_utils.get_usd_ils_rate", return_value=Decimal("4")):
+        summary = svc.get_portfolio_summary("p1", with_prices=True)
+
+    assert summary["display_currency"] == "USD"
+
+
+def test_all_ils_with_cash_falls_back_to_usd():
+    """Cash is USD-only for now, so any portfolio with track_cash falls back."""
+    teva = _holding("TEVA.TA", 100, 10, 12)
+    svc = _make_service_with_holdings(
+        [teva], track_cash=True, cash_balance=500
+    )
+    with patch("currency_utils.get_usd_ils_rate", return_value=Decimal("4")):
+        summary = svc.get_portfolio_summary("p1", with_prices=True)
+    assert summary["display_currency"] == "USD"

@@ -2071,11 +2071,19 @@ def portfolios_prices():
 
     def _fetch_summary(pid):
         try:
+            from currency_utils import convert_to_usd
+            from decimal import Decimal as _D
+
             summary = portfolio_service.get_portfolio_summary(pid, with_prices=True)
-            mv = to_float(summary.get("total_market_value")) or 0.0
-            ug = to_float(summary.get("total_unrealized_gain")) or 0.0
+            display_currency = summary.get("display_currency", "USD")
+            # Aggregate totals must stay in USD even if this portfolio displays in ILS.
+            mv_native = summary.get("total_market_value") or _D("0")
+            ug_native = summary.get("total_unrealized_gain") or _D("0")
+            mv = float(convert_to_usd(_D(str(mv_native)), display_currency))
+            ug = float(convert_to_usd(_D(str(ug_native)), display_currency))
             row = {
                 "portfolio_id": pid,
+                "display_currency": display_currency,
                 "total_market_value": to_float(summary.get("total_market_value")),
                 "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
                 "total_unrealized_gain_pct": to_float(summary.get("total_unrealized_gain_pct")),
@@ -2102,7 +2110,12 @@ def portfolios_prices():
                 })
             row["holdings"] = holdings_out
             row["day_change"] = day_change
-            return row, mv, ug, day_change
+            # day_change is summed in native (ILS) when display_currency=ILS
+            # because each h_mv is native; convert to USD for the cross-portfolio aggregate.
+            day_change_usd = float(
+                convert_to_usd(_D(str(day_change)), display_currency)
+            )
+            return row, mv, ug, day_change_usd
         except Exception:
             return {
                 "portfolio_id": pid,
@@ -2185,6 +2198,8 @@ def portfolio_prices(portfolio_id):
 
     resp = {
         "holdings": holdings_out,
+        "display_currency": summary.get("display_currency", "USD"),
+        "total_cost_basis": to_float(summary.get("total_cost_basis")),
         "total_market_value": to_float(summary.get("total_market_value")),
         "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
         "total_unrealized_gain_pct": to_float(
