@@ -105,8 +105,8 @@ def test_mixed_portfolio_falls_back_to_usd():
     assert summary["display_currency"] == "USD"
 
 
-def test_all_ils_with_cash_falls_back_to_usd():
-    """Cash is USD-only for now, so any portfolio with track_cash falls back."""
+def test_all_ils_with_nonzero_cash_falls_back_to_usd():
+    """Cash is USD-only, so a non-zero balance forces the total to USD."""
     teva = _holding("TEVA.TA", 100, 10, 12)
     svc = _make_service_with_holdings(
         [teva], track_cash=True, cash_balance=500
@@ -114,3 +114,14 @@ def test_all_ils_with_cash_falls_back_to_usd():
     with patch("currency_utils.get_usd_ils_rate", return_value=Decimal("4")):
         summary = svc.get_portfolio_summary("p1", with_prices=True)
     assert summary["display_currency"] == "USD"
+
+
+def test_all_ils_with_zero_cash_still_displays_in_ils():
+    """track_cash with a zero balance shouldn't drag display back to USD."""
+    teva = _holding("TEVA.TA", 100, 10, 12)
+    svc = _make_service_with_holdings(
+        [teva], track_cash=True, cash_balance=0
+    )
+    with patch("currency_utils.get_usd_ils_rate", return_value=Decimal("4")):
+        summary = svc.get_portfolio_summary("p1", with_prices=True)
+    assert summary["display_currency"] == "ILS"

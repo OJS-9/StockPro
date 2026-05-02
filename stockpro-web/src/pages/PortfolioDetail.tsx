@@ -292,6 +292,7 @@ export default function PortfolioDetail() {
     pnl: h.unrealized_gain ?? h.pnl ?? 0,
     pnl_pct: h.unrealized_gain_pct ?? h.pnl_pct ?? 0,
     asset_type: h.asset_type ?? inferAssetType(h.symbol),
+    currency: h.currency ?? (String(h.symbol || '').toUpperCase().endsWith('.TA') ? 'ILS' : 'USD'),
   }))
 
   const displayHoldings = useMemo(() => {

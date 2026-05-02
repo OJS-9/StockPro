@@ -604,11 +604,11 @@ class PortfolioService:
         from currency_utils import convert_to_usd, detect_currency
 
         # Auto-detect display currency: ILS only when every holding is ILS and
-        # there is no cash balance (cash is USD-only for now). Anything else
-        # falls back to USD.
+        # any tracked cash balance is zero (cash is USD-only for now, so a
+        # non-zero USD balance forces the aggregate back to USD).
         if (
             holdings
-            and not track_cash
+            and (not track_cash or cash_balance == 0)
             and all(
                 (h.get("currency") or detect_currency(h.get("symbol", ""))) == "ILS"
                 for h in holdings
