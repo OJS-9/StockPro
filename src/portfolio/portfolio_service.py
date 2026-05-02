@@ -601,15 +601,19 @@ class PortfolioService:
 
         holdings = self.get_holdings(portfolio_id, with_prices=with_prices)
 
+        from currency_utils import convert_to_usd, detect_currency
+
         total_cost_basis = sum(
-            h.get("total_cost_basis", Decimal("0")) for h in holdings
+            convert_to_usd(
+                Decimal(str(h.get("total_cost_basis", 0) or 0)),
+                h.get("currency") or detect_currency(h.get("symbol", "")),
+            )
+            for h in holdings
         )
         if track_cash:
             total_cost_basis += cash_balance
 
         if with_prices:
-            from currency_utils import convert_to_usd
-
             for h in holdings:
                 mv = h.get("market_value")
                 cur = h.get("currency", "USD")
