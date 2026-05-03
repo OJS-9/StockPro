@@ -203,6 +203,7 @@ export default function AppNav() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <UpgradePill />
         <Link to="/research" style={{ textDecoration: 'none' }}>
           <button
             style={{
@@ -516,5 +517,41 @@ export default function AppNav() {
       </div>
     )}
     </div>
+  )
+}
+
+/** Top-right upgrade pill. Shows for free + starter; hidden for ultra. */
+function UpgradePill() {
+  const api = useApiClient()
+  const { data } = useQuery<{ profile: { tier: string } }>({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await api.get('/api/settings')
+      if (!res.ok) throw new Error('Failed')
+      return res.json()
+    },
+    staleTime: 60_000,
+  })
+  const tier = data?.profile?.tier || 'free'
+  if (tier === 'ultra') return null
+
+  const label = tier === 'free' ? 'Upgrade' : 'Plan'
+  return (
+    <Link
+      to="/pricing"
+      style={{
+        textDecoration: 'none',
+        padding: '6px 14px',
+        borderRadius: 100,
+        background: tier === 'free' ? '#d6d3d1' : 'transparent',
+        color: tier === 'free' ? '#0c0a09' : '#d6d3d1',
+        border: tier === 'free' ? 'none' : '1px solid #292524',
+        fontSize: 12.5,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </Link>
   )
 }
