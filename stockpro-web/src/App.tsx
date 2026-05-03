@@ -30,6 +30,7 @@ const Alerts = lazy(() => import('./pages/Alerts'))
 const TickerPage = lazy(() => import('./pages/TickerPage'))
 const Settings = lazy(() => import('./pages/Settings'))
 const DevicePage = lazy(() => import('./pages/DevicePage'))
+const Pricing = lazy(() => import('./pages/Pricing'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -320,6 +321,15 @@ export default function App() {
               />
             </SignedOut>
           </>
+        }
+      />
+
+      <Route
+        path="/pricing"
+        element={
+          <SignedIn>
+            <Pricing />
+          </SignedIn>
         }
       />
 
