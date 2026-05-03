@@ -2509,10 +2509,11 @@ def api_billing_checkout_session():
     """
     data = request.get_json(silent=True) or {}
     tier = (data.get("tier") or "").strip().lower()
+    cadence = (data.get("cadence") or "monthly").strip().lower()
 
     from tiers import build_checkout_url
 
-    url = build_checkout_url(tier, session["user_id"])
+    url = build_checkout_url(tier, cadence, session["user_id"])
     if not url:
         return jsonify({"success": False, "error": "plan not configured"}), 400
 
@@ -2566,17 +2567,16 @@ def api_billing_webhook():
             return None
 
     if event_type in ("membership.activated", "membership.went_valid", "membership_went_valid"):
-        # Tier comes from metadata on our checkout URL.
-        # Cadence we derive from the membership/plan fields Whop sends us.
-        from tiers import derive_cadence_from_webhook
-
+        # Tier + cadence both come from metadata we set on the checkout URL.
         tier = (metadata.get("tier") or "").lower()
-        cadence = derive_cadence_from_webhook(payload)
+        cadence = (metadata.get("cadence") or "monthly").lower()
         if not (user_id and membership_id):
             return jsonify({"ok": False, "error": "missing user_id/membership_id"}), 400
         if tier not in ("starter", "ultra"):
             app.logger.warning("whop webhook: bad/missing tier metadata: %s", tier)
             return jsonify({"ok": False, "error": "missing tier metadata"}), 400
+        if cadence not in ("monthly", "yearly"):
+            cadence = "monthly"
         db.upsert_subscription(
             user_id=user_id,
             whop_membership_id=membership_id,

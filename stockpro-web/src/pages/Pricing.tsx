@@ -7,7 +7,8 @@ import { useApiClient } from '../api/client'
 type Cadence = 'monthly' | 'yearly'
 
 type PlanInfo = {
-  url: string | null
+  monthly_url: string | null
+  yearly_url: string | null
   price_monthly: number
   price_yearly: number
 }
@@ -48,7 +49,7 @@ export default function Pricing() {
   const currentTier = settings?.profile?.tier || 'free'
 
   const startCheckout = async (tier: 'starter' | 'ultra') => {
-    const res = await api.post('/api/billing/checkout-session', { tier })
+    const res = await api.post('/api/billing/checkout-session', { tier, cadence })
     if (!res.ok) {
       toast.error('Could not start checkout. Plan may not be configured yet.')
       return
@@ -131,7 +132,7 @@ export default function Pricing() {
         </div>
 
         <p style={{ textAlign: 'center', color: '#a8a29e', fontSize: 12.5, marginTop: 24 }}>
-          Checkout opens in a new tab where you can pick monthly or yearly. Your plan activates within seconds of payment.
+          Checkout opens in a new tab. Your plan activates within seconds of payment.
         </p>
       </main>
     </div>
