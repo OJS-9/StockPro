@@ -20,8 +20,10 @@ SECRET_B64 = base64.b64encode(SECRET_RAW).decode()
 @pytest.fixture(autouse=True)
 def env(monkeypatch):
     monkeypatch.setenv("WHOP_WEBHOOK_SECRET", SECRET_B64)
-    monkeypatch.setenv("WHOP_STARTER_URL", "https://whop.com/x/starter/")
-    monkeypatch.setenv("WHOP_ULTRA_URL", "https://whop.com/x/ultra/")
+    monkeypatch.setenv("WHOP_STARTER_MONTHLY_URL", "https://whop.com/x/starter-m/")
+    monkeypatch.setenv("WHOP_STARTER_YEARLY_URL", "https://whop.com/x/starter-y/")
+    monkeypatch.setenv("WHOP_ULTRA_MONTHLY_URL", "https://whop.com/x/ultra-m/")
+    monkeypatch.setenv("WHOP_ULTRA_YEARLY_URL", "https://whop.com/x/ultra-y/")
 
 
 @pytest.fixture
@@ -97,8 +99,7 @@ def test_webhook_membership_activated_sets_tier(client):
         "data": {
             "id": "mem_123",
             "plan_id": "plan_anything",
-            "metadata": {"user_id": "user_abc", "tier": "starter"},
-            "renewal_period": "monthly",
+            "metadata": {"user_id": "user_abc", "tier": "starter", "cadence": "monthly"},
             "expires_at": "2027-01-01T00:00:00Z",
         },
     }
@@ -121,8 +122,7 @@ def test_webhook_membership_yearly_ultra(client):
         "action": "membership.activated",
         "data": {
             "id": "mem_yr",
-            "metadata": {"user_id": "u9", "tier": "ultra"},
-            "renewal_period": "yearly",
+            "metadata": {"user_id": "u9", "tier": "ultra", "cadence": "yearly"},
         },
     }
     db = MagicMock()

@@ -1,13 +1,13 @@
 """Single source of truth for paid tier limits + Whop checkout URLs.
 
-Tiers: free, starter, ultra. Each product in Whop has ONE checkout URL — the
-customer picks monthly/yearly on Whop's page. Tier rides in metadata; cadence
-is read from the membership webhook payload.
+Tiers: free, starter, ultra. Each tier has 2 cadences (monthly, yearly), each
+configured as its own Whop product with a separate checkout URL. The SPA
+picks the URL based on the toggle; tier+cadence ride along in metadata.
 """
 
 import math
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 
 TIER_LIMITS: Dict[str, Dict[str, float]] = {
@@ -32,16 +32,17 @@ TIER_LIMITS: Dict[str, Dict[str, float]] = {
 }
 
 
-def _product_urls() -> Dict[str, Optional[str]]:
+def _checkout_urls() -> Dict[str, Optional[str]]:
     """Re-read each call so monkeypatch works in tests."""
     return {
-        "starter": os.getenv("WHOP_STARTER_URL"),
-        "ultra": os.getenv("WHOP_ULTRA_URL"),
+        "starter_monthly": os.getenv("WHOP_STARTER_MONTHLY_URL"),
+        "starter_yearly": os.getenv("WHOP_STARTER_YEARLY_URL"),
+        "ultra_monthly": os.getenv("WHOP_ULTRA_MONTHLY_URL"),
+        "ultra_yearly": os.getenv("WHOP_ULTRA_YEARLY_URL"),
     }
 
 
 def get_user_tier(user_id: str) -> str:
-    """Read users.tier; default to 'free' on any miss."""
     from database import get_database_manager
 
     db = get_database_manager()
@@ -55,14 +56,11 @@ def get_user_tier(user_id: str) -> str:
 
 
 def get_limit(user_id: str, key: str) -> float:
-    """Return the numeric cap for `key` for the user's current tier."""
     tier = get_user_tier(user_id)
     return TIER_LIMITS[tier].get(key, 0)
 
 
 def get_all_limits(user_id: str) -> Dict[str, float]:
-    """Full caps dict for the user's tier (for API responses).
-    JSON cannot encode inf, so unlimited becomes -1."""
     tier = get_user_tier(user_id)
     out = {}
     for k, v in TIER_LIMITS[tier].items():
@@ -70,74 +68,60 @@ def get_all_limits(user_id: str) -> Dict[str, float]:
     return out
 
 
-def plans_public() -> Dict[str, Dict[str, Optional[str]]]:
-    """Product URLs + display prices for the SPA pricing page.
-
-    Both monthly + yearly point to the same product URL; the customer
-    picks the cadence on Whop's page.
-    """
-    urls = _product_urls()
+def plans_public() -> Dict[str, Dict[str, Optional[object]]]:
+    """Plan checkout URLs + display prices for the SPA pricing page."""
+    urls = _checkout_urls()
     return {
         "starter": {
-            "url": urls["starter"],
-            "price_monthly": 19,
-            "price_yearly": 190,
+            "monthly_url": urls["starter_monthly"],
+            "yearly_url": urls["starter_yearly"],
+            "price_monthly": _price("WHOP_STARTER_PRICE_MONTHLY", 19),
+            "price_yearly": _price("WHOP_STARTER_PRICE_YEARLY", 190),
         },
         "ultra": {
-            "url": urls["ultra"],
-            "price_monthly": 59,
-            "price_yearly": 590,
+            "monthly_url": urls["ultra_monthly"],
+            "yearly_url": urls["ultra_yearly"],
+            "price_monthly": _price("WHOP_ULTRA_PRICE_MONTHLY", 59),
+            "price_yearly": _price("WHOP_ULTRA_PRICE_YEARLY", 590),
         },
     }
 
 
-def build_checkout_url(tier: str, user_id: str) -> Optional[str]:
-    """Append metadata params Whop will store on the resulting membership.
+def _price(env_key: str, default: int) -> int:
+    raw = os.getenv(env_key)
+    if not raw:
+        return default
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return default
 
-    Returns None if the product URL isn't configured in env.
-    """
-    from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
+def resolve_url(tier: str, cadence: str) -> Optional[Tuple[str, str, str]]:
     tier = (tier or "").lower()
-    if tier not in ("starter", "ultra"):
+    cadence = (cadence or "").lower()
+    if tier not in ("starter", "ultra") or cadence not in ("monthly", "yearly"):
         return None
-    base = _product_urls().get(tier)
+    base = _checkout_urls().get(f"{tier}_{cadence}")
     if not base:
         return None
+    return tier, cadence, base
+
+
+def build_checkout_url(tier: str, cadence: str, user_id: str) -> Optional[str]:
+    """Append metadata Whop will store on the resulting membership."""
+    from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
+
+    resolved = resolve_url(tier, cadence)
+    if not resolved:
+        return None
+    _, _, base = resolved
 
     parts = urlsplit(base)
     existing = dict(parse_qsl(parts.query))
     existing.update({
         "metadata[user_id]": user_id,
         "metadata[tier]": tier,
+        "metadata[cadence]": cadence,
     })
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(existing), parts.fragment))
-
-
-def derive_cadence_from_webhook(payload: dict) -> str:
-    """Whop puts the renewal interval somewhere on the membership/plan payload.
-
-    We try a handful of common field names. Returns 'monthly' or 'yearly'.
-    Defaults to 'monthly' if we can't figure it out — better than blocking
-    activation over a missing field.
-    """
-    candidates = []
-    for source in (payload, payload.get("plan") or {}, payload.get("membership") or {}):
-        if not isinstance(source, dict):
-            continue
-        for key in (
-            "renewal_period",
-            "billing_period",
-            "interval",
-            "renewal_period_initial_interval",
-            "renewal_period_initial_unit",
-            "plan_type",
-        ):
-            v = source.get(key)
-            if v:
-                candidates.append(str(v).lower())
-
-    blob = " ".join(candidates)
-    if "year" in blob or "annual" in blob or "annually" in blob:
-        return "yearly"
-    return "monthly"
