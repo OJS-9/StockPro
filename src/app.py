@@ -2036,6 +2036,22 @@ def api_delete_transaction(portfolio_id: str, transaction_id: str):
 @login_required
 def api_create_portfolio():
     """Create a new portfolio (JSON API for React SPA)."""
+    import math as _math
+    from database import get_database_manager
+    from tiers import get_limit
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    limit = get_limit(uid, "portfolios")
+    if limit != _math.inf and db.count_user_portfolios(uid) >= int(limit):
+        return jsonify({
+            "ok": False,
+            "error": "quota_exceeded",
+            "resource": "portfolios",
+            "limit": int(limit),
+            "message": f"Free plan allows {int(limit)} portfolio. Upgrade to add more.",
+        }), 402
+
     data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     if not name:
@@ -2344,8 +2360,22 @@ def api_create_alert():
     if asset_type not in ("stock", "crypto"):
         return jsonify({"success": False, "error": "invalid asset_type"}), 400
 
-    alert_id = str(uuid.uuid4())
+    import math as _math
+    from tiers import get_limit
+
+    uid = session["user_id"]
     db = get_database_manager()
+    limit = get_limit(uid, "price_alerts")
+    if limit != _math.inf and db.count_user_active_alerts(uid) >= int(limit):
+        return jsonify({
+            "success": False,
+            "error": "quota_exceeded",
+            "resource": "price_alerts",
+            "limit": int(limit),
+            "message": f"Your plan allows {int(limit)} active alerts. Upgrade to add more.",
+        }), 402
+
+    alert_id = str(uuid.uuid4())
     db.create_price_alert(
         alert_id=alert_id,
         user_id=session["user_id"],
@@ -2458,6 +2488,143 @@ def api_telegram_connect_token():
     return jsonify({"success": True, "token": token, "ttl_minutes": 10})
 
 
+# ==================== Billing (Whop) ====================
+
+
+@app.route("/api/billing/plans", methods=["GET"])
+def api_billing_plans():
+    """Public: tier plan IDs and prices for the SPA pricing page."""
+    from tiers import plans_public
+
+    return jsonify({"success": True, "plans": plans_public()})
+
+
+@app.route("/api/billing/checkout-session", methods=["POST"])
+@login_required
+def api_billing_checkout_session():
+    """Return a Whop hosted checkout URL with user_id/tier/cadence baked in.
+
+    SPA opens this URL in a new tab; on payment Whop fires `membership.activated`
+    with the metadata, which our webhook uses to link the user to a tier.
+    """
+    data = request.get_json(silent=True) or {}
+    tier = (data.get("tier") or "").strip().lower()
+
+    from tiers import build_checkout_url
+
+    url = build_checkout_url(tier, session["user_id"])
+    if not url:
+        return jsonify({"success": False, "error": "plan not configured"}), 400
+
+    return jsonify({"success": True, "checkout_url": url})
+
+
+@app.route("/api/billing/webhook", methods=["POST"])
+def api_billing_webhook():
+    """Whop webhook receiver. Verifies HMAC sig, updates DB."""
+    from billing.whop_service import verify_webhook, WhopSignatureError
+    from database import get_database_manager
+    from datetime import datetime, timezone
+
+    raw_body = request.get_data() or b""
+    try:
+        event = verify_webhook(raw_body, dict(request.headers))
+    except WhopSignatureError as e:
+        app.logger.warning("whop webhook rejected: %s", e)
+        return jsonify({"ok": False, "error": "signature"}), 401
+
+    event_type = (event.get("action") or event.get("type") or "").lower()
+    payload = event.get("data") or {}
+    membership_id = (
+        payload.get("id")
+        or payload.get("membership_id")
+        or payload.get("membership", {}).get("id")
+    )
+    plan_id = payload.get("plan_id") or payload.get("plan", {}).get("id")
+    metadata = payload.get("metadata") or {}
+    user_id = metadata.get("user_id")
+
+    db = get_database_manager()
+
+    # Look up the user_id from a previously-stored sub if metadata is missing
+    if not user_id and membership_id:
+        user_id = db.get_subscription_user(membership_id)
+
+    def _parse_period_end():
+        v = (
+            payload.get("expires_at")
+            or payload.get("renewal_period_end")
+            or payload.get("current_period_end")
+        )
+        if not v:
+            return None
+        try:
+            if isinstance(v, (int, float)):
+                return datetime.fromtimestamp(int(v), tz=timezone.utc)
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    if event_type in ("membership.activated", "membership.went_valid", "membership_went_valid"):
+        # Tier comes from metadata on our checkout URL.
+        # Cadence we derive from the membership/plan fields Whop sends us.
+        from tiers import derive_cadence_from_webhook
+
+        tier = (metadata.get("tier") or "").lower()
+        cadence = derive_cadence_from_webhook(payload)
+        if not (user_id and membership_id):
+            return jsonify({"ok": False, "error": "missing user_id/membership_id"}), 400
+        if tier not in ("starter", "ultra"):
+            app.logger.warning("whop webhook: bad/missing tier metadata: %s", tier)
+            return jsonify({"ok": False, "error": "missing tier metadata"}), 400
+        db.upsert_subscription(
+            user_id=user_id,
+            whop_membership_id=membership_id,
+            whop_plan_id=plan_id or "",
+            tier=tier,
+            cadence=cadence,
+            status="active",
+            current_period_end=_parse_period_end(),
+        )
+        db.set_user_tier(user_id, tier)
+        return jsonify({"ok": True})
+
+    if event_type in ("membership.deactivated", "membership.cancelled", "membership_went_invalid"):
+        if membership_id:
+            db.set_subscription_status(membership_id, "canceled")
+        if user_id:
+            db.set_user_tier(user_id, "free")
+        return jsonify({"ok": True})
+
+    if event_type in ("payment.succeeded", "payment_succeeded"):
+        period_end = _parse_period_end()
+        if membership_id and period_end:
+            db.update_subscription_period_end(membership_id, period_end)
+        return jsonify({"ok": True})
+
+    if event_type in ("refund.created", "refund_created"):
+        if membership_id:
+            db.set_subscription_status(membership_id, "canceled")
+        if user_id:
+            db.set_user_tier(user_id, "free")
+        app.logger.info("whop refund processed for membership %s", membership_id)
+        return jsonify({"ok": True})
+
+    # Unknown event types: 200 so Whop doesn't retry forever
+    return jsonify({"ok": True, "ignored": event_type})
+
+
+# Some webhook handlers must NOT receive CSRF protection (Flask-WTF wraps
+# the app); make sure this one is exempt if csrf is initialized.
+try:
+    from flask_wtf.csrf import CSRFProtect  # noqa: F401
+    _csrf = app.extensions.get("csrf") if hasattr(app, "extensions") else None
+    if _csrf is not None and hasattr(_csrf, "exempt"):
+        _csrf.exempt(api_billing_webhook)
+except Exception:
+    pass
+
+
 @app.route("/api/settings", methods=["GET"])
 @login_required
 def api_settings_get():
@@ -2469,6 +2636,8 @@ def api_settings_get():
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 404
 
+    from tiers import get_all_limits
+
     # Never return decrypted email in logs — just expose username
     return jsonify({
         "success": True,
@@ -2477,6 +2646,7 @@ def api_settings_get():
             "display_name": user.get("username", ""),
             "is_pro": bool(user.get("is_pro")),
             "tier": user.get("tier", "free"),
+            "tier_limits": get_all_limits(user["user_id"]),
         },
         "preferences": user.get("preferences") or {},
     })
@@ -3976,6 +4146,22 @@ def api_watchlist_add_symbol(watchlist_id):
     symbol = (data.get("symbol") or "").strip().upper()
     if not symbol:
         return jsonify({"error": "symbol is required"}), 400
+
+    import math as _math
+    from database import get_database_manager
+    from tiers import get_limit
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    limit = get_limit(uid, "watchlist_items")
+    if limit != _math.inf and db.count_user_watchlist_items(uid) >= int(limit):
+        return jsonify({
+            "error": "quota_exceeded",
+            "resource": "watchlist_items",
+            "limit": int(limit),
+            "message": f"Your plan allows {int(limit)} watchlist items. Upgrade to add more.",
+        }), 402
+
     try:
         watchlist_svc.add_symbol(watchlist_id, symbol, None)
         return jsonify({"success": True, "symbol": symbol})

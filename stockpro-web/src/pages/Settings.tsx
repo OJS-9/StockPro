@@ -304,6 +304,14 @@ export default function Settings() {
             </div>
           )}
 
+          {/* PLAN / BILLING */}
+          {activeSection === 'plan' && (
+            <PlanSection
+              tier={settingsData?.profile?.tier || 'free'}
+              limits={settingsData?.profile?.tier_limits || {}}
+            />
+          )}
+
           {/* CLI TOKENS */}
           {activeSection === 'cli' && <CliTokensSection />}
 
@@ -459,6 +467,65 @@ function CliTokensSection() {
           ))
         )}
       </div>
+    </div>
+  )
+}
+
+
+// ==================== Plan / Billing Section ====================
+
+function PlanSection({ tier, limits }: { tier: string; limits: Record<string, number> }) {
+  const tierLabel = tier === 'free' ? 'Free' : tier === 'starter' ? 'Starter' : tier === 'ultra' ? 'Ultra' : tier
+  const fmt = (n: number | undefined) => (n === -1 || n === undefined ? 'Unlimited' : String(n))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#a8a29e', textTransform: 'uppercase', letterSpacing: 0.6 }}>Current plan</div>
+            <div style={{ fontSize: 22, fontWeight: 600, color: '#fafaf9', marginTop: 4 }}>{tierLabel}</div>
+          </div>
+          <a
+            href="/pricing"
+            style={{ padding: '9px 16px', borderRadius: 100, background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
+          >
+            {tier === 'free' ? 'Upgrade' : 'Change plan'}
+          </a>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          <Quota label="Reports / month" value={fmt(limits.reports_per_month)} />
+          <Quota label="Portfolios" value={fmt(limits.portfolios)} />
+          <Quota label="Watchlist items" value={fmt(limits.watchlist_items)} />
+          <Quota label="Price alerts" value={fmt(limits.price_alerts)} />
+        </div>
+      </div>
+
+      {tier !== 'free' && (
+        <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fafaf9', marginBottom: 4 }}>Manage subscription</div>
+            <div style={{ fontSize: 12.5, color: '#a8a29e' }}>Update payment, change plan, or cancel via the Whop member portal.</div>
+          </div>
+          <a
+            href="https://whop.com/orders/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #292524', background: '#0c0a09', color: '#fafaf9', fontSize: 12.5, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}
+          >
+            Open Whop portal
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Quota({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: '#0c0a09', border: '1px solid #292524', borderRadius: 10, padding: 14 }}>
+      <div style={{ fontSize: 11.5, color: '#a8a29e', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 600, color: '#fafaf9', marginTop: 6 }}>{value}</div>
     </div>
   )
 }

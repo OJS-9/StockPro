@@ -567,6 +567,36 @@ class DatabaseManager:
                     "WITH CHECK (user_id = auth.jwt()->>'sub')"
                 )
 
+                # Subscriptions: Whop is source of truth; we cache the active
+                # membership state here for fast tier/quota lookups.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS subscriptions (
+                        id                  VARCHAR(36) PRIMARY KEY,
+                        user_id             VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        whop_membership_id  VARCHAR(64) NOT NULL UNIQUE,
+                        whop_plan_id        VARCHAR(64) NOT NULL,
+                        tier                VARCHAR(20) NOT NULL,
+                        cadence             VARCHAR(20) NOT NULL,
+                        status              VARCHAR(20) NOT NULL DEFAULT 'active',
+                        current_period_end  TIMESTAMPTZ,
+                        created_at          TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at          TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_status  ON subscriptions (status)"
+                )
+                cur.execute("ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY")
+                cur.execute("DROP POLICY IF EXISTS subscriptions_owner ON subscriptions")
+                cur.execute(
+                    "CREATE POLICY subscriptions_owner ON subscriptions "
+                    "FOR ALL USING (user_id = auth.jwt()->>'sub') "
+                    "WITH CHECK (user_id = auth.jwt()->>'sub')"
+                )
+
             conn.commit()
             logger.info("Database schema initialized")
 
@@ -1250,19 +1280,223 @@ class DatabaseManager:
             self._release(conn)
 
     def user_is_pro(self, user_id: str) -> bool:
-        """Paid / pro users bypass free-tier report quota (stub until billing)."""
+        """Paid users bypass free-tier quotas. True for tier in {starter, ultra}
+        OR legacy is_pro flag = true."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COALESCE(is_pro, FALSE) FROM users WHERE user_id = %s",
+                    "SELECT tier, COALESCE(is_pro, FALSE) FROM users WHERE user_id = %s",
                     (user_id,),
                 )
                 row = cur.fetchone()
-                return bool(row and row[0])
+                if not row:
+                    return False
+                tier = (row[0] or "free").lower()
+                return tier in ("starter", "ultra") or bool(row[1])
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to read user tier: {e}")
+        finally:
+            self._release(conn)
+
+    def set_user_tier(self, user_id: str, tier: str) -> None:
+        """Set users.tier and sync legacy is_pro flag."""
+        tier = (tier or "free").lower()
+        if tier not in ("free", "starter", "ultra"):
+            raise ValueError(f"unknown tier: {tier}")
+        is_pro = tier in ("starter", "ultra")
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET tier = %s, is_pro = %s WHERE user_id = %s",
+                    (tier, is_pro, user_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set tier: {e}")
+        finally:
+            self._release(conn)
+
+    def upsert_subscription(
+        self,
+        *,
+        user_id: str,
+        whop_membership_id: str,
+        whop_plan_id: str,
+        tier: str,
+        cadence: str,
+        status: str = "active",
+        current_period_end=None,
+    ) -> str:
+        """Insert or update a subscription row keyed by whop_membership_id."""
+        import uuid as _uuid
+
+        sub_id = str(_uuid.uuid4())
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO subscriptions
+                        (id, user_id, whop_membership_id, whop_plan_id, tier,
+                         cadence, status, current_period_end, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (whop_membership_id) DO UPDATE SET
+                        whop_plan_id       = EXCLUDED.whop_plan_id,
+                        tier               = EXCLUDED.tier,
+                        cadence            = EXCLUDED.cadence,
+                        status             = EXCLUDED.status,
+                        current_period_end = EXCLUDED.current_period_end,
+                        updated_at         = NOW()
+                    RETURNING id
+                    """,
+                    (sub_id, user_id, whop_membership_id, whop_plan_id, tier,
+                     cadence, status, current_period_end),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return row[0] if row else sub_id
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to upsert subscription: {e}")
+        finally:
+            self._release(conn)
+
+    def get_active_subscription(self, user_id: str):
+        """Return the most recent active subscription row, or None."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, user_id, whop_membership_id, whop_plan_id,
+                           tier, cadence, status, current_period_end,
+                           created_at, updated_at
+                    FROM subscriptions
+                    WHERE user_id = %s AND status = 'active'
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (user_id,),
+                )
+                return cur.fetchone()
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read subscription: {e}")
+        finally:
+            self._release(conn)
+
+    def set_subscription_status(self, whop_membership_id: str, status: str) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE subscriptions SET status = %s, updated_at = NOW() "
+                    "WHERE whop_membership_id = %s",
+                    (status, whop_membership_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set subscription status: {e}")
+        finally:
+            self._release(conn)
+
+    def get_subscription_user(self, whop_membership_id: str):
+        """Look up the user_id behind an existing subscription row."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT user_id FROM subscriptions WHERE whop_membership_id = %s",
+                    (whop_membership_id,),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read subscription user: {e}")
+        finally:
+            self._release(conn)
+
+    def update_subscription_period_end(self, whop_membership_id: str, period_end) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE subscriptions SET current_period_end = %s, updated_at = NOW() "
+                    "WHERE whop_membership_id = %s",
+                    (period_end, whop_membership_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update period end: {e}")
+        finally:
+            self._release(conn)
+
+    def count_user_portfolios(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM portfolios WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to count portfolios: {e}")
+        finally:
+            self._release(conn)
+
+    def count_user_watchlist_items(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(wi.*)
+                    FROM watchlist_items wi
+                    JOIN watchlists w ON w.watchlist_id = wi.watchlist_id
+                    WHERE w.user_id = %s
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to count watchlist items: {e}")
+        finally:
+            self._release(conn)
+
+    def count_user_active_alerts(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM price_alerts "
+                    "WHERE user_id = %s AND COALESCE(active, TRUE) = TRUE",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to count alerts: {e}")
         finally:
             self._release(conn)
 
