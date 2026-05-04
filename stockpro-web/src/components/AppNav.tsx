@@ -538,7 +538,7 @@ function UpgradePill() {
   const label = tier === 'free' ? 'Upgrade' : 'Plan'
   return (
     <Link
-      to="/pricing"
+      to="/settings?section=plan"
       style={{
         textDecoration: 'none',
         padding: '6px 14px',

@@ -31,6 +31,7 @@ const TickerPage = lazy(() => import('./pages/TickerPage'))
 const Settings = lazy(() => import('./pages/Settings'))
 const DevicePage = lazy(() => import('./pages/DevicePage'))
 const Pricing = lazy(() => import('./pages/Pricing'))
+const BillingReturn = lazy(() => import('./pages/BillingReturn'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -299,9 +300,19 @@ export default function App() {
       <Route
         path="/settings"
         element={
-          <SignedIn>
-            <Settings />
-          </SignedIn>
+          <>
+            <SignedIn>
+              <Settings />
+            </SignedIn>
+            <SignedOut>
+              <Navigate
+                to={`/sign-in?redirect_url=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/settings'
+                )}`}
+                replace
+              />
+            </SignedOut>
+          </>
         }
       />
 
@@ -324,12 +335,24 @@ export default function App() {
         }
       />
 
+      <Route path="/pricing" element={<Pricing />} />
+
       <Route
-        path="/pricing"
+        path="/billing/return"
         element={
-          <SignedIn>
-            <Pricing />
-          </SignedIn>
+          <>
+            <SignedIn>
+              <BillingReturn />
+            </SignedIn>
+            <SignedOut>
+              <Navigate
+                to={`/sign-in?redirect_url=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/billing/return'
+                )}`}
+                replace
+              />
+            </SignedOut>
+          </>
         }
       />
 
