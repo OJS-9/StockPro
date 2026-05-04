@@ -36,7 +36,7 @@ export default function UpgradeNudge({ resource, message, onDismiss }: Props) {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <Link
-          to="/pricing"
+          to="/settings?section=plan"
           style={{
             padding: '6px 14px',
             borderRadius: 100,

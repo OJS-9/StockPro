@@ -43,9 +43,13 @@ export default function Landing() {
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 40, marginInlineStart: 'auto' }}>
           {!isMobile && (
             <div style={{ display: 'flex', gap: 32 }}>
-              {['Features', 'How it works', 'Pricing'].map(l => (
-                <a key={l} href={`#${l.toLowerCase().replace(' ', '-')}`} style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 14, fontWeight: 500, transition: 'color 0.15s' }}>
-                  {l}
+              {[
+                { label: 'Features', href: '#features' },
+                { label: 'How it works', href: '#how-it-works' },
+                { label: 'Pricing', href: '/pricing' },
+              ].map(l => (
+                <a key={l.label} href={l.href} style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 14, fontWeight: 500, transition: 'color 0.15s' }}>
+                  {l.label}
                 </a>
               ))}
             </div>

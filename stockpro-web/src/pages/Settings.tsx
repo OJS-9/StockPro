@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useUser } from '@clerk/clerk-react'
+import { useSearchParams } from 'react-router'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import PricingPlans from '../components/PricingPlans'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
@@ -38,6 +40,31 @@ export default function Settings() {
   const { isMobile } = useBreakpoint()
   const [activeSection, setActiveSection] = useState('profile')
   const [hasChanges, setHasChanges] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    const section = searchParams.get('section')
+    const upgraded = searchParams.get('upgraded') === '1'
+    if (section && NAV_ITEMS.some(n => n.id === section)) {
+      setActiveSection(section)
+    } else if (upgraded) {
+      setActiveSection('plan')
+    }
+    if (upgraded) {
+      const cached = queryClient.getQueryData<any>(['settings'])
+      const tier = (cached?.profile?.tier as string) || 'starter'
+      const label = tier.charAt(0).toUpperCase() + tier.slice(1)
+      toast.success(`Welcome to ${label}! Your new quotas are active.`)
+    }
+    if (section || upgraded) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('section')
+      next.delete('upgraded')
+      setSearchParams(next, { replace: true })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [notifs, setNotifs] = useState({
     price_alerts_telegram: true,
@@ -481,17 +508,9 @@ function PlanSection({ tier, limits }: { tier: string; limits: Record<string, nu
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 12, color: '#a8a29e', textTransform: 'uppercase', letterSpacing: 0.6 }}>Current plan</div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: '#fafaf9', marginTop: 4 }}>{tierLabel}</div>
-          </div>
-          <a
-            href="/pricing"
-            style={{ padding: '9px 16px', borderRadius: 100, background: '#d6d3d1', color: '#0c0a09', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
-          >
-            {tier === 'free' ? 'Upgrade' : 'Change plan'}
-          </a>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: '#a8a29e', textTransform: 'uppercase', letterSpacing: 0.6 }}>Current plan</div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: '#fafaf9', marginTop: 4 }}>{tierLabel}</div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <Quota label="Reports / month" value={fmt(limits.reports_per_month)} />
@@ -500,6 +519,8 @@ function PlanSection({ tier, limits }: { tier: string; limits: Record<string, nu
           <Quota label="Price alerts" value={fmt(limits.price_alerts)} />
         </div>
       </div>
+
+      <PricingPlans currentTier={tier} compact />
 
       {tier !== 'free' && (
         <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
