@@ -3961,6 +3961,7 @@ def api_home():
                 all_holdings = summary.get("holdings", [])
                 p_total_value = 0.0
                 p_total_pnl = 0.0
+                from currency_utils import convert_to_usd, detect_currency
                 # Calculate totals from ALL holdings
                 for h in all_holdings:
                     sym = h["symbol"]
@@ -3968,15 +3969,32 @@ def api_home():
                     current_price = _safe_float(cp.get("price")) if cp else None
                     qty = _safe_float(h.get("total_quantity")) or 0
                     avg_cost = _safe_float(h.get("average_cost")) or 0
+                    # Bug 2: fall back to cost basis when no cached price to avoid
+                    # silently dropping the holding from the total
+                    if current_price is None:
+                        current_price = avg_cost if avg_cost else None
                     if current_price is not None:
+                        cur = detect_currency(sym)
                         mv = current_price * qty
                         ug = mv - (avg_cost * qty)
+                        # Bug 1: convert ILS amounts to USD before accumulating
+                        if cur != "USD":
+                            mv = float(convert_to_usd(Decimal(str(mv)), cur))
+                            ug = float(convert_to_usd(Decimal(str(ug)), cur))
                         p_total_value += mv
                         p_total_pnl += ug
                         # Day change from cached change_percent
                         chg_pct = _safe_float(cp.get("change_percent")) if cp else None
                         if chg_pct:
-                            day_change += qty * current_price * (chg_pct / 100)
+                            day_chg_native = qty * current_price * (chg_pct / 100)
+                            if cur != "USD":
+                                day_change += float(convert_to_usd(Decimal(str(day_chg_native)), cur))
+                            else:
+                                day_change += day_chg_native
+                # Bug 3: include cash balance when cash tracking is enabled
+                if summary.get("track_cash"):
+                    cash = _safe_float(summary.get("cash_balance")) or 0.0
+                    p_total_value += cash
                 # Preview: only first 5 for display
                 for h in all_holdings[:5]:
                     sym = h["symbol"]
