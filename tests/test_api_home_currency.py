@@ -15,6 +15,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from currency_utils import convert_to_usd, detect_currency  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -52,8 +54,6 @@ def _run_api_home_totals(
     Execute the portfolio-totals logic extracted from api_home() and return
     (total_value, total_pnl, day_change).
     """
-    from currency_utils import convert_to_usd, detect_currency
-
     def _safe_float(v):
         try:
             return float(v) if v is not None else None

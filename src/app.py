@@ -49,6 +49,7 @@ from watchlist.watchlist_service import get_watchlist_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
+from currency_utils import convert_to_usd, detect_currency
 
 # Load environment variables
 load_dotenv()
@@ -3961,7 +3962,6 @@ def api_home():
                 all_holdings = summary.get("holdings", [])
                 p_total_value = 0.0
                 p_total_pnl = 0.0
-                from currency_utils import convert_to_usd, detect_currency
                 # Calculate totals from ALL holdings
                 for h in all_holdings:
                     sym = h["symbol"]
