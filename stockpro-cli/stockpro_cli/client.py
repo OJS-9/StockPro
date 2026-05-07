@@ -1,7 +1,8 @@
-"""HTTP client wrapper with auth headers and error handling."""
+"""HTTP client wrapper with auth headers and structured error handling."""
 
 import sys
 import json
+import click
 import httpx
 from stockpro_cli.config import get_api_url, get_token
 
@@ -33,29 +34,42 @@ class StockProClient:
         if resp.status_code >= 500:
             _error(f"Server error ({resp.status_code}): {resp.text[:200]}")
         try:
-            return resp.json()
+            data = resp.json()
         except Exception:
             return {"raw": resp.text}
+        if isinstance(data, list):
+            return {"items": data, "page": 1, "has_more": False}
+        return data
+
+    def _request(self, method: str, path: str, **kwargs) -> dict:
+        try:
+            resp = self._client.request(method, self._url(path), **kwargs)
+        except httpx.ConnectError as exc:
+            _error(f"Cannot reach server at {self._base}: {exc}")
+        except httpx.TimeoutException as exc:
+            _error(f"Request timed out: {exc}")
+        except httpx.RequestError as exc:
+            _error(f"Network error: {exc}")
+        return self._handle(resp)
 
     def get(self, path: str, params: dict | None = None) -> dict:
-        return self._handle(self._client.get(self._url(path), params=params))
+        return self._request("GET", path, params=params)
 
     def post(self, path: str, data: dict | None = None) -> dict:
-        return self._handle(self._client.post(self._url(path), json=data))
+        return self._request("POST", path, json=data)
 
     def put(self, path: str, data: dict | None = None) -> dict:
-        return self._handle(self._client.put(self._url(path), json=data))
+        return self._request("PUT", path, json=data)
 
     def patch(self, path: str, data: dict | None = None) -> dict:
-        return self._handle(self._client.patch(self._url(path), json=data))
+        return self._request("PATCH", path, json=data)
 
     def delete(self, path: str) -> dict:
-        return self._handle(self._client.delete(self._url(path)))
+        return self._request("DELETE", path)
 
 
 def _error(msg: str):
-    json.dump({"error": msg}, sys.stderr)
-    sys.stderr.write("\n")
+    click.echo(json.dumps({"error": msg}), err=True)
     sys.exit(1)
 
 

@@ -6,7 +6,11 @@ By default the CLI targets the live deployment at `https://stockpro-production-1
 
 ## Install
 
-From the repo root:
+```bash
+pip install stockpro-cli
+```
+
+Or, for local development from the repo root:
 
 ```bash
 pip install -e stockpro-cli/
@@ -14,13 +18,17 @@ pip install -e stockpro-cli/
 
 This registers the `stockpro` command.
 
+### Token storage
+
+Your auth token is stored in your OS keychain (macOS Keychain, Windows Credential Locker, or freedesktop Secret Service on Linux) via the `keyring` library. If no keyring backend is available, the token falls back to `~/.stockpro/config.json` (mode `0600`) and you'll see a warning. For headless/CI use, set `STOCKPRO_TOKEN=...` — it overrides everything else.
+
 ## First-time sign-in
 
 ```bash
 stockpro auth login
 ```
 
-Opens your browser to the StockPro Clerk sign-in page. After Google OAuth completes, the browser redirects to a short-lived local callback and the CLI stores your token at `~/.stockpro/config.json` (file mode `0600`).
+Opens your browser to the StockPro Clerk sign-in page. After Google OAuth completes, the browser redirects to a short-lived local callback (timeout: 120s) and the CLI stores your token in the OS keychain.
 
 Confirm:
 

@@ -1,4 +1,8 @@
-"""Read/write ~/.stockpro/config.json for token + API URL storage."""
+"""Read/write ~/.stockpro/config.json for non-secret config (API URL).
+
+Tokens live in the OS keychain — see `keychain.py`. Legacy file-stored tokens are
+migrated on first read.
+"""
 
 import json
 import os
@@ -15,7 +19,10 @@ def _ensure_dir():
 
 def load_config() -> dict:
     if CONFIG_FILE.exists():
-        return json.loads(CONFIG_FILE.read_text())
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except json.JSONDecodeError:
+            return {}
     return {}
 
 
@@ -34,10 +41,10 @@ def get_api_url() -> str:
 
 
 def get_token() -> str | None:
-    return os.environ.get("STOCKPRO_TOKEN") or load_config().get("access_token")
+    from stockpro_cli.keychain import load_token
+    return load_token()
 
 
 def clear_auth():
-    cfg = load_config()
-    cfg.pop("access_token", None)
-    save_config(cfg)
+    from stockpro_cli.keychain import clear_token
+    clear_token()
