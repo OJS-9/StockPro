@@ -37,7 +37,13 @@ class MCPManager:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load MCP configuration from env var or JSON file."""
-        api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        api_key_raw = os.getenv("ALPHA_VANTAGE_API_KEY")
+        api_key = api_key_raw.strip() if api_key_raw else ""
+        if api_key_raw is not None and not api_key:
+            logger.warning(
+                "ALPHA_VANTAGE_API_KEY is set but empty/whitespace; "
+                "falling back to mcp.json file lookup."
+            )
         if api_key:
             return {
                 "servers": {
@@ -85,7 +91,7 @@ class MCPManager:
             # Check if API key is in URL or needs to be added
             if "YOUR_API_KEY" in url or "apikey=" not in url:
                 # Try to get API key from environment
-                api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+                api_key = (os.getenv("ALPHA_VANTAGE_API_KEY") or "").strip()
                 if api_key:
                     if "?" in url:
                         url = f"{url}&apikey={api_key}"
