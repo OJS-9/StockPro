@@ -143,6 +143,7 @@ export default function PortfolioList() {
     value: p.total_market_value ?? p.value ?? 0,
     pnl: p.total_unrealized_gain ?? p.pnl ?? 0,
     pnl_pct: p.total_unrealized_gain_pct != null ? Number(p.total_unrealized_gain_pct).toFixed(1) : (p.pnl_pct ?? 0),
+    holdings_count: p.holdings_count ?? (Array.isArray(p.holdings) ? p.holdings.length : 0),
   }))
 
   const dotColors = ['#60a5fa', '#a78bfa', '#22c55e', '#f59e0b', '#f472b6']
