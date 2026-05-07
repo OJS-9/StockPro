@@ -164,6 +164,7 @@ export default function LegalLayout({ title, lastUpdated, intro, disclaimer, sec
           <Link to="/legal/privacy" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>{t('legal.footerLinks.privacy')}</Link>
           <Link to="/legal/terms" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>{t('legal.footerLinks.terms')}</Link>
           <Link to="/legal/refund" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>{t('legal.footerLinks.refund')}</Link>
+          <a href="mailto:ojs.stockpro@gmail.com" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>{t('legal.footerLinks.contact')}</a>
         </div>
         <span style={{ fontSize: 12, color: '#a8a29e' }}>&copy; 2026 StockPro</span>
       </footer>

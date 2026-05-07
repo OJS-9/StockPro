@@ -217,6 +217,7 @@ export default function Landing() {
           <Link to="/legal/privacy" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Privacy</Link>
           <Link to="/legal/terms" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Terms</Link>
           <Link to="/legal/refund" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Refund</Link>
+          <a href="mailto:ojs.stockpro@gmail.com" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Contact</a>
         </div>
         <span style={{ fontSize: 12, color: '#a8a29e' }}>&copy; 2026 StockPro</span>
       </footer>
