@@ -1204,16 +1204,24 @@ def report_status(session_id: str):
     user_id = session.get("user_id")
     status = _generation_status.get(session_id)
 
-    # Web session ownership check (browser flow)
-    web_session_ok = session.get("session_id") == session_id
-    # API/CLI token ownership check (stateless generate endpoint)
-    api_owner_ok = status is not None and status.get("_owner_user_id") == user_id
-
-    if not web_session_ok and not api_owner_ok:
-        return jsonify({"error": "forbidden"}), 403
-
+    # No status dict yet (race between CLI's first poll and the generate handler
+    # registering state, or the cold-worker warm-up case). Return "unknown" so
+    # the caller keeps polling instead of crashing with a 403. No ownership
+    # information is leaked because the response is identical for any caller.
     if status is None:
         return jsonify({"status": "unknown"})
+
+    web_session_ok = session.get("session_id") == session_id
+    status_owner = status.get("_owner_user_id")
+    api_owner_ok = bool(status_owner) and bool(user_id) and status_owner == user_id
+
+    if not web_session_ok and not api_owner_ok:
+        app.logger.warning(
+            "report_status forbidden: session=%s user=%s owner=%s web_ok=%s",
+            session_id, user_id, status_owner, web_session_ok,
+        )
+        return jsonify({"error": "forbidden"}), 403
+
     return jsonify({k: v for k, v in status.items() if not k.startswith("_")})
 
 
