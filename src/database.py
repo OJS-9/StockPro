@@ -597,12 +597,63 @@ class DatabaseManager:
                     "WITH CHECK (user_id = auth.jwt()->>'sub')"
                 )
 
+                # Multi-worker shared state: report-generation status replaces
+                # the per-process `_generation_status` dict in app.py so any
+                # gunicorn worker can serve any /api/report_status poll.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS generation_status (
+                        session_id      TEXT PRIMARY KEY,
+                        user_id         TEXT NOT NULL,
+                        status          TEXT NOT NULL,
+                        report_id       TEXT,
+                        progress        INT  DEFAULT 0,
+                        step            TEXT,
+                        step_code       TEXT,
+                        done            INT,
+                        total           INT,
+                        partial         BOOLEAN DEFAULT FALSE,
+                        message         TEXT,
+                        questions       JSONB,
+                        subjects        JSONB,
+                        failed_subjects JSONB,
+                        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        expires_at      TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours')
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_generation_status_user ON generation_status (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_generation_status_expires ON generation_status (expires_at)"
+                )
+
+                # SSE event queue: replaces the per-process `_sse_queues` dict
+                # so the producer thread on one worker and the SSE consumer on
+                # another worker can communicate via Postgres.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS generation_events (
+                        id          BIGSERIAL PRIMARY KEY,
+                        session_id  TEXT   NOT NULL,
+                        seq         BIGINT NOT NULL,
+                        event_type  TEXT   NOT NULL,
+                        payload     JSONB  NOT NULL,
+                        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE (session_id, seq)
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_generation_events_session ON generation_events (session_id, seq)"
+                )
+
             conn.commit()
             logger.info("Database schema initialized")
 
-        except psycopg2.errors.InternalError_ as e:
-            # Two processes ran init_schema concurrently (common in Flask debug mode).
-            # The schema is already being initialized by the other process — safe to ignore.
+        except (psycopg2.errors.InternalError_, psycopg2.errors.DeadlockDetected) as e:
+            # Two or more processes ran init_schema concurrently — common when
+            # gunicorn forks N workers that all import app.py at the same time.
+            # The schema is idempotent (CREATE IF NOT EXISTS) so whichever process
+            # commits first wins; the rest can safely roll back and continue.
             if conn:
                 conn.rollback()
             logger.warning("init_schema concurrent update ignored: %s", e)
@@ -2645,6 +2696,205 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to log CSV import: {e}")
+        finally:
+            self._release(conn)
+
+    # --- Multi-worker shared state: generation_status + generation_events ---
+
+    _GEN_STATUS_FIELDS = {
+        "status",
+        "report_id",
+        "progress",
+        "step",
+        "step_code",
+        "done",
+        "total",
+        "partial",
+        "message",
+        "questions",
+        "subjects",
+        "failed_subjects",
+    }
+    _GEN_STATUS_JSON_FIELDS = {"questions", "subjects", "failed_subjects"}
+
+    def set_generation_status(
+        self, session_id: str, user_id: str, **fields: Any
+    ) -> None:
+        """UPSERT a row in generation_status. Fields must be in _GEN_STATUS_FIELDS."""
+        cols = ["session_id", "user_id"]
+        vals: List[Any] = [session_id, user_id]
+        for k, v in fields.items():
+            if k not in self._GEN_STATUS_FIELDS:
+                raise ValueError(f"Unknown generation_status field: {k}")
+            cols.append(k)
+            vals.append(json.dumps(v) if k in self._GEN_STATUS_JSON_FIELDS else v)
+
+        placeholders = ", ".join(["%s"] * len(cols))
+        col_list = ", ".join(cols)
+        update_cols = [c for c in cols if c not in ("session_id", "user_id")]
+        update_clause = ", ".join(f"{c}=EXCLUDED.{c}" for c in update_cols)
+        if update_clause:
+            update_clause += ", updated_at=NOW()"
+        else:
+            update_clause = "updated_at=NOW()"
+
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO generation_status ({col_list})
+                    VALUES ({placeholders})
+                    ON CONFLICT (session_id) DO UPDATE SET {update_clause}
+                    """,
+                    vals,
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set generation_status: {e}") from e
+        finally:
+            self._release(conn)
+
+    def get_generation_status(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a generation_status row as a dict, or None if missing."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT session_id, user_id, status, report_id, progress, step,
+                           step_code, done, total, partial, message, questions,
+                           subjects, failed_subjects, created_at, updated_at, expires_at
+                    FROM generation_status
+                    WHERE session_id = %s
+                    """,
+                    (session_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                cols = [d[0] for d in cur.description]
+                return dict(zip(cols, row))
+        finally:
+            self._release(conn)
+
+    def update_generation_status(self, session_id: str, **fields: Any) -> None:
+        """UPDATE specific fields on an existing generation_status row."""
+        if not fields:
+            return
+        sets: List[str] = []
+        vals: List[Any] = []
+        for k, v in fields.items():
+            if k not in self._GEN_STATUS_FIELDS:
+                raise ValueError(f"Unknown generation_status field: {k}")
+            sets.append(f"{k}=%s")
+            vals.append(json.dumps(v) if k in self._GEN_STATUS_JSON_FIELDS else v)
+        sets.append("updated_at=NOW()")
+        vals.append(session_id)
+
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE generation_status SET {', '.join(sets)} WHERE session_id=%s",
+                    vals,
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update generation_status: {e}") from e
+        finally:
+            self._release(conn)
+
+    def append_generation_event(
+        self, session_id: str, event_type: str, payload: Dict[str, Any]
+    ) -> int:
+        """Append an SSE event for a session and return its monotonic seq."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO generation_events (session_id, seq, event_type, payload)
+                    VALUES (
+                        %s,
+                        COALESCE(
+                            (SELECT MAX(seq) FROM generation_events WHERE session_id = %s),
+                            0
+                        ) + 1,
+                        %s,
+                        %s
+                    )
+                    RETURNING seq
+                    """,
+                    (session_id, session_id, event_type, json.dumps(payload)),
+                )
+                seq = cur.fetchone()[0]
+            conn.commit()
+            return int(seq)
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to append generation_event: {e}") from e
+        finally:
+            self._release(conn)
+
+    def read_generation_events_since(
+        self, session_id: str, last_seq: int
+    ) -> List[Dict[str, Any]]:
+        """Return events with seq > last_seq, ordered by seq."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT seq, event_type, payload
+                    FROM generation_events
+                    WHERE session_id = %s AND seq > %s
+                    ORDER BY seq
+                    """,
+                    (session_id, last_seq),
+                )
+                rows = cur.fetchall()
+                return [
+                    {"seq": int(r[0]), "event_type": r[1], "payload": r[2]}
+                    for r in rows
+                ]
+        finally:
+            self._release(conn)
+
+    def evict_stale_generation_data(self) -> int:
+        """Delete expired generation_status rows + their events. Returns rows deleted."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM generation_events
+                    WHERE session_id IN (
+                        SELECT session_id FROM generation_status WHERE expires_at < NOW()
+                    )
+                    """
+                )
+                cur.execute(
+                    "DELETE FROM generation_status WHERE expires_at < NOW()"
+                )
+                deleted = cur.rowcount or 0
+            conn.commit()
+            return deleted
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to evict stale generation data: {e}") from e
         finally:
             self._release(conn)
 

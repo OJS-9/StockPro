@@ -25,32 +25,72 @@ def api_client(api_app):
 
 
 class TestReportStatusApi:
-    def test_forbidden_when_session_id_mismatch(self, api_client):
+    """Generation status now lives in the `generation_status` Postgres table
+    rather than the old in-process `_generation_status` dict. We mock the
+    DB helper so these tests don't need a live database."""
+
+    def test_forbidden_when_owner_mismatch(self, api_client):
         import app as app_module
 
-        with patch.object(
-            app_module,
-            "_generation_status",
-            {"good-sid": {"status": "ready", "report_id": "r1"}},
-        ):
+        # Row exists but is owned by a different user. Web session matches
+        # session_id, but ownership check fails → 403.
+        row = {
+            "session_id": "shared-sid",
+            "user_id": "OTHER_USER",
+            "status": "ready",
+            "report_id": "r1",
+        }
+        with patch.object(app_module.db, "get_generation_status", return_value=row):
             with api_client.session_transaction() as sess:
                 sess["user_id"] = "u1"
-                sess["session_id"] = "good-sid"
-            resp = api_client.get("/api/report_status/wrong-sid")
+                # web session does NOT match → falls through to api_owner_ok which fails too
+                sess["session_id"] = "different-sid"
+            resp = api_client.get("/api/report_status/shared-sid")
             assert resp.status_code == 403
             assert resp.get_json() == {"error": "forbidden"}
 
-    def test_returns_status_when_session_matches(self, api_client):
+    def test_returns_unknown_when_session_missing(self, api_client):
+        """Cold-worker / pre-registration race: no DB row yet → 'unknown'
+        so the CLI keeps polling instead of crashing."""
         import app as app_module
 
-        payload = {"status": "ready", "report_id": "r1"}
-        with patch.object(app_module, "_generation_status", {"good-sid": payload}):
+        with patch.object(app_module.db, "get_generation_status", return_value=None):
             with api_client.session_transaction() as sess:
                 sess["user_id"] = "u1"
                 sess["session_id"] = "good-sid"
             resp = api_client.get("/api/report_status/good-sid")
             assert resp.status_code == 200
-            assert resp.get_json() == payload
+            assert resp.get_json() == {"status": "unknown"}
+
+    def test_returns_status_when_session_matches(self, api_client):
+        import app as app_module
+        from datetime import datetime, timezone
+
+        row = {
+            "session_id": "good-sid",
+            "user_id": "u1",
+            "status": "ready",
+            "report_id": "r1",
+            "progress": 100,
+            "step": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "expires_at": datetime.now(timezone.utc),
+        }
+        with patch.object(app_module.db, "get_generation_status", return_value=row):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "u1"
+                sess["session_id"] = "good-sid"
+            resp = api_client.get("/api/report_status/good-sid")
+            assert resp.status_code == 200
+            data = resp.get_json()
+            # Internal columns + None values are stripped from the response.
+            assert data["status"] == "ready"
+            assert data["report_id"] == "r1"
+            assert data["progress"] == 100
+            assert "user_id" not in data
+            assert "expires_at" not in data
+            assert "step" not in data  # None values dropped
 
 
 class TestApiReportsAuth:

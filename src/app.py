@@ -84,6 +84,12 @@ app.config["SESSION_COOKIE_SECURE"] = _is_production  # HTTPS-only in prod
 
 csrf = CSRFProtect(app)
 
+# Module-level DB manager — used by the new generation_status / generation_events
+# multi-worker shared-state helpers. Existing code paths still create local
+# `db = get_database_manager()` bindings; both reference the same singleton.
+from database import get_database_manager as _bootstrap_get_database_manager
+db = _bootstrap_get_database_manager()
+
 # Exempt all /api/* routes from CSRF — authenticated via Clerk Bearer token.
 # Flask-WTF's csrf_protect runs as the LAST before_request hook added by init_app.
 # We replace it with a wrapper that skips /api/ paths.
@@ -290,8 +296,13 @@ def inject_user():
 @app.context_processor
 def inject_active_research_session():
     sid = session.get("session_id")
-    if sid and _generation_status.get(sid, {}).get("status") == "in_progress":
-        return {"active_research_session_id": sid}
+    if sid:
+        try:
+            row = db.get_generation_status(sid)
+            if row and row.get("status") == "in_progress":
+                return {"active_research_session_id": sid}
+        except Exception:
+            pass
     return {"active_research_session_id": None}
 
 
@@ -372,11 +383,37 @@ def _page_range(current, total, delta=2):
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
 
-# SSE step queues — keyed by session_id; cleaned up after stream completes
-_sse_queues: dict = {}
+# SSE events now live in the Postgres `generation_events` table so a producer
+# thread on one gunicorn worker can stream to a consumer connected to another.
+# Report-generation status lives in `generation_status` (see DatabaseManager
+# helpers: get_generation_status / set_generation_status / update_generation_status).
 
-# Background generation status — keyed by session_id
-_generation_status: dict = {}
+
+class _PgEventQueue:
+    """Drop-in replacement for queue.Queue used by StepEmitter / SSE producer.
+
+    `put_nowait` and `put` both append a row to `generation_events` keyed by
+    session_id. Consumers (the /stream/<id> SSE endpoint) poll via
+    db.read_generation_events_since().
+    """
+
+    __slots__ = ("session_id",)
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+
+    def _append(self, item: dict) -> None:
+        try:
+            event_type = (item or {}).get("type") or "step"
+            db.append_generation_event(self.session_id, event_type, item or {})
+        except Exception as e:
+            app.logger.warning("PgEventQueue append failed for %s: %s", self.session_id, e)
+
+    def put_nowait(self, item: dict) -> None:
+        self._append(item)
+
+    def put(self, item: dict, block: bool = True, timeout: float | None = None) -> None:
+        self._append(item)
 
 
 def _step_code_for(progress, english_step: str) -> str:
@@ -401,7 +438,9 @@ def _step_code_for(progress, english_step: str) -> str:
         return "ready"
     return "working"
 
-# Session creation timestamps for TTL eviction
+# Per-worker creation timestamps used to evict in-memory `agent_sessions`
+# (LangGraph orchestrator instances). Postgres `generation_status.expires_at`
+# handles TTL for the cross-worker shared status data.
 _session_created_at: dict = {}
 
 
@@ -410,9 +449,12 @@ def _evict_stale_sessions(max_age_seconds: int = 86400):
     stale = [sid for sid, t in _session_created_at.items() if t < cutoff]
     for sid in stale:
         agent_sessions.pop(sid, None)
-        _generation_status.pop(sid, None)
-        _sse_queues.pop(sid, None)
         _session_created_at.pop(sid, None)
+    # Clean up Postgres-side expired rows opportunistically.
+    try:
+        db.evict_stale_generation_data()
+    except Exception as e:
+        app.logger.warning("evict_stale_generation_data failed: %s", e)
 
 
 def initialize_session(session_id: str) -> OrchestratorSession:
@@ -803,9 +845,8 @@ def continue_conversation():
     conversation_history_snapshot = list(session.get("conversation_history", []))
     session_ticker = session.get("current_ticker")
 
-    # Create SSE queue and emitter
-    step_q: queue.Queue = queue.Queue()
-    _sse_queues[session_id] = step_q
+    # SSE event sink — Postgres-backed so any worker can consume the stream.
+    step_q = _PgEventQueue(session_id)
     emitter = create_emitter(step_q)
     agent.set_emitter(emitter)
 
@@ -879,33 +920,24 @@ def stream_steps(session_id: str):
     if session.get("session_id") != session_id:
         abort(403)
 
-    step_q = _sse_queues.get(session_id)
-    if step_q is None:
-        # No active stream — send immediate done with empty payload
-        def empty():
-            yield 'data: {"type": "done"}\n\n'
-
-        return Response(
-            empty(),
-            mimetype="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
-
     def event_stream():
-        try:
-            while True:
-                try:
-                    event = step_q.get(timeout=120)
-                except queue.Empty:
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Request timed out'})}\n\n"
+        last_seq = 0
+        deadline = time.time() + 120  # overall stream timeout
+        poll_interval = 0.5
+        while time.time() < deadline:
+            try:
+                events = db.read_generation_events_since(session_id, last_seq)
+            except Exception as e:
+                app.logger.warning("read_generation_events_since failed: %s", e)
+                events = []
+            for ev in events:
+                payload = ev.get("payload") or {}
+                last_seq = ev["seq"]
+                yield f"data: {json.dumps(payload)}\n\n"
+                if payload.get("type") in ("done", "error"):
                     return
-
-                yield f"data: {json.dumps(event)}\n\n"
-
-                if event.get("type") in ("done", "error"):
-                    return
-        finally:
-            _sse_queues.pop(session_id, None)
+            time.sleep(poll_interval)
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Request timed out'})}\n\n"
 
     return Response(
         event_stream(),
@@ -1123,13 +1155,16 @@ def start_generation():
             position_block += f"\nUser's goal for this research: {position_goal}"
         context_str = position_block + ("\n\n" + context_str if context_str else "")
 
-    _generation_status[session_id] = {
-        "status": "in_progress",
-        "report_id": None,
-        "progress": 5,
-        "step": "Starting...",
-        "step_code": "starting",
-    }
+    user_id = session.get("user_id") or ""
+    db.set_generation_status(
+        session_id,
+        user_id,
+        status="in_progress",
+        report_id=None,
+        progress=5,
+        step="Starting...",
+        step_code="starting",
+    )
 
     def run_generation():
         import threading as _threading
@@ -1138,32 +1173,37 @@ def start_generation():
         counter_lock = _threading.Lock()
 
         def progress_fn(progress, step):
-            status = _generation_status.get(session_id)
-            if status is None:
-                return
-            if progress is None:
-                # Subject completed — increment counter, interpolate within 20–75% band
-                with counter_lock:
-                    subject_counter["done"] += 1
-                    done = subject_counter["done"]
-                    total = subject_counter["total"] or 1
-                    pct = 20 + int((done / total) * 55)
-                    status["progress"] = min(pct, 75)
-                    status["step"] = f"Researching: {done}/{total} subjects done"
-                    status["step_code"] = "researching"
-                    status["done"] = done
-                    status["total"] = total
-            else:
-                status["progress"] = progress
-                status["step"] = step
-                status["step_code"] = _step_code_for(progress, step)
-                if progress == 20 and "subjects" in step:
-                    # Extract subject count from "Researching N subjects..."
-                    try:
-                        subject_counter["total"] = int(step.split()[1])
-                        status["total"] = subject_counter["total"]
-                    except (IndexError, ValueError):
-                        pass
+            try:
+                if progress is None:
+                    # Subject completed — increment counter, interpolate within 20–75% band
+                    with counter_lock:
+                        subject_counter["done"] += 1
+                        done = subject_counter["done"]
+                        total = subject_counter["total"] or 1
+                        pct = 20 + int((done / total) * 55)
+                        db.update_generation_status(
+                            session_id,
+                            progress=min(pct, 75),
+                            step=f"Researching: {done}/{total} subjects done",
+                            step_code="researching",
+                            done=done,
+                            total=total,
+                        )
+                else:
+                    fields = {
+                        "progress": progress,
+                        "step": step,
+                        "step_code": _step_code_for(progress, step),
+                    }
+                    if progress == 20 and "subjects" in (step or ""):
+                        try:
+                            subject_counter["total"] = int(step.split()[1])
+                            fields["total"] = subject_counter["total"]
+                        except (IndexError, ValueError):
+                            pass
+                    db.update_generation_status(session_id, **fields)
+            except Exception as e:
+                app.logger.warning("progress_fn DB update failed: %s", e)
 
         emitter = create_emitter()
         agent.set_emitter(emitter)
@@ -1174,15 +1214,21 @@ def start_generation():
                 selected_subjects=selected_subject_ids,
                 spend_budget_usd=spend_budget_usd,
             )
-            _generation_status[session_id] = {
-                "status": "ready",
-                "report_id": agent.current_report_id,
-                "progress": 100,
-                "step": "Report ready",
-                "step_code": "ready",
-            }
+            db.update_generation_status(
+                session_id,
+                status="ready",
+                report_id=agent.current_report_id,
+                progress=100,
+                step="Report ready",
+                step_code="ready",
+            )
         except Exception as e:
-            _generation_status[session_id] = {"status": "error", "message": str(e), "step_code": "error"}
+            db.update_generation_status(
+                session_id,
+                status="error",
+                message=str(e),
+                step_code="error",
+            )
         finally:
             agent.set_emitter(None)
             agent.set_progress_fn(None)
@@ -1202,17 +1248,17 @@ def api_health():
 def report_status(session_id: str):
     """Poll endpoint for background generation status."""
     user_id = session.get("user_id")
-    status = _generation_status.get(session_id)
+    row = db.get_generation_status(session_id)
 
-    # No status dict yet (race between CLI's first poll and the generate handler
+    # No row yet (race between CLI's first poll and the generate handler
     # registering state, or the cold-worker warm-up case). Return "unknown" so
     # the caller keeps polling instead of crashing with a 403. No ownership
     # information is leaked because the response is identical for any caller.
-    if status is None:
+    if row is None:
         return jsonify({"status": "unknown"})
 
     web_session_ok = session.get("session_id") == session_id
-    status_owner = status.get("_owner_user_id")
+    status_owner = row.get("user_id")
     api_owner_ok = bool(status_owner) and bool(user_id) and status_owner == user_id
 
     if not web_session_ok and not api_owner_ok:
@@ -1222,7 +1268,9 @@ def report_status(session_id: str):
         )
         return jsonify({"error": "forbidden"}), 403
 
-    return jsonify({k: v for k, v in status.items() if not k.startswith("_")})
+    # Strip internal/timestamp columns and any None values for a clean response.
+    _hidden = {"user_id", "session_id", "created_at", "updated_at", "expires_at"}
+    return jsonify({k: v for k, v in row.items() if k not in _hidden and v is not None})
 
 
 @app.route("/api/reports/generate", methods=["POST"])
@@ -1316,12 +1364,13 @@ def api_reports_generate():
     ]
 
     if not no_questions:
-        _generation_status[session_id] = {
-            "status": "needs_input",
-            "questions": pending,
-            "subjects": subjects,
-            "_owner_user_id": user_id,
-        }
+        db.set_generation_status(
+            session_id,
+            user_id,
+            status="needs_input",
+            questions=pending,
+            subjects=subjects,
+        )
         return jsonify({
             "success": True,
             "session_id": session_id,
@@ -1329,14 +1378,15 @@ def api_reports_generate():
             "subjects": subjects,
         })
 
-    _generation_status[session_id] = {
-        "status": "in_progress",
-        "report_id": None,
-        "progress": 5,
-        "step": "Starting...",
-        "step_code": "starting",
-        "_owner_user_id": user_id,
-    }
+    db.set_generation_status(
+        session_id,
+        user_id,
+        status="in_progress",
+        report_id=None,
+        progress=5,
+        step="Starting...",
+        step_code="starting",
+    )
 
     _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd)
     return jsonify({"success": True, "session_id": session_id, "questions": []})
@@ -1351,25 +1401,28 @@ def _start_report_generation_thread(session_id, agent, context_str, user_id, spe
         counter_lock = _threading.Lock()
 
         def progress_fn(progress, step):
-            status = _generation_status.get(session_id)
-            if status is None:
-                return
-            if progress is None:
-                with counter_lock:
-                    subject_counter["done"] += 1
-                    done = subject_counter["done"]
-                    total = subject_counter["total"] or 1
-                    pct = 20 + int((done / total) * 55)
-                    status["progress"] = min(pct, 75)
-                    status["step"] = f"Researching: {done}/{total} subjects done"
-            else:
-                status["progress"] = progress
-                status["step"] = step
-                if progress == 20 and "subjects" in step:
-                    try:
-                        subject_counter["total"] = int(step.split()[1])
-                    except (IndexError, ValueError):
-                        pass
+            try:
+                if progress is None:
+                    with counter_lock:
+                        subject_counter["done"] += 1
+                        done = subject_counter["done"]
+                        total = subject_counter["total"] or 1
+                        pct = 20 + int((done / total) * 55)
+                        db.update_generation_status(
+                            session_id,
+                            progress=min(pct, 75),
+                            step=f"Researching: {done}/{total} subjects done",
+                        )
+                else:
+                    fields = {"progress": progress, "step": step}
+                    if progress == 20 and "subjects" in (step or ""):
+                        try:
+                            subject_counter["total"] = int(step.split()[1])
+                        except (IndexError, ValueError):
+                            pass
+                    db.update_generation_status(session_id, **fields)
+            except Exception as e:
+                app.logger.warning("progress_fn DB update failed: %s", e)
 
         emitter = create_emitter()
         agent.set_emitter(emitter)
@@ -1390,46 +1443,46 @@ def _start_report_generation_thread(session_id, agent, context_str, user_id, spe
             # instead of a misleading "ready". Otherwise the user pays for an
             # empty report and trusts a fake success.
             if not report_id or gate_aborted:
-                _generation_status[session_id] = {
-                    "status": "error",
-                    "message": (
+                db.update_generation_status(
+                    session_id,
+                    status="error",
+                    message=(
                         f"Report generation failed: research could not produce "
                         f"usable output. Most likely the ticker was invalid or "
                         f"upstream data sources are down. Failed subjects: "
                         f"{', '.join(failed) if failed else 'all'}."
                     ),
-                    "failed_subjects": failed,
-                    "step_code": "error",
-                    "_owner_user_id": user_id,
-                }
+                    failed_subjects=failed,
+                    step_code="error",
+                )
             elif is_partial and failed:
                 # Some subjects failed but the report has content — succeed but warn.
-                _generation_status[session_id] = {
-                    "status": "ready",
-                    "report_id": report_id,
-                    "progress": 100,
-                    "step": "Report ready (partial)",
-                    "step_code": "ready",
-                    "partial": True,
-                    "failed_subjects": failed,
-                    "_owner_user_id": user_id,
-                }
+                db.update_generation_status(
+                    session_id,
+                    status="ready",
+                    report_id=report_id,
+                    progress=100,
+                    step="Report ready (partial)",
+                    step_code="ready",
+                    partial=True,
+                    failed_subjects=failed,
+                )
             else:
-                _generation_status[session_id] = {
-                    "status": "ready",
-                    "report_id": report_id,
-                    "progress": 100,
-                    "step": "Report ready",
-                    "step_code": "ready",
-                    "_owner_user_id": user_id,
-                }
+                db.update_generation_status(
+                    session_id,
+                    status="ready",
+                    report_id=report_id,
+                    progress=100,
+                    step="Report ready",
+                    step_code="ready",
+                )
         except Exception as e:
-            _generation_status[session_id] = {
-                "status": "error",
-                "message": str(e),
-                "step_code": "error",
-                "_owner_user_id": user_id,
-            }
+            db.update_generation_status(
+                session_id,
+                status="error",
+                message=str(e),
+                step_code="error",
+            )
         finally:
             agent.set_emitter(None)
             agent.set_progress_fn(None)
@@ -1455,17 +1508,17 @@ def api_reports_answer():
     if not session_id:
         return jsonify({"error": "session_id is required"}), 400
 
-    status = _generation_status.get(session_id)
+    row = db.get_generation_status(session_id)
     user_id = session.get("user_id")
 
-    if status is None:
+    if row is None:
         return jsonify({"error": "unknown session"}), 404
-    if status.get("_owner_user_id") != user_id:
+    if row.get("user_id") != user_id:
         return jsonify({"error": "forbidden"}), 403
-    if status.get("status") != "needs_input":
-        return jsonify({"error": f"session not awaiting input (status={status.get('status')})"}), 409
+    if row.get("status") != "needs_input":
+        return jsonify({"error": f"session not awaiting input (status={row.get('status')})"}), 409
 
-    questions = status.get("questions") or []
+    questions = row.get("questions") or []
 
     # Accept either a flat list of answer strings (aligned with questions order)
     # or a list of {question, answer} dicts.
@@ -1485,14 +1538,15 @@ def api_reports_answer():
     from spend_budget import get_spend_budget_usd
     spend_budget_usd = get_spend_budget_usd(agent.user_id)
 
-    _generation_status[session_id] = {
-        "status": "in_progress",
-        "report_id": None,
-        "progress": 5,
-        "step": "Starting...",
-        "step_code": "starting",
-        "_owner_user_id": user_id,
-    }
+    db.set_generation_status(
+        session_id,
+        user_id,
+        status="in_progress",
+        report_id=None,
+        progress=5,
+        step="Starting...",
+        step_code="starting",
+    )
 
     _start_report_generation_thread(
         session_id, agent, context_str, user_id, spend_budget_usd,
@@ -4320,14 +4374,6 @@ def api_holding_detail(portfolio_id: str, symbol: str):
         return jsonify({"portfolio": portfolio_data, "holding": holding, "transactions": transactions})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-try:
-    from realtime.ws_prices import register_ws_routes
-
-    register_ws_routes(app)
-except ImportError as e:
-    app.logger.warning("WebSocket /ws/prices not registered: %s", e)
 
 
 # --- Device-code auth + CLI token management ---
