@@ -4322,14 +4322,6 @@ def api_holding_detail(portfolio_id: str, symbol: str):
         return jsonify({"error": str(e)}), 500
 
 
-try:
-    from realtime.ws_prices import register_ws_routes
-
-    register_ws_routes(app)
-except ImportError as e:
-    app.logger.warning("WebSocket /ws/prices not registered: %s", e)
-
-
 # --- Device-code auth + CLI token management ---
 
 
