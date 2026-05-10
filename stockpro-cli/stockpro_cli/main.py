@@ -1,5 +1,7 @@
 """StockPro CLI entry point."""
 
+import json
+import sys
 import click
 from stockpro_cli.auth import auth
 from stockpro_cli.client import get_client
@@ -18,6 +20,7 @@ from stockpro_cli.commands.news import news
 @click.group()
 @click.option("--pretty", is_flag=True, help="Human-readable output instead of JSON")
 @click.option("--api-url", default=None, help="Override API URL")
+@click.version_option(package_name="stockpro-cli")
 @click.pass_context
 def cli(ctx, pretty, api_url):
     """StockPro CLI -- AI-powered stock research from your terminal."""
@@ -73,9 +76,57 @@ def report_status(ctx, session_id):
 
 @cli.command("delete-account")
 @click.option("--confirm", is_flag=True, required=True, help="Confirm account deletion")
+@click.option(
+    "--yes-i-mean-it",
+    is_flag=True,
+    default=False,
+    help="Required to proceed without an interactive TTY (machine mode).",
+)
 @click.pass_context
-def delete_account(ctx, confirm):
-    """Delete your account. Requires --confirm."""
+def delete_account(ctx, confirm, yes_i_mean_it):
+    """Delete your account. Destructive — requires double confirmation."""
+    if sys.stdin.isatty():
+        typed = click.prompt(
+            'This will permanently delete your account. Type "DELETE" to confirm',
+            default="",
+            show_default=False,
+        )
+        if typed.strip() != "DELETE":
+            click.echo("Aborted.", err=True)
+            raise SystemExit(1)
+    else:
+        if not yes_i_mean_it:
+            click.echo(
+                json.dumps(
+                    {"error": "non-interactive delete-account requires --yes-i-mean-it"}
+                ),
+                err=True,
+            )
+            sys.exit(2)
+
     client = get_client(ctx.obj.get("api_url"))
     data = client.delete("/api/account")
     output(data, ctx.obj.get("pretty", False))
+
+
+def main():
+    """Entry point with a top-level error handler so users never see a raw traceback."""
+    try:
+        cli(standalone_mode=True)
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        click.echo(json.dumps({"error": "interrupted"}), err=True)
+        sys.exit(130)
+    except Exception as exc:
+        click.echo(
+            json.dumps(
+                {"error": "unexpected_error", "type": type(exc).__name__, "detail": str(exc)}
+            ),
+            err=True,
+        )
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

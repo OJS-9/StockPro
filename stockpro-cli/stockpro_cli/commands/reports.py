@@ -1,9 +1,38 @@
 """Research report commands."""
 
+import json
+import sys
 import time
 import click
 from stockpro_cli.client import get_client
 from stockpro_cli.output import output
+
+
+_TRADE_TYPE_ALIASES = {
+    "investment": "Investment",
+    "invest": "Investment",
+    "long": "Investment",
+    "swing": "Swing Trade",
+    "swing trade": "Swing Trade",
+    "swingtrade": "Swing Trade",
+    "day": "Day Trade",
+    "day trade": "Day Trade",
+    "daytrade": "Day Trade",
+    "intraday": "Day Trade",
+}
+
+
+def _normalize_trade_type(ctx, param, value):
+    if value is None:
+        return value
+    norm = _TRADE_TYPE_ALIASES.get(value.strip().lower())
+    if not norm:
+        raise click.BadParameter(
+            f"{value!r} is not a valid trade type. "
+            "Use one of: Investment, Swing Trade, Day Trade "
+            "(or shortcuts: invest, swing, day)."
+        )
+    return norm
 
 
 @click.group()
@@ -66,8 +95,8 @@ def _prompt_subjects(subjects):
 @click.option(
     "--trade-type",
     required=True,
-    type=click.Choice(["Investment", "Swing Trade", "Day Trade"], case_sensitive=False),
-    help="Type of trade to research",
+    callback=_normalize_trade_type,
+    help="Investment | Swing Trade | Day Trade (also accepts: invest, swing, day)",
 )
 @click.option("--context", default="", help="Optional research context or notes")
 @click.option(
@@ -230,9 +259,34 @@ def delete_report(ctx, report_id):
 
 @reports.command("delete-all")
 @click.option("--confirm", is_flag=True, required=True, help="Confirm deletion")
+@click.option(
+    "--yes-i-mean-it",
+    is_flag=True,
+    default=False,
+    help="Required to proceed without an interactive TTY (machine mode).",
+)
 @click.pass_context
-def delete_all(ctx, confirm):
-    """Delete all reports. Requires --confirm."""
+def delete_all(ctx, confirm, yes_i_mean_it):
+    """Delete all reports. Destructive — requires double confirmation."""
+    if sys.stdin.isatty():
+        typed = click.prompt(
+            'This will delete EVERY report. Type "DELETE" to confirm',
+            default="",
+            show_default=False,
+        )
+        if typed.strip() != "DELETE":
+            click.echo("Aborted.", err=True)
+            raise SystemExit(1)
+    else:
+        if not yes_i_mean_it:
+            click.echo(
+                json.dumps(
+                    {"error": "non-interactive delete-all requires --yes-i-mean-it"}
+                ),
+                err=True,
+            )
+            sys.exit(2)
+
     client = get_client(ctx.obj.get("api_url"))
     data = client.delete("/api/reports/all")
     output(data, ctx.obj.get("pretty", False))
