@@ -38,6 +38,7 @@ class ResearchState(TypedDict):
     ]  # merged across parallel nodes
     failed_subjects: List[str]  # subject_ids that errored (set by quality_gate_node)
     is_partial_report: bool  # True if some subjects failed
+    quality_gate_aborted: bool  # True when >50% of subjects failed (gate skipped synthesis)
     report_text: str  # set by synthesis_node
     report_id: str  # set by storage_node
     user_id: Optional[int]
@@ -273,6 +274,7 @@ def quality_gate_node(state: ResearchState) -> dict:
             "research_outputs": clean_outputs,
             "failed_subjects": failed,
             "is_partial_report": True,
+            "quality_gate_aborted": True,
             "report_text": error_text,
         }
 
@@ -347,6 +349,7 @@ def run_research(
         "research_outputs": {},
         "failed_subjects": [],
         "is_partial_report": False,
+        "quality_gate_aborted": False,
         "report_text": "",
         "report_id": "",
         "user_id": user_id,

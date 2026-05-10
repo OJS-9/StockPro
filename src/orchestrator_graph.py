@@ -41,6 +41,9 @@ class OrchestratorSession:
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
+        self.last_failed_subjects: List[str] = []
+        self.last_is_partial: bool = False
+        self.last_quality_gate_aborted: bool = False
         self.pending_questions: List[Dict[str, Any]] = []
         self.conversation_history: List[Dict[str, str]] = []
         self._chat_agent = ReportChatAgent()
@@ -226,6 +229,9 @@ class OrchestratorSession:
             )
             self.current_report_id = result.get("report_id", "")
             self.last_report_text = result.get("report_text", "")
+            self.last_failed_subjects = list(result.get("failed_subjects", []) or [])
+            self.last_is_partial = bool(result.get("is_partial_report", False))
+            self.last_quality_gate_aborted = bool(result.get("quality_gate_aborted", False))
             return self.last_report_text
         except Exception as e:
             error_msg = f"Error generating report: {e}"

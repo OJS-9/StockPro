@@ -1372,14 +1372,49 @@ def _start_report_generation_thread(session_id, agent, context_str, user_id, spe
                 selected_subjects=selected_subjects,
                 spend_budget_usd=spend_budget_usd,
             )
-            _generation_status[session_id] = {
-                "status": "ready",
-                "report_id": agent.current_report_id,
-                "progress": 100,
-                "step": "Report ready",
-                "step_code": "ready",
-                "_owner_user_id": user_id,
-            }
+            failed = list(getattr(agent, "last_failed_subjects", []) or [])
+            is_partial = bool(getattr(agent, "last_is_partial", False))
+            gate_aborted = bool(getattr(agent, "last_quality_gate_aborted", False))
+            report_id = agent.current_report_id
+
+            # When the quality gate aborted (>50% subjects failed) or no report
+            # was produced at all, surface this as an error to CLI/headless callers
+            # instead of a misleading "ready". Otherwise the user pays for an
+            # empty report and trusts a fake success.
+            if not report_id or gate_aborted:
+                _generation_status[session_id] = {
+                    "status": "error",
+                    "message": (
+                        f"Report generation failed: research could not produce "
+                        f"usable output. Most likely the ticker was invalid or "
+                        f"upstream data sources are down. Failed subjects: "
+                        f"{', '.join(failed) if failed else 'all'}."
+                    ),
+                    "failed_subjects": failed,
+                    "step_code": "error",
+                    "_owner_user_id": user_id,
+                }
+            elif is_partial and failed:
+                # Some subjects failed but the report has content — succeed but warn.
+                _generation_status[session_id] = {
+                    "status": "ready",
+                    "report_id": report_id,
+                    "progress": 100,
+                    "step": "Report ready (partial)",
+                    "step_code": "ready",
+                    "partial": True,
+                    "failed_subjects": failed,
+                    "_owner_user_id": user_id,
+                }
+            else:
+                _generation_status[session_id] = {
+                    "status": "ready",
+                    "report_id": report_id,
+                    "progress": 100,
+                    "step": "Report ready",
+                    "step_code": "ready",
+                    "_owner_user_id": user_id,
+                }
         except Exception as e:
             _generation_status[session_id] = {
                 "status": "error",
