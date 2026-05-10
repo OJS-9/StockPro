@@ -430,11 +430,66 @@ function CliTokensSection() {
   const tokens = data?.tokens ?? []
   const rowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #292524', gap: 16 } as const
 
+  const codeBlockStyle = { background: '#0c0a09', border: '1px solid #292524', borderRadius: 8, padding: '10px 12px', fontFamily: 'ui-monospace, monospace', fontSize: 12.5, color: '#fafaf9', overflowX: 'auto' as const, margin: 0 }
+  const copyCmd = (cmd: string) => { navigator.clipboard.writeText(cmd); toast.success(t('common.toasts.copied')) }
+  const cmdRow = (cmd: string) => (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+      <pre style={{ ...codeBlockStyle, flex: 1, whiteSpace: 'pre-wrap' }}>{cmd}</pre>
+      <button onClick={() => copyCmd(cmd)} style={{ padding: '0 14px', borderRadius: 8, border: '1px solid #292524', background: '#232120', color: '#a8a29e', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>Copy</button>
+    </div>
+  )
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <p style={{ fontSize: 13, color: '#a8a29e', margin: 0 }}>
-        Long-lived tokens for the <code style={{ color: '#d6d3d1' }}>stockpro</code> CLI and headless agents. Set the token as <code style={{ color: '#d6d3d1' }}>STOCKPRO_TOKEN</code> or run <code style={{ color: '#d6d3d1' }}>stockpro auth device-login</code>.
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Install the CLI callout */}
+      <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#fafaf9', marginBottom: 4 }}>Install the StockPro CLI</div>
+          <div style={{ fontSize: 13, color: '#a8a29e' }}>
+            Run StockPro from your terminal — or hand it to an AI agent like Claude or Manus. Requires Python 3.10+.
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#d6d3d1', marginBottom: 6 }}>1. Install</div>
+          {cmdRow('pip install stockpro-cli')}
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#d6d3d1', marginBottom: 6 }}>2. Sign in (browser)</div>
+          {cmdRow('stockpro auth login')}
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#d6d3d1', marginBottom: 6 }}>2b. Or, headless / for AI agents</div>
+          <div style={{ fontSize: 12, color: '#a8a29e', marginBottom: 6 }}>
+            Create a token below, then export it. <code style={{ color: '#d6d3d1' }}>STOCKPRO_TOKEN</code> works in serverless environments and CI without a browser.
+          </div>
+          {cmdRow('export STOCKPRO_TOKEN=sp_...\nstockpro reports list')}
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#d6d3d1', marginBottom: 6 }}>Common commands</div>
+          <pre style={codeBlockStyle}>{`stockpro portfolio list
+stockpro reports generate --ticker AAPL --trade-type Investment
+stockpro watchlist list
+stockpro alerts list
+stockpro --help`}</pre>
+        </div>
+
+        <a href="https://pypi.org/project/stockpro-cli/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, color: '#a8a29e', textDecoration: 'underline', alignSelf: 'start' }}>
+          View on PyPI →
+        </a>
+      </div>
+
+      <div style={{ height: 1, background: '#292524' }} />
+
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#fafaf9', marginBottom: 4 }}>API tokens</div>
+        <p style={{ fontSize: 13, color: '#a8a29e', margin: 0 }}>
+          Long-lived tokens for the <code style={{ color: '#d6d3d1' }}>stockpro</code> CLI and headless agents. Set the token as <code style={{ color: '#d6d3d1' }}>STOCKPRO_TOKEN</code> or run <code style={{ color: '#d6d3d1' }}>stockpro auth device-login</code>.
+        </p>
+      </div>
 
       {newToken && (
         <div style={{ background: '#1c1917', border: '1px solid #22c55e', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
