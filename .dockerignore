@@ -11,7 +11,8 @@ __pycache__
 *.pyc
 node_modules
 stockpro-web/node_modules
-stockpro-web/dist
+# stockpro-web/dist is now built by GitHub Actions and committed to the repo,
+# so Docker should include it (Railway no longer runs the frontend build).
 data/
 audit-screenshots/
 .playwright/

@@ -1,0 +1,1 @@
+function e(e,t=`USD`,n=`en-US`){return e==null?`---`:new Intl.NumberFormat(n,{style:`currency`,currency:t}).format(e)}function t(e,t=`USD`){let n=t===`ILS`?`₪`:`$`;return e>=1e6?`${n}${(e/1e6).toFixed(1)}M`:e>=1e3?`${n}${(e/1e3).toFixed(1)}K`:`${n}${e.toFixed(0)}`}export{e as n,t};

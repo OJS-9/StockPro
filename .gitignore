@@ -18,6 +18,10 @@ htmlcov/
 build/
 develop-eggs/
 dist/
+# Exception: the React SPA's built output IS tracked. The GitHub Action
+# (.github/workflows/build-frontend.yml) builds and commits it so Railway
+# can serve a pre-rendered version without running Node at deploy time.
+!stockpro-web/dist/
 downloads/
 eggs/
 .eggs/
