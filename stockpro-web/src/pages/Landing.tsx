@@ -196,6 +196,32 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section id="faq" style={{ padding: isMobile ? '48px 20px' : '80px 64px', maxWidth: 820, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: isMobile ? 32 : 48 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>Frequently asked questions</div>
+          <h2 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em' }}>Common questions about AI stock research</h2>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {[
+            { q: 'What makes StockPro different from a normal stock screener?', a: "StockPro runs 12 specialized AI research agents in parallel — fundamentals, technicals, risk, competitive landscape, news sentiment, and more — and synthesizes their output into a structured research report. Traditional screeners filter tickers by metrics; StockPro explains the company." },
+            { q: "Which AI models power StockPro's research?", a: 'We use Google Gemini 2.5 Pro for the specialized research and synthesis agents, and Gemini 2.5 Flash for orchestration, planning, and the report-chat assistant. Agents are orchestrated through LangGraph and pull data from yfinance, Alpha Vantage, and Nimble.' },
+            { q: 'Is StockPro free to use?', a: 'Yes. StockPro has a free tier with no credit card required — you can generate research reports, track a portfolio, build watchlists, and set price alerts. Paid plans add higher report limits and premium features.' },
+            { q: 'Can AI replace a human stock analyst?', a: "No, and we don't pitch it as a replacement. AI is best at quickly synthesizing structured information — earnings, filings, news, technicals — so you can form your own view faster. Final investment decisions still require human judgment about risk tolerance, time horizon, and conviction." },
+            { q: 'How accurate is AI-generated stock research?', a: "Accuracy depends on the data sources and the model's reasoning. We ground every report in real market data (yfinance, Alpha Vantage) and live web sources, and we run a quality gate before synthesis to reject low-confidence agent outputs. Reports are informational, not investment advice." },
+            { q: 'What data sources does AI stock research use?', a: 'StockPro pulls from yfinance for fundamentals and prices, Alpha Vantage for news sentiment, CoinGecko for crypto, and the Nimble agent for live web search and Perplexity-style research. Reports cite the underlying sources where applicable.' },
+            { q: "What's the best AI tool for researching stocks?", a: 'StockPro is purpose-built for stock and crypto research — unlike general chatbots, it runs a multi-agent research pipeline that gathers fundamentals, technicals, risk, and news in parallel, then synthesizes a structured report you can chat with. Free to try at stock-pro.org.' },
+            { q: 'How do I track a stock portfolio with AI?', a: 'In StockPro, you create one or more portfolios, add transactions (buy/sell, manually or via CSV), and the app tracks cost basis, P&L, sector allocation, and history automatically. AI research is then framed against your actual positions.' },
+            { q: 'Can I get AI alerts when a stock hits a target price?', a: 'Yes. StockPro lets you set price-level alerts for any stock or crypto. When the trigger fires, you get an in-app notification and an optional Telegram message — no need to keep checking quotes.' },
+          ].map(({ q, a }) => (
+            <div key={q} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: isMobile ? 20 : 24 }}>
+              <h3 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 600, margin: 0, marginBottom: 10, color: '#fafaf9' }}>{q}</h3>
+              <p style={{ fontSize: 14, color: '#a8a29e', lineHeight: 1.65, margin: 0 }}>{a}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* CTA */}
       <section style={{ padding: isMobile ? '64px 20px' : '100px 64px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.05) 0%, transparent 65%)', pointerEvents: 'none' }} />
