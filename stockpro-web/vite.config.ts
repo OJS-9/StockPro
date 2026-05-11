@@ -1,18 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { vitePrerenderPlugin } from 'vite-prerender-plugin'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   base: mode === 'production' ? '/app/' : '/',
-  plugins: [
-    react(),
-    tailwindcss(),
-    // Bake the Landing page into dist/index.html at build time so non-JS
-    // crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content.
-    vitePrerenderPlugin({ renderTarget: '#root' }),
-  ],
+  plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
       output: {

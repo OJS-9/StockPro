@@ -151,11 +151,7 @@ export default function App() {
       </div>
     }>
     <Routes>
-      {/* Root: Landing renders unconditionally so it matches the prerendered HTML
-          baked in at build time (avoids React 19 hydration mismatch). When Clerk
-          finishes loading and confirms a signed-in user, <SignedIn> kicks in
-          and Navigate redirects to /home. Signed-out and loading states both
-          show Landing. */}
+      {/* Root: landing for unauthenticated, redirect to /home for signed in */}
       <Route
         path="/"
         element={
@@ -163,7 +159,9 @@ export default function App() {
             <SignedIn>
               <Navigate to="/home" replace />
             </SignedIn>
-            <Landing />
+            <SignedOut>
+              <Landing />
+            </SignedOut>
           </>
         }
       />
