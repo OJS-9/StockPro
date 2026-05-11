@@ -563,12 +563,17 @@ _SPA_PASSTHROUGH_PREFIXES = (
 )
 
 
+# Exact root-level paths that must be served by their own routes, not redirected to /app/.
+# These are AEO/SEO files that AI crawlers and search engines fetch from the domain root.
+_SPA_PASSTHROUGH_EXACT = ("/", "/llms.txt", "/robots.txt", "/sitemap.xml")
+
+
 @app.before_request
 def _force_spa_for_gets():
     if request.method != "GET":
         return None
     path = request.path
-    if path == "/app" or path.startswith(_SPA_PASSTHROUGH_PREFIXES):
+    if path in _SPA_PASSTHROUGH_EXACT or path == "/app" or path.startswith(_SPA_PASSTHROUGH_PREFIXES):
         return None
     if _wants_json():
         return None
