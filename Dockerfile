@@ -40,4 +40,4 @@ COPY . .
 
 EXPOSE ${PORT:-5000}
 
-CMD ["python", "src/app.py"]
+CMD ["sh", "-c", "gunicorn -w 4 --threads 2 -k gthread -t 600 --pythonpath src --bind 0.0.0.0:${PORT:-5000} --access-logfile - --access-logformat '[pid=%(p)s] \"%(r)s\" %(s)s' app:app"]
