@@ -721,19 +721,19 @@ def _render_authenticated_home():
 @app.route("/llms.txt")
 def llms_txt():
     """AI-engine index file (llmstxt.org spec). Served at the domain root for AEO."""
-    return send_from_directory("static", "llms.txt", mimetype="text/markdown; charset=utf-8")
+    return send_from_directory(app.static_folder, "llms.txt", mimetype="text/markdown; charset=utf-8")
 
 
 @app.route("/robots.txt")
 def robots_txt():
     """Robots policy — allows AI crawlers (GPTBot, PerplexityBot, ClaudeBot, etc.)."""
-    return send_from_directory("static", "robots.txt", mimetype="text/plain")
+    return send_from_directory(app.static_folder, "robots.txt", mimetype="text/plain")
 
 
 @app.route("/sitemap.xml")
 def sitemap_xml():
     """XML sitemap of public pages."""
-    return send_from_directory("static", "sitemap.xml", mimetype="application/xml")
+    return send_from_directory(app.static_folder, "sitemap.xml", mimetype="application/xml")
 
 
 @app.route("/")
