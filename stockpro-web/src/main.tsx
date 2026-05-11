@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ClerkProvider } from '@clerk/clerk-react'
@@ -29,7 +29,9 @@ function AppToaster() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
+const rootEl = document.getElementById('root')!
+
+const tree = (
   <StrictMode>
     <ClerkProvider publishableKey={CLERK_KEY}>
       <QueryClientProvider client={queryClient}>
@@ -43,5 +45,13 @@ createRoot(document.getElementById('root')!).render(
         </LanguageProvider>
       </QueryClientProvider>
     </ClerkProvider>
-  </StrictMode>,
+  </StrictMode>
 )
+
+// If vite-prerender-plugin baked Landing HTML into the root at build time,
+// hydrate over it. Otherwise (dev, or routes without prerender), do a fresh mount.
+if (rootEl.hasChildNodes()) {
+  hydrateRoot(rootEl, tree)
+} else {
+  createRoot(rootEl).render(tree)
+}
