@@ -2,7 +2,7 @@
 
 > AI-powered stock and crypto research platform. Twelve specialized AI agents produce deep research reports on any ticker in minutes, plus portfolio tracking, watchlists, and price alerts — built for retail investors who want institutional-grade analysis.
 
-StockPro generates structured research reports covering fundamentals, technicals, risk factors, competitive landscape, and news sentiment. Reports are powered by Google Gemini models orchestrated through LangGraph, using yfinance, Alpha Vantage, and Nimble data sources. After each report, users can chat with an AI grounded in the report's content (RAG) to dig deeper into any section.
+StockPro generates structured research reports covering fundamentals, technicals, risk factors, competitive landscape, and news sentiment. A team of 12 specialist AI agents researches in parallel, drawing from live market data, financial filings, and real-time web sources, before a synthesis agent merges everything into one cohesive report. After each report, users can chat with an AI grounded in the report's content (RAG) to dig deeper into any section.
 
 ## Product
 

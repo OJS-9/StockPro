@@ -108,10 +108,10 @@
         },
         {
           "@type": "Question",
-          "name": "Which AI models power StockPro's research?",
+          "name": "How does the AI research actually work?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "We use Google Gemini 2.5 Pro for the specialized research and synthesis agents, and Gemini 2.5 Flash for orchestration, planning, and the report-chat assistant. Agents are orchestrated through LangGraph and pull data from yfinance, Alpha Vantage, and Nimble."
+            "text": "A planner agent reads your ticker and picks which specialists to dispatch. Up to 12 expert agents — fundamentals, technicals, risk, competitive landscape, news sentiment, and more — research in parallel using live market data and real-time web sources. A quality gate filters weak outputs before a synthesis agent merges everything into one cohesive report."
           }
         },
         {
@@ -135,7 +135,7 @@
           "name": "How accurate is AI-generated stock research?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Accuracy depends on the data sources and the model's reasoning. We ground every report in real market data (yfinance, Alpha Vantage) and live web sources, and we run a quality gate before synthesis to reject low-confidence agent outputs. Reports are informational, not investment advice."
+            "text": "Accuracy depends on the data sources and the reasoning. Every report is grounded in real-time market data, financial filings, and live web sources, and a quality gate runs before synthesis to reject low-confidence outputs. Reports are informational, not investment advice."
           }
         },
         {
@@ -143,7 +143,7 @@
           "name": "What data sources does AI stock research use?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "StockPro pulls from yfinance for fundamentals and prices, Alpha Vantage for news sentiment, CoinGecko for crypto, and the Nimble agent for live web search and Perplexity-style research. Reports cite the underlying sources where applicable."
+            "text": "StockPro pulls live market data and fundamentals for stocks and crypto, real-time news sentiment, and live web search for context and breaking events. Reports cite the underlying sources where applicable."
           }
         },
         {

@@ -95,9 +95,9 @@ export default function About() {
           </p>
           <p style={{ fontSize: 15, color: '#a8a29e', lineHeight: 1.75, marginBottom: 16 }}>
             I'm Or Joshua Salinas — a self-taught builder. My background is a mix: I've spent serious time thinking about
-            markets and investing, taught myself Python and Flask to actually ship working software, and watched the AI
-            landscape evolve to the point where — sometime in late 2025 — products like this finally became possible for
-            one person to build end-to-end.
+            markets and investing, taught myself to code and ship real software, and watched the AI landscape evolve to
+            the point where — sometime in late 2025 — products like this finally became possible for one person to build
+            end-to-end.
           </p>
         </section>
 

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 
 const PRESS_EMAIL = 'optimusor@gmail.com'
 
-const BOILERPLATE = `StockPro (stock-pro.org) is an AI-powered stock and crypto research platform built by solo founder Or Joshua Salinas. It runs 12 specialized AI research agents in parallel — covering fundamentals, technicals, risk, competitive landscape, and news sentiment — to produce institutional-quality research reports on any ticker in under three minutes. The product also includes portfolio tracking, watchlists, and real-time price alerts. StockPro is free to use, with paid tiers for higher report volume. The platform is built on Google Gemini, LangGraph, Flask, and React, and is independently operated.`
+const BOILERPLATE = `StockPro (stock-pro.org) is an AI-powered stock and crypto research platform built by solo founder Or Joshua Salinas. It runs 12 specialized AI research agents in parallel — covering fundamentals, technicals, risk, competitive landscape, and news sentiment — to produce institutional-quality research reports on any ticker in under three minutes. The product also includes portfolio tracking, watchlists, and real-time price alerts. StockPro is free to use, with paid tiers for higher report volume. The platform is built on a modern multi-agent AI stack and is independently operated.`
 
 export default function Press() {
   const [isMobile, setIsMobile] = useState(false)
