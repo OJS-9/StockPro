@@ -4509,9 +4509,18 @@ _spa_dist = project_root / "stockpro-web" / "dist"
 @app.route("/app/", defaults={"path": ""})
 @app.route("/app/<path:path>")
 def serve_spa(path):
-    """Serve the React SPA static files."""
+    """Serve the React SPA static files.
+
+    Prerendered routes live at dist/<route>/index.html (vite-prerender-plugin
+    output) so non-JS crawlers see real content per page. We check for that
+    first, then fall back to the root index.html for client-side routing.
+    """
     if path and (_spa_dist / path).is_file():
         return send_from_directory(str(_spa_dist), path)
+    if path:
+        prerendered = _spa_dist / path / "index.html"
+        if prerendered.is_file():
+            return send_from_directory(str(_spa_dist / path), "index.html")
     index = _spa_dist / "index.html"
     if index.is_file():
         return send_from_directory(str(_spa_dist), "index.html")
