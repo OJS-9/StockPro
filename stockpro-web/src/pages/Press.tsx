@@ -27,6 +27,14 @@ export default function Press() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0c0a09', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif' }}>
+      <title>StockPro — Press Kit</title>
+      <meta name="description" content="StockPro press kit: boilerplate, brand assets, founder contact, and media inquiries." />
+      <meta property="og:title" content="StockPro — Press Kit" />
+      <meta property="og:description" content="AI-powered stock and crypto research. Press kit, brand assets, and media contact." />
+      <meta property="og:image" content="https://stock-pro.org/app/og-press.png" />
+      <meta property="og:url" content="https://stock-pro.org/press" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:image" content="https://stock-pro.org/app/og-press.png" />
       {/* NAV */}
       <nav
         style={{
