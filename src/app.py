@@ -3855,6 +3855,64 @@ def api_ticker_fundamentals(symbol: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/ticker/<symbol>/public-view")
+@login_required
+def api_ticker_public_view(symbol: str):
+    """Return cached public-view summary for a symbol (or computing placeholder)."""
+    from database import get_database_manager
+
+    sym = (symbol or "").strip().upper()
+    db = get_database_manager()
+    row = db.get_ticker_public_view(sym)
+    if not row:
+        # Not yet computed — return a placeholder so the UI can show a skeleton.
+        return jsonify({
+            "symbol": sym,
+            "status": "computing",
+            "summary_md": None,
+            "bullish_pct": None,
+            "top_themes": [],
+            "reddit_posts": [],
+            "x_posts": [],
+            "last_updated": None,
+            "error_message": None,
+        })
+    return jsonify({
+        "symbol": sym,
+        "status": row.get("status") or "ready",
+        "summary_md": row.get("summary_md"),
+        "bullish_pct": row.get("bullish_pct"),
+        "top_themes": row.get("top_themes_json") or [],
+        "reddit_posts": row.get("reddit_posts") or [],
+        "x_posts": row.get("x_posts") or [],
+        "last_updated": row["last_updated"].isoformat() if row.get("last_updated") else None,
+        "error_message": row.get("error_message"),
+    })
+
+
+@app.route("/api/ticker/<symbol>/public-view/refresh", methods=["POST"])
+@login_required
+@limiter.limit("1 per minute", key_func=get_remote_address)
+def api_ticker_public_view_refresh(symbol: str):
+    """Force a refresh of the public-view for a symbol (rate-limited)."""
+    import threading as _t
+    from watchlist.public_view_service import refresh_public_view
+    from database import get_database_manager
+
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        return jsonify({"success": False, "error": "missing symbol"}), 400
+
+    db = get_database_manager()
+    try:
+        db.upsert_ticker_public_view(sym, status="computing")
+    except Exception:
+        pass
+
+    _t.Thread(target=refresh_public_view, args=(sym,), daemon=True).start()
+    return jsonify({"success": True, "status": "computing"}), 202
+
+
 @app.route("/api/ticker/search")
 @login_required
 def api_ticker_search():
@@ -4536,8 +4594,10 @@ def main():
         )
 
     from watchlist.price_refresh import start_price_refresh
+    from watchlist.public_view_refresh import start_public_view_refresh
 
     start_price_refresh()
+    start_public_view_refresh()
 
     app.run(
         host=os.getenv("FLASK_HOST", "0.0.0.0"),

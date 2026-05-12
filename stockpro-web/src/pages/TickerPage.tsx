@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import PublicViewCard from '../components/PublicViewCard'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
@@ -204,6 +205,11 @@ export default function TickerPage() {
             </div>
             <PriceChart data={chartData} gain={gain} />
           </div>
+        </div>
+
+        {/* PUBLIC VIEW */}
+        <div style={{ marginBottom: 20 }}>
+          {symbol && <PublicViewCard symbol={symbol} />}
         </div>
 
         {/* MAIN LAYOUT */}

@@ -123,7 +123,23 @@ class WatchlistService:
 
         # Immediately fetch price into cache
         self._refresh_symbol_price(symbol, asset_type, display_name)
+
+        # Kick public view fetch in background (skip if fresh)
+        self._kick_public_view(symbol)
         return item_id
+
+    def _kick_public_view(self, symbol):
+        try:
+            import threading as _t
+            from watchlist import public_view_service as pv
+
+            if pv.is_fresh(symbol):
+                return
+            _t.Thread(
+                target=pv.refresh_public_view, args=(symbol,), daemon=True
+            ).start()
+        except Exception as e:
+            logger.warning("public_view kick failed for %s: %s", symbol, e)
 
     def remove_symbol(self, item_id):
         self.db.remove_watchlist_item(item_id)

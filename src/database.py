@@ -428,6 +428,24 @@ class DatabaseManager:
                     "ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'USD'"
                 )
 
+                # Public view (global per-symbol Reddit + X synthesis)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS ticker_public_view (
+                        symbol           VARCHAR(20)  PRIMARY KEY,
+                        summary_md       TEXT,
+                        bullish_pct      INTEGER,
+                        top_themes_json  JSONB,
+                        reddit_posts     JSONB,
+                        x_posts          JSONB,
+                        last_updated     TIMESTAMPTZ,
+                        status           VARCHAR(16),
+                        error_message    TEXT
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_ticker_public_view_last_updated ON ticker_public_view (last_updated)"
+                )
+
                 # Price alerts (user-defined targets vs cached quotes; evaluation in jobs later)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS price_alerts (
@@ -2423,6 +2441,83 @@ class DatabaseManager:
                 cur.execute("SELECT * FROM price_cache")
                 rows = cur.fetchall()
                 return {row["symbol"]: row for row in rows}
+        finally:
+            self._release(conn)
+
+    # ── Ticker Public View ───────────────────────────────────────
+
+    def upsert_ticker_public_view(
+        self,
+        symbol: str,
+        summary_md: Optional[str] = None,
+        bullish_pct: Optional[int] = None,
+        top_themes: Optional[list] = None,
+        reddit_posts: Optional[list] = None,
+        x_posts: Optional[list] = None,
+        status: str = "ready",
+        error_message: Optional[str] = None,
+    ):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO ticker_public_view (
+                        symbol, summary_md, bullish_pct, top_themes_json,
+                        reddit_posts, x_posts, status, error_message, last_updated
+                    )
+                    VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s, NOW())
+                    ON CONFLICT (symbol) DO UPDATE SET
+                        summary_md      = EXCLUDED.summary_md,
+                        bullish_pct     = EXCLUDED.bullish_pct,
+                        top_themes_json = EXCLUDED.top_themes_json,
+                        reddit_posts    = EXCLUDED.reddit_posts,
+                        x_posts         = EXCLUDED.x_posts,
+                        status          = EXCLUDED.status,
+                        error_message   = EXCLUDED.error_message,
+                        last_updated    = NOW()
+                    """,
+                    (
+                        symbol.upper(),
+                        summary_md,
+                        bullish_pct,
+                        json.dumps(top_themes) if top_themes is not None else None,
+                        json.dumps(reddit_posts) if reddit_posts is not None else None,
+                        json.dumps(x_posts) if x_posts is not None else None,
+                        status,
+                        error_message,
+                    ),
+                )
+            conn.commit()
+        finally:
+            self._release(conn)
+
+    def get_ticker_public_view(self, symbol: str) -> Optional[dict]:
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM ticker_public_view WHERE symbol = %s",
+                    (symbol.upper(),),
+                )
+                return cur.fetchone()
+        finally:
+            self._release(conn)
+
+    def get_stale_public_view_symbols(self, ttl_hours: int = 24) -> list:
+        """Return symbols whose public view is older than ttl_hours or in 'error' state."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT symbol FROM ticker_public_view
+                    WHERE last_updated IS NULL
+                       OR last_updated < NOW() - (%s || ' hours')::interval
+                    """,
+                    (str(ttl_hours),),
+                )
+                return [row["symbol"] for row in cur.fetchall()]
         finally:
             self._release(conn)
 
