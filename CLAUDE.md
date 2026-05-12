@@ -121,6 +121,17 @@ tests/                      # 40 pytest files
 - **Fonts**: Nunito (display), Inter (body). Icons: Material Symbols Outlined.
 - **Patterns**: dark cards with border-dark, sticky blurred nav, pill buttons, rounded-2xl bubbles
 
+### Build & deploy: dist/ is tracked in git
+
+CRITICAL: `stockpro-web/dist/` is **committed to the repo**. Railway serves it directly -- no Node/CI build at deploy time. `vite-prerender-plugin` runs at build time to produce a prerendered `dist/index.html` (~33KB) so AI crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content instead of an empty `<div id="root"></div>`. The plugin uses Puppeteer and hangs in Railway/GitHub Actions runners, so we build locally.
+
+**After any change to `stockpro-web/src/**` or `index.html`:**
+```bash
+cd stockpro-web && npm run build
+git add stockpro-web/dist && git commit -m "..."
+```
+Forgetting this ships code where humans see new copy but bots see the old prerendered HTML. The Landing page FAQ Q&A and the FAQPage JSON-LD in `index.html` must stay in sync (both consumed by AI engines).
+
 ## Database
 
 - PostgreSQL via Supabase. Schema defined in `database.py` (`init_schema`).
