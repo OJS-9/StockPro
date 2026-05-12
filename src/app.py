@@ -567,6 +567,19 @@ _SPA_PASSTHROUGH_PREFIXES = (
 # These are AEO/SEO files that AI crawlers and search engines fetch from the domain root.
 _SPA_PASSTHROUGH_EXACT = ("/", "/llms.txt", "/robots.txt", "/sitemap.xml")
 
+# Top-level paths that correspond to real React Router routes inside the SPA.
+# Hits here get redirected to /app<path> (preserving the path) so the SPA can render
+# the right page. Anything not in this set returns a real 404 (no soft-404).
+_SPA_ROUTE_EXACT = frozenset({
+    "/pricing", "/sign-in", "/sign-up", "/home", "/portfolio",
+    "/reports", "/watchlist", "/alerts", "/research", "/settings",
+    "/device", "/legal/terms", "/legal/privacy", "/legal/refund",
+    "/billing/return",
+})
+_SPA_ROUTE_PREFIXES = (
+    "/sign-in/", "/sign-up/", "/portfolio/", "/report/", "/chat/", "/ticker/",
+)
+
 
 @app.before_request
 def _force_spa_for_gets():
@@ -577,7 +590,9 @@ def _force_spa_for_gets():
         return None
     if _wants_json():
         return None
-    return redirect("/app/")
+    if path in _SPA_ROUTE_EXACT or path.startswith(_SPA_ROUTE_PREFIXES):
+        return redirect(f"/app{path}", code=301)
+    abort(404)
 
 
 def _safe_redirect_url(next_url, fallback="/"):
