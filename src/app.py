@@ -574,7 +574,7 @@ _SPA_ROUTE_EXACT = frozenset({
     "/pricing", "/sign-in", "/sign-up", "/home", "/portfolio",
     "/reports", "/watchlist", "/alerts", "/research", "/settings",
     "/device", "/legal/terms", "/legal/privacy", "/legal/refund",
-    "/billing/return",
+    "/billing/return", "/about", "/press",
 })
 _SPA_ROUTE_PREFIXES = (
     "/sign-in/", "/sign-up/", "/portfolio/", "/report/", "/chat/", "/ticker/",

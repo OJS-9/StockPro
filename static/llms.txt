@@ -19,6 +19,11 @@ StockPro generates structured research reports covering fundamentals, technicals
 - Price Alerts: Get notified the moment a stock or crypto hits your target.
 - Report Chat: Conversational follow-up grounded in your research reports.
 
+## About / Press
+
+- [About](https://stock-pro.org/about): Founder bio (Or Joshua Salinas), story behind StockPro, and the tech stack.
+- [Press](https://stock-pro.org/press): Press kit, brand assets, boilerplate, and media contact.
+
 ## Legal
 
 - [Terms of Service](https://stock-pro.org/legal/terms)

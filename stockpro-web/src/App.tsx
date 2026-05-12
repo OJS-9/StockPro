@@ -12,6 +12,8 @@ import SignUp from './pages/SignUp'
 import Terms from './pages/legal/Terms'
 import Privacy from './pages/legal/Privacy'
 import Refund from './pages/legal/Refund'
+import About from './pages/About'
+import Press from './pages/Press'
 
 // Lazy: all authenticated pages
 const Home = lazy(() => import('./pages/Home'))
@@ -357,6 +359,10 @@ export default function App() {
           </>
         }
       />
+
+      {/* Public authority pages */}
+      <Route path="/about" element={<About />} />
+      <Route path="/press" element={<Press />} />
 
       {/* Public legal pages */}
       <Route path="/legal/terms" element={<Terms />} />

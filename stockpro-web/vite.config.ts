@@ -11,7 +11,10 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
     // Bake the Landing page into dist/index.html at build time so non-JS
     // crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content.
-    vitePrerenderPlugin({ renderTarget: '#root' }),
+    vitePrerenderPlugin({
+      renderTarget: '#root',
+      additionalPrerenderRoutes: ['/about', '/press'],
+    }),
   ],
   build: {
     rollupOptions: {

@@ -239,7 +239,9 @@ export default function Landing() {
       {/* FOOTER */}
       <footer style={{ borderTop: '1px solid #292524', padding: isMobile ? '24px 20px' : '32px 64px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 14 : 0, alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 700, color: '#d6d3d1' }}>StockPro</span>
-        <div style={{ display: 'flex', gap: 24 }}>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Link to="/about" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>About</Link>
+          <Link to="/press" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Press</Link>
           <Link to="/legal/privacy" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Privacy</Link>
           <Link to="/legal/terms" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Terms</Link>
           <Link to="/legal/refund" style={{ fontSize: 13, color: '#a8a29e', textDecoration: 'none' }}>Refund</Link>
