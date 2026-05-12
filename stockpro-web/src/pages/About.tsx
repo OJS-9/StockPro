@@ -118,17 +118,17 @@ export default function About() {
           </p>
         </section>
 
-        {/* STACK */}
+        {/* HOW IT WORKS */}
         <section style={{ marginBottom: 48 }}>
           <h2 style={{ fontFamily: 'Nunito, sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 16 }}>
-            How it's built
+            How it works
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             {[
-              { label: 'AI agents', value: 'Google Gemini 2.5 Pro + LangGraph orchestration' },
-              { label: 'Backend', value: 'Python, Flask, PostgreSQL (Supabase)' },
-              { label: 'Frontend', value: 'React 19, Vite, TypeScript, Tailwind v4' },
-              { label: 'Data', value: 'yfinance, Alpha Vantage, CoinGecko, Nimble' },
+              { label: 'The team', value: 'A team of 12 specialist AI agents — fundamentals, technicals, risk, competitive landscape, news sentiment, and more — working in parallel on every ticker.' },
+              { label: 'Grounded in real data', value: 'Every report pulls from live market data, financial filings, and real-time web sources. No vibes. No hallucinated numbers.' },
+              { label: 'Three minutes, end to end', value: 'A planner picks the right specialists, they research in parallel, a quality gate filters weak output, and a synthesis agent merges it into one report.' },
+              { label: 'Framed around you', value: "When you've connected a portfolio, the research is framed against your actual positions — not a generic write-up." },
             ].map(({ label, value }) => (
               <div key={label} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 12, padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#22c55e', marginBottom: 6 }}>{label}</div>
