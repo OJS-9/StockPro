@@ -125,10 +125,10 @@ class WatchlistService:
         self._refresh_symbol_price(symbol, asset_type, display_name)
 
         # Kick public view fetch in background (skip if fresh)
-        self._kick_public_view(symbol)
+        self._kick_public_view(symbol, display_name)
         return item_id
 
-    def _kick_public_view(self, symbol):
+    def _kick_public_view(self, symbol, display_name=None):
         try:
             import threading as _t
             from watchlist import public_view_service as pv
@@ -136,7 +136,9 @@ class WatchlistService:
             if pv.is_fresh(symbol):
                 return
             _t.Thread(
-                target=pv.refresh_public_view, args=(symbol,), daemon=True
+                target=pv.refresh_public_view,
+                args=(symbol, display_name),
+                daemon=True,
             ).start()
         except Exception as e:
             logger.warning("public_view kick failed for %s: %s", symbol, e)
