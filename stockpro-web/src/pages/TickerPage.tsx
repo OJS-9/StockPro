@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import PublicViewCard from '../components/PublicViewCard'
 import Skeleton from '../components/Skeleton'
 import { useApiClient } from '../api/client'
-
-const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-const fmtCompact = (n: number) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
+import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useLanguage } from '../LanguageContext'
+import { formatCurrency, formatCompact } from '../utils/currency'
 
 const RANGES = ['1D', '1W', '1M', '3M', '1Y']
 
@@ -41,6 +42,9 @@ function PriceChart({ data, gain = true }: { data: number[]; gain?: boolean }) {
 export default function TickerPage() {
   const { symbol } = useParams()
   const api = useApiClient()
+  const { isMobile } = useBreakpoint()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [range, setRange] = useState('3M')
 
   const { data: hist } = useQuery({
@@ -97,13 +101,13 @@ export default function TickerPage() {
   const industry = fundamentals.industry || ''
 
   const statItems = [
-    { label: 'Market Cap', val: fundamentals.market_cap ? fmtCompact(fundamentals.market_cap) : '-' },
+    { label: 'Market Cap', val: fundamentals.market_cap ? formatCompact(fundamentals.market_cap, fundamentals.currency ?? 'USD') : '-' },
     { label: 'P/E Ratio', val: fundamentals.pe_ratio != null ? `${Number(fundamentals.pe_ratio).toFixed(1)}x` : '-' },
-    { label: 'EPS (TTM)', val: fundamentals.eps != null ? `$${Number(fundamentals.eps).toFixed(2)}` : '-' },
-    { label: 'Revenue (TTM)', val: fundamentals.revenue ? fmtCompact(fundamentals.revenue) : '-' },
+    { label: 'EPS (TTM)', val: fundamentals.eps != null ? formatCurrency(Number(fundamentals.eps), fundamentals.currency ?? 'USD') : '-' },
+    { label: 'Revenue (TTM)', val: fundamentals.revenue ? formatCompact(fundamentals.revenue, fundamentals.currency ?? 'USD') : '-' },
     { label: 'Gross Margin', val: fundamentals.gross_margin != null ? `${(fundamentals.gross_margin * 100).toFixed(1)}%` : '-', highlight: fundamentals.gross_margin != null && fundamentals.gross_margin > 0.4 },
-    { label: '52W Range', val: fundamentals.week_52_high && fundamentals.week_52_low ? `$${Number(fundamentals.week_52_low).toFixed(0)} – $${Number(fundamentals.week_52_high).toFixed(0)}` : '-', small: true },
-    { label: 'Avg Volume', val: fundamentals.avg_volume ? fmtCompact(fundamentals.avg_volume) : '-' },
+    { label: '52W Range', val: fundamentals.week_52_high && fundamentals.week_52_low ? `${formatCurrency(Number(fundamentals.week_52_low), fundamentals.currency ?? 'USD')} – ${formatCurrency(Number(fundamentals.week_52_high), fundamentals.currency ?? 'USD')}` : '-', small: true },
+    { label: 'Avg Volume', val: fundamentals.avg_volume ? formatCompact(fundamentals.avg_volume, fundamentals.currency ?? 'USD') : '-' },
     { label: 'Beta', val: fundamentals.beta != null ? Number(fundamentals.beta).toFixed(2) : '-' },
     { label: 'Dividend', val: fundamentals.dividend_yield != null ? `${(fundamentals.dividend_yield * 100).toFixed(2)}%` : '-', muted: !fundamentals.dividend_yield },
   ]
@@ -111,7 +115,7 @@ export default function TickerPage() {
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '36px 48px 80px' }}>
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {fundLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -127,13 +131,18 @@ export default function TickerPage() {
 
         {!fundLoading && <>
         {/* TICKER HEADER */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 16 : 0, marginBottom: 32 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 28 : 36, fontWeight: 700, letterSpacing: '-0.03em' }}>{symbol}</span>
               <div>
                 <div style={{ fontSize: 15, color: '#a8a29e' }}>{name !== symbol ? name : ''}</div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {fundamentals.exchange && (
+                    <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #292524', color: '#d6d3d1', background: '#1c1917' }}>
+                      {fundamentals.exchange}
+                    </span>
+                  )}
                   {sector && (
                     <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 999, border: '1px solid #292524', color: '#a8a29e', background: '#1c1917' }}>
                       {sector}
@@ -148,20 +157,20 @@ export default function TickerPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-              <span style={{ fontFamily: 'Nunito, sans-serif', fontSize: 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {price ? fmt(price) : '-'}
+              <span style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 32 : 44, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                {price ? formatCurrency(price, fundamentals.currency ?? 'USD') : '-'}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
                 <span style={{ fontSize: 18, fontWeight: 600, color: gain ? '#22c55e' : '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
-                  {gain ? '+' : ''}{fmt(changeAbs)}
+                  <bdi>{gain ? '+' : ''}{formatCurrency(changeAbs, fundamentals.currency ?? 'USD')}</bdi>
                 </span>
                 <span style={{ fontSize: 15, fontWeight: 500, color: gain ? '#22c55e' : '#ef4444', fontVariantNumeric: 'tabular-nums' }}>
-                  ({gain ? '+' : ''}{changePct}%)
+                  <bdi>({gain ? '+' : ''}{changePct}%)</bdi>
                 </span>
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
+          <div style={{ display: 'flex', gap: 8, paddingTop: 8, flexWrap: 'wrap' }}>
             <button style={{ background: 'transparent', color: '#a8a29e', fontSize: 13, fontWeight: 500, padding: '9px 16px', borderRadius: 8, border: '1px solid #292524', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <Icon name="visibility" size={16} /> Watch
             </button>
@@ -170,7 +179,7 @@ export default function TickerPage() {
             </button>
             <Link
               to={`/research?ticker=${symbol}`}
-              style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', fontFamily: 'Nunito, sans-serif' }}
+              style={{ background: '#d6d3d1', color: '#0c0a09', fontSize: 14, fontWeight: 700, padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', fontFamily: 'Nunito, "Secular One", Heebo, sans-serif' }}
             >
               <Icon name="auto_awesome" size={18} /> Research {symbol}
             </Link>
@@ -198,9 +207,14 @@ export default function TickerPage() {
           </div>
         </div>
 
+        {/* PUBLIC VIEW */}
+        <div style={{ marginBottom: 20 }}>
+          {symbol && <PublicViewCard symbol={symbol} />}
+        </div>
+
         {/* MAIN LAYOUT */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: 20, alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
 
             {/* KEY STATISTICS */}
             <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden' }}>
@@ -208,11 +222,11 @@ export default function TickerPage() {
                 <Icon name="bar_chart" size={16} style={{ color: '#a8a29e' }} />
                 Key Statistics
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
-                {statItems.map(({ label, val, highlight, small, muted }, i) => (
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: 0, background: '#292524' }}>
+                {statItems.map(({ label, val, highlight, small, muted }) => (
                   <div key={label} style={{ background: '#1c1917', padding: '14px 18px' }}>
                     <div style={{ fontSize: 10.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>
+                    <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: small ? 13 : 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: highlight ? '#22c55e' : muted ? '#a8a29e' : '#fafaf9' }}>
                       {val}
                     </div>
                   </div>
@@ -244,7 +258,7 @@ export default function TickerPage() {
                 tickerReports.slice(0, 4).map((r: any) => {
                   const rid = r.report_id || r.id
                   const title = r.title || `${symbol} Research Report`
-                  const date = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+                  const date = r.created_at ? new Date(r.created_at).toLocaleDateString(locale, { month: 'short', day: 'numeric' }) : ''
                   const type = r.trade_type || r.type || ''
                   return (
                     <Link
@@ -283,20 +297,20 @@ export default function TickerPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Shares held</div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600 }}>{position.shares}</div>
+                      <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600 }}>{position.shares}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Mkt Value</div>
-                      <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 600 }}>{fmt(position.market_value)}</div>
+                      <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 600 }}>{formatCurrency(position.market_value, fundamentals.currency ?? 'USD')}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Avg Cost</div>
-                      <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{fmt(position.avg_cost)}</div>
+                      <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(position.avg_cost, fundamentals.currency ?? 'USD')}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a8a29e', marginBottom: 4 }}>Total Return</div>
                       <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: position.pnl >= 0 ? '#22c55e' : '#ef4444' }}>
-                        {position.pnl >= 0 ? '+' : ''}{fmt(position.pnl)} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct}%)
+                        <bdi>{position.pnl >= 0 ? '+' : ''}{formatCurrency(position.pnl, fundamentals.currency ?? 'USD')} ({position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct}%)</bdi>
                       </div>
                     </div>
                   </div>

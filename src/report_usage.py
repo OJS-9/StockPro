@@ -1,5 +1,6 @@
-"""Free-tier monthly research report quota (per user, per calendar month)."""
+"""Per-user monthly research report quota (tier-aware)."""
 
+import math
 import os
 from datetime import datetime, timezone
 from typing import Optional, Tuple, Any
@@ -29,14 +30,20 @@ def quota_exceeded_for_user(
     """
     Returns (exceeded, limit, used).
 
-    If limit is 0, never exceeded (free enforcement off).
-    Pro users never exceeded.
+    Limit comes from the user's tier (tiers.TIER_LIMITS). Ultra = unlimited.
+    A free-tier global override of 0 disables enforcement entirely.
     """
-    limit = get_free_tier_report_limit()
-    if limit == 0:
+    # Hard global off-switch (env)
+    if get_free_tier_report_limit() == 0:
         return False, 0, 0
-    if db.user_is_pro(user_id):
-        return False, limit, 0
+
+    from tiers import get_limit
+
+    limit_f = get_limit(user_id, "reports_per_month")
+    if limit_f == math.inf:
+        return False, -1, 0
+
+    limit = int(limit_f)
     p = period or current_period_month()
     used = db.get_report_usage_count(user_id, p)
     return used >= limit, limit, used

@@ -1,5 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Secular+One&display=swap');
 @import "tailwindcss";
+
+/* Tailwind v4 dir variants — write `rtl:ms-2` / `ltr:pl-4` when logical
+   properties aren't enough (e.g. icon flips, transforms). */
+@custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *));
+@custom-variant ltr (&:where([dir="ltr"], [dir="ltr"] *));
 
 @theme {
   --color-primary: #d6d3d1;
@@ -9,14 +14,17 @@
   --color-accent-up: #22c55e;
   --color-accent-down: #ef4444;
 
-  --font-display: 'Nunito', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  /* Hebrew fallbacks: Secular One (display, single weight 400) pairs with
+     Heebo (body, full weight range). Latin glyphs still resolve to Nunito /
+     Inter first; Hebrew glyphs fall through to Secular One / Heebo. */
+  --font-display: 'Nunito', 'Secular One', 'Heebo', sans-serif;
+  --font-body: 'Inter', 'Heebo', sans-serif;
 }
 
 body {
   background-color: #0c0a09;
   color: white;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', 'Heebo', sans-serif;
   -webkit-font-smoothing: antialiased;
   margin: 0;
 }
@@ -40,7 +48,14 @@ body {
 }
 
 input, textarea, select, button {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', 'Heebo', sans-serif;
+}
+
+/* Keep tickers / Latin codes (AAPL, BTC-USD) LTR inside Hebrew sentences.
+   Use <bdi> in JSX, or apply this class. */
+.bidi-isolate {
+  unicode-bidi: isolate;
+  direction: ltr;
 }
 
 a {
@@ -53,4 +68,11 @@ a {
   vertical-align: middle;
   line-height: 1;
   user-select: none;
+}
+
+/* Mirror directional icons (chevrons, arrows, send, logout) under RTL so a
+   "forward" arrow still visually points the way Hebrew readers move. Applied
+   centrally by Icon.tsx — never hand-flip these per call site. */
+[dir="rtl"] .icon-directional {
+  transform: scaleX(-1);
 }

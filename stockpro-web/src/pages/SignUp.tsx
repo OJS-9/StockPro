@@ -1,14 +1,20 @@
 import { SignUp as ClerkSignUp } from '@clerk/clerk-react'
+import { Link } from 'react-router'
+import { Trans, useTranslation } from 'react-i18next'
 import Icon from '../components/Icon'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 export default function SignUp() {
+  const { isMobile } = useBreakpoint()
+  const { t } = useTranslation()
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
       {/* Left branding panel */}
+      {!isMobile && (
       <div
         style={{
           background: '#1c1917',
-          borderRight: '1px solid #292524',
+          borderInlineEnd: '1px solid #292524',
           padding: 48,
           display: 'flex',
           flexDirection: 'column',
@@ -21,7 +27,7 @@ export default function SignUp() {
           style={{
             position: 'absolute',
             top: -120,
-            right: -120,
+            insetInlineEnd: -120,
             width: 440,
             height: 440,
             borderRadius: '50%',
@@ -29,14 +35,14 @@ export default function SignUp() {
             pointerEvents: 'none',
           }}
         />
-        <div style={{ fontFamily: 'Nunito, sans-serif', fontSize: 20, fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>
+        <div style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 20, fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>
           StockPro
         </div>
 
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h2
             style={{
-              fontFamily: 'Nunito, sans-serif',
+              fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
               fontSize: 38,
               fontWeight: 600,
               lineHeight: 1.15,
@@ -67,14 +73,15 @@ export default function SignUp() {
 
         <div style={{ fontSize: 12, color: '#a8a29e' }}>&copy; 2026 StockPro. Built for retail investors.</div>
       </div>
+      )}
 
       {/* Right auth panel */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: isMobile ? '24px 16px' : 48, background: isMobile ? '#1c1917' : undefined }}>
         <ClerkSignUp
           routing="path"
-          path="/sign-up"
-          signInUrl="/sign-in"
-          afterSignUpUrl="/home"
+          path={`${import.meta.env.BASE_URL}sign-up`}
+          signInUrl={`${import.meta.env.BASE_URL}sign-in`}
+          afterSignUpUrl={`${import.meta.env.BASE_URL}home`}
           appearance={{
             variables: {
               colorBackground: '#1c1917',
@@ -85,11 +92,11 @@ export default function SignUp() {
               colorPrimary: '#d6d3d1',
               colorDanger: '#ef4444',
               borderRadius: '10px',
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: 'Inter, Heebo, sans-serif',
             },
             elements: {
               card: { border: 'none', boxShadow: 'none', background: 'transparent' },
-              headerTitle: { fontFamily: 'Nunito, sans-serif', fontWeight: 600 },
+              headerTitle: { fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 600 },
               formButtonPrimary: { background: '#d6d3d1', color: '#0c0a09', fontWeight: 600 },
               socialButtonsBlockButton: {
                 background: '#292524',
@@ -119,6 +126,16 @@ export default function SignUp() {
             },
           }}
         />
+        <p style={{ fontSize: 12, color: '#a8a29e', maxWidth: 360, textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+          <Trans
+            i18nKey="legal.signupAgreement"
+            t={t}
+            components={{
+              terms: <Link to="/legal/terms" style={{ color: '#d6d3d1', textDecoration: 'underline' }} />,
+              privacy: <Link to="/legal/privacy" style={{ color: '#d6d3d1', textDecoration: 'underline' }} />,
+            }}
+          />
+        </p>
       </div>
     </div>
   )

@@ -10,6 +10,11 @@ import AdminGuard from './components/AdminGuard'
 import Landing from './pages/Landing'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
+import Terms from './pages/legal/Terms'
+import Privacy from './pages/legal/Privacy'
+import Refund from './pages/legal/Refund'
+import About from './pages/About'
+import Press from './pages/Press'
 
 // Lazy: all authenticated pages
 const Home = lazy(() => import('./pages/Home'))
@@ -33,6 +38,9 @@ const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminStats = lazy(() => import('./pages/admin/Stats'))
 const AdminLogs = lazy(() => import('./pages/admin/Logs'))
 const AdminConfig = lazy(() => import('./pages/admin/Config'))
+const DevicePage = lazy(() => import('./pages/DevicePage'))
+const Pricing = lazy(() => import('./pages/Pricing'))
+const BillingReturn = lazy(() => import('./pages/BillingReturn'))
 
 /**
  * Runs at app level (never unmounts on navigation) so toast dedup works.
@@ -147,12 +155,16 @@ export default function App() {
     <SignedIn><NotificationListener /><DataPrefetcher /></SignedIn>
     <Suspense fallback={
       <div style={{ background: '#0c0a09', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <div style={{ fontSize: 28, fontFamily: 'Nunito, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
+        <div style={{ fontSize: 28, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
         <div style={{ width: 32, height: 32, border: '3px solid #292524', borderTopColor: '#d6d3d1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       </div>
     }>
     <Routes>
-      {/* Root: landing for unauthenticated, redirect to /home for signed in */}
+      {/* Root: Landing renders unconditionally so it matches the prerendered HTML
+          baked in at build time (avoids React 19 hydration mismatch). When Clerk
+          finishes loading and confirms a signed-in user, <SignedIn> kicks in
+          and Navigate redirects to /home. Signed-out and loading states both
+          show Landing. */}
       <Route
         path="/"
         element={
@@ -160,9 +172,7 @@ export default function App() {
             <SignedIn>
               <Navigate to="/home" replace />
             </SignedIn>
-            <SignedOut>
-              <Landing />
-            </SignedOut>
+            <Landing />
           </>
         }
       />
@@ -301,9 +311,19 @@ export default function App() {
       <Route
         path="/settings"
         element={
-          <SignedIn>
-            <Settings />
-          </SignedIn>
+          <>
+            <SignedIn>
+              <Settings />
+            </SignedIn>
+            <SignedOut>
+              <Navigate
+                to={`/sign-in?redirect_url=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/settings'
+                )}`}
+                replace
+              />
+            </SignedOut>
+          </>
         }
       />
 
@@ -324,6 +344,55 @@ export default function App() {
         <Route path="logs" element={<AdminLogs />} />
         <Route path="config" element={<AdminConfig />} />
       </Route>
+
+      <Route
+        path="/device"
+        element={
+          <>
+            <SignedIn>
+              <DevicePage />
+            </SignedIn>
+            <SignedOut>
+              <Navigate
+                to={`/sign-in?redirect_url=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/device'
+                )}`}
+                replace
+              />
+            </SignedOut>
+          </>
+        }
+      />
+
+      <Route path="/pricing" element={<Pricing />} />
+
+      <Route
+        path="/billing/return"
+        element={
+          <>
+            <SignedIn>
+              <BillingReturn />
+            </SignedIn>
+            <SignedOut>
+              <Navigate
+                to={`/sign-in?redirect_url=${encodeURIComponent(
+                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/billing/return'
+                )}`}
+                replace
+              />
+            </SignedOut>
+          </>
+        }
+      />
+
+      {/* Public authority pages */}
+      <Route path="/about" element={<About />} />
+      <Route path="/press" element={<Press />} />
+
+      {/* Public legal pages */}
+      <Route path="/legal/terms" element={<Terms />} />
+      <Route path="/legal/privacy" element={<Privacy />} />
+      <Route path="/legal/refund" element={<Refund />} />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />

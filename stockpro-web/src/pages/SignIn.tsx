@@ -1,14 +1,21 @@
 import { SignIn as ClerkSignIn } from '@clerk/clerk-react'
+import { useSearchParams } from 'react-router'
 import Icon from '../components/Icon'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 export default function SignIn() {
+  const [params] = useSearchParams()
+  const redirectParam = params.get('redirect_url')
+  const afterSignIn = redirectParam || `${import.meta.env.BASE_URL}home`
+  const { isMobile } = useBreakpoint()
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
       {/* Left branding panel */}
+      {!isMobile && (
       <div
         style={{
           background: '#1c1917',
-          borderRight: '1px solid #292524',
+          borderInlineEnd: '1px solid #292524',
           padding: 48,
           display: 'flex',
           flexDirection: 'column',
@@ -22,7 +29,7 @@ export default function SignIn() {
             content: '',
             position: 'absolute',
             top: -120,
-            right: -120,
+            insetInlineEnd: -120,
             width: 440,
             height: 440,
             borderRadius: '50%',
@@ -32,7 +39,7 @@ export default function SignIn() {
         />
         <div
           style={{
-            fontFamily: 'Nunito, sans-serif',
+            fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
             fontSize: 20,
             fontWeight: 700,
             color: '#d6d3d1',
@@ -45,7 +52,7 @@ export default function SignIn() {
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h2
             style={{
-              fontFamily: 'Nunito, sans-serif',
+              fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
               fontSize: 38,
               fontWeight: 600,
               lineHeight: 1.15,
@@ -78,14 +85,16 @@ export default function SignIn() {
           &copy; 2026 StockPro. Built for retail investors.
         </div>
       </div>
+      )}
 
       {/* Right auth panel */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '24px 16px' : 48, background: isMobile ? '#1c1917' : undefined }}>
         <ClerkSignIn
           routing="path"
-          path="/sign-in"
-          signUpUrl="/sign-up"
-          afterSignInUrl="/home"
+          path={`${import.meta.env.BASE_URL}sign-in`}
+          signUpUrl={`${import.meta.env.BASE_URL}sign-up`}
+          afterSignInUrl={afterSignIn}
+          forceRedirectUrl={afterSignIn}
           appearance={{
             variables: {
               colorBackground: '#1c1917',
@@ -96,11 +105,11 @@ export default function SignIn() {
               colorPrimary: '#d6d3d1',
               colorDanger: '#ef4444',
               borderRadius: '10px',
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: 'Inter, Heebo, sans-serif',
             },
             elements: {
               card: { border: 'none', boxShadow: 'none', background: 'transparent' },
-              headerTitle: { fontFamily: 'Nunito, sans-serif', fontWeight: 600 },
+              headerTitle: { fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 600 },
               formButtonPrimary: {
                 background: '#d6d3d1',
                 color: '#0c0a09',

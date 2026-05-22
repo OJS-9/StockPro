@@ -50,7 +50,7 @@ class PortfolioService:
         name: str = "My Portfolio",
         description: str = "",
         user_id: Optional[str] = None,
-        track_cash: bool = False,
+        track_cash: bool = True,
         cash_balance: float = 0.0,
     ) -> str:
         """
@@ -91,6 +91,45 @@ class PortfolioService:
         if cash_balance < 0:
             raise ValueError("Cash balance cannot be negative")
         self.db.update_cash_balance(portfolio_id, cash_balance)
+
+    def deposit_cash(self, portfolio_id: str, amount: float) -> float:
+        """
+        Deposit cash into a portfolio. Returns the new balance.
+
+        Raises:
+            ValueError: If amount is not positive
+        """
+        if amount <= 0:
+            raise ValueError("Deposit amount must be positive")
+        portfolio = self.get_portfolio(portfolio_id)
+        if not portfolio:
+            raise ValueError("Portfolio not found")
+        new_balance = float(portfolio.get("cash_balance", 0)) + amount
+        self.db.update_cash_balance(portfolio_id, new_balance)
+        return new_balance
+
+    def withdraw_cash(self, portfolio_id: str, amount: float) -> float:
+        """
+        Withdraw cash from a portfolio. Returns the new balance.
+
+        Raises:
+            ValueError: If amount is not positive or exceeds balance
+        """
+        if amount <= 0:
+            raise ValueError("Withdrawal amount must be positive")
+        portfolio = self.get_portfolio(portfolio_id)
+        if not portfolio:
+            raise ValueError("Portfolio not found")
+        current_balance = float(portfolio.get("cash_balance", 0))
+        if amount > current_balance:
+            raise ValueError("Insufficient cash balance")
+        new_balance = current_balance - amount
+        self.db.update_cash_balance(portfolio_id, new_balance)
+        return new_balance
+
+    def enable_cash_tracking(self, portfolio_id: str) -> None:
+        """Enable cash tracking for a portfolio."""
+        self.db.enable_cash_tracking(portfolio_id)
 
     def get_portfolio(self, portfolio_id: str) -> Optional[Dict]:
         """
@@ -234,15 +273,19 @@ class PortfolioService:
             ).start()
 
         # Apply prices to holdings
+        from currency_utils import detect_currency, convert_to_usd
+
         for h in stocks:
             price = price_map.get(h["symbol"])
             h["current_price"] = price if price is not None else Decimal("0")
             h["price_available"] = price is not None
+            h["currency"] = detect_currency(h["symbol"])
 
         for h in cryptos:
             price = price_map.get(h["symbol"])
             h["current_price"] = price if price is not None else Decimal("0")
             h["price_available"] = price is not None
+            h["currency"] = "USD"
 
         # Calculate market value and gains for all holdings
         for h in holdings:
@@ -558,15 +601,50 @@ class PortfolioService:
 
         holdings = self.get_holdings(portfolio_id, with_prices=with_prices)
 
+        from currency_utils import convert_to_usd, detect_currency
+
+        # Auto-detect display currency: ILS only when every holding is ILS and
+        # any tracked cash balance is zero (cash is USD-only for now, so a
+        # non-zero USD balance forces the aggregate back to USD).
+        if (
+            holdings
+            and (not track_cash or cash_balance == 0)
+            and all(
+                (h.get("currency") or detect_currency(h.get("symbol", ""))) == "ILS"
+                for h in holdings
+            )
+        ):
+            display_currency = "ILS"
+        else:
+            display_currency = "USD"
+
+        def _to_display(amount: Decimal, currency: str) -> Decimal:
+            if display_currency == "ILS":
+                # All holdings already ILS in this branch
+                return amount
+            return convert_to_usd(amount, currency)
+
         total_cost_basis = sum(
-            h.get("total_cost_basis", Decimal("0")) for h in holdings
+            _to_display(
+                Decimal(str(h.get("total_cost_basis", 0) or 0)),
+                h.get("currency") or detect_currency(h.get("symbol", "")),
+            )
+            for h in holdings
         )
         if track_cash:
             total_cost_basis += cash_balance
 
         if with_prices:
+            for h in holdings:
+                mv = h.get("market_value")
+                cur = h.get("currency", "USD")
+                if mv is not None:
+                    h["market_value_usd"] = _to_display(mv, cur)
+                else:
+                    h["market_value_usd"] = mv
+
             total_market_value = sum(
-                h.get("market_value") or Decimal("0") for h in holdings
+                h.get("market_value_usd") or Decimal("0") for h in holdings
             )
             if track_cash:
                 total_market_value += cash_balance
@@ -577,12 +655,12 @@ class PortfolioService:
                 else Decimal("0")
             )
             stock_value = sum(
-                h.get("market_value") or Decimal("0")
+                h.get("market_value_usd") or Decimal("0")
                 for h in holdings
                 if h["asset_type"] == "stock"
             )
             crypto_value = sum(
-                h.get("market_value") or Decimal("0")
+                h.get("market_value_usd") or Decimal("0")
                 for h in holdings
                 if h["asset_type"] == "crypto"
             )
@@ -611,6 +689,7 @@ class PortfolioService:
         result = {
             "portfolio_id": portfolio_id,
             "prices_loaded": with_prices,
+            "display_currency": display_currency,
             "total_cost_basis": total_cost_basis,
             "total_market_value": total_market_value,
             "total_unrealized_gain": total_unrealized_gain,

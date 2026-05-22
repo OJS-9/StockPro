@@ -36,10 +36,14 @@ class OrchestratorSession:
     def __init__(self, user_id: Optional[int] = None):
         self.user_id = user_id
         self.username: Optional[str] = None
+        self.language: Optional[str] = None
         self.current_ticker: Optional[str] = None
         self.current_trade_type: Optional[str] = None
         self.current_report_id: Optional[str] = None
         self.last_report_text: Optional[str] = None
+        self.last_failed_subjects: List[str] = []
+        self.last_is_partial: bool = False
+        self.last_quality_gate_aborted: bool = False
         self.pending_questions: List[Dict[str, Any]] = []
         self.conversation_history: List[Dict[str, str]] = []
         self._chat_agent = ReportChatAgent()
@@ -58,7 +62,7 @@ class OrchestratorSession:
         self.current_trade_type = trade_type
         self.conversation_history = []
 
-        system_instructions = get_orchestration_instructions(ticker, trade_type)
+        system_instructions = get_orchestration_instructions(ticker, trade_type, self.language or "en")
         user_message = (
             f"I want to research {ticker} for a {trade_type} strategy. "
             "Please help me create a fundamental research report."
@@ -121,6 +125,7 @@ class OrchestratorSession:
                     parent_config=config,
                     username=session.username,
                     progress_fn=session._progress_fn,
+                    language=session.language,
                 )
                 session.current_report_id = result.get("report_id", "")
                 session.last_report_text = result.get("report_text", "")
@@ -220,9 +225,13 @@ class OrchestratorSession:
                 spend_budget_usd=spend_budget_usd,
                 username=self.username,
                 progress_fn=self._progress_fn,
+                language=self.language,
             )
             self.current_report_id = result.get("report_id", "")
             self.last_report_text = result.get("report_text", "")
+            self.last_failed_subjects = list(result.get("failed_subjects", []) or [])
+            self.last_is_partial = bool(result.get("is_partial_report", False))
+            self.last_quality_gate_aborted = bool(result.get("quality_gate_aborted", False))
             return self.last_report_text
         except Exception as e:
             error_msg = f"Error generating report: {e}"
@@ -232,14 +241,16 @@ class OrchestratorSession:
     def chat_with_report(self, question: str) -> Dict[str, Any]:
         """Chat with the current report using ReAct agent with live tools."""
         if not self.current_report_id:
-            return {"answer": "Error: No report available. Please generate a report first.", "sources": []}
-        self._chat_agent.set_progress_fn(
-            self._emitter.emit if self._emitter else None
-        )
+            return {
+                "answer": "Error: No report available. Please generate a report first.",
+                "sources": [],
+            }
+        self._chat_agent.set_progress_fn(self._emitter.emit if self._emitter else None)
         return self._chat_agent.chat_with_report(
             report_id=self.current_report_id,
             ticker=self.current_ticker or "",
             question=question,
+            language=self.language,
         )
 
     def reset_conversation(self):

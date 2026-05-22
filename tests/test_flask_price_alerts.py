@@ -49,6 +49,8 @@ def test_create_alert_success(client, logged_in):
         uid = sess["user_id"]
     with patch("database.get_database_manager") as mock_db:
         db = MagicMock()
+        db.get_user_by_id.return_value = {"tier": "starter"}
+        db.count_user_active_alerts.return_value = 0
         mock_db.return_value = db
         r = client.post(
             "/api/alerts",

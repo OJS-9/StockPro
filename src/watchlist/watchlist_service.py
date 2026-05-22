@@ -82,6 +82,7 @@ class WatchlistService:
             item["price"] = cache.get("price")
             item["change_percent"] = cache.get("change_percent")
             item["price_last_updated"] = cache.get("last_updated")
+            item["currency"] = cache.get("currency", "USD")
             return item
 
         items = [enrich(item) for item in items]
@@ -122,7 +123,25 @@ class WatchlistService:
 
         # Immediately fetch price into cache
         self._refresh_symbol_price(symbol, asset_type, display_name)
+
+        # Kick public view fetch in background (skip if fresh)
+        self._kick_public_view(symbol, display_name)
         return item_id
+
+    def _kick_public_view(self, symbol, display_name=None):
+        try:
+            import threading as _t
+            from watchlist import public_view_service as pv
+
+            if pv.is_fresh(symbol):
+                return
+            _t.Thread(
+                target=pv.refresh_public_view,
+                args=(symbol, display_name),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            logger.warning("public_view kick failed for %s: %s", symbol, e)
 
     def remove_symbol(self, item_id):
         self.db.remove_watchlist_item(item_id)

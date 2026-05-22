@@ -38,6 +38,7 @@ class ResearchState(TypedDict):
     ]  # merged across parallel nodes
     failed_subjects: List[str]  # subject_ids that errored (set by quality_gate_node)
     is_partial_report: bool  # True if some subjects failed
+    quality_gate_aborted: bool  # True when >50% of subjects failed (gate skipped synthesis)
     report_text: str  # set by synthesis_node
     report_id: str  # set by storage_node
     user_id: Optional[int]
@@ -57,12 +58,14 @@ class ResearchState(TypedDict):
     actual_input_tokens: Annotated[int, operator.add]  # summed across all nodes
     actual_output_tokens: Annotated[int, operator.add]  # summed across all nodes
     actual_cost_usd: Optional[float]  # computed in storage_node
+    language: Optional[str]  # "he" for Hebrew, None/en for English
 
 
 _MAX_SUBJECTS = int(os.getenv("MAX_RESEARCH_SUBJECTS", "8"))
 _MIN_OUTPUT_CHARS = int(os.getenv("QUALITY_GATE_MIN_OUTPUT_CHARS", "200"))
 _URL_RE = re.compile(r"https?://[^\s<>\"{}|\\^`\[\]]+")
 _MAX_ABORT_DETAIL_CHARS = 600
+_NUMBER_RE = re.compile(r"\d+\.?\d*%?")  # matches numbers/percentages in text
 
 
 def _subject_failure_reason(subject_id: str, result: Dict[str, Any]) -> str:
@@ -89,8 +92,9 @@ def _fan_out(state: ResearchState) -> List[Send]:
     ):
         trimmed = subject_ids[:effective_subject_count]
         dropped = subject_ids[effective_subject_count:]
-        print(
-            f"[FanOut] Budget trimmed subjects from {len(subject_ids)} → {effective_subject_count}. Dropped: {dropped}"
+        logger.info(
+            "Budget trimmed subjects from %s to %s. Dropped: %s",
+            len(subject_ids), effective_subject_count, dropped,
         )
         subject_ids = trimmed
 
@@ -230,19 +234,30 @@ def quality_gate_node(state: ResearchState) -> dict:
     failed = []
     clean_outputs = {}
     for sid, result in research_outputs.items():
+        output = result.get("research_output", "")
         if result.get("error"):
             failed.append(sid)
-        elif len(result.get("research_output", "")) < _MIN_OUTPUT_CHARS:
-            char_count = len(result.get("research_output", ""))
+        elif len(output) < _MIN_OUTPUT_CHARS:
             logger.warning(
                 "%s: output too short (%s chars) — treating as failure",
+                sid, len(output),
+            )
+            failed.append(sid)
+        elif not _NUMBER_RE.search(output):
+            logger.warning(
+                "%s: output contains no data points (numbers/percentages) — treating as failure",
                 sid,
-                char_count,
+            )
+            failed.append(sid)
+        elif ticker.upper() not in output.upper():
+            logger.warning(
+                "%s: output does not reference ticker %s — treating as failure",
+                sid, ticker,
             )
             failed.append(sid)
         else:
             urls = list(
-                dict.fromkeys(_URL_RE.findall(result.get("research_output", "")))
+                dict.fromkeys(_URL_RE.findall(output))
             )
             clean_outputs[sid] = {**result, "sources": urls}
 
@@ -279,6 +294,7 @@ def quality_gate_node(state: ResearchState) -> dict:
             "research_outputs": clean_outputs,
             "failed_subjects": failed,
             "is_partial_report": True,
+            "quality_gate_aborted": True,
             "report_text": error_text,
         }
 
@@ -335,6 +351,7 @@ def run_research(
     parent_config: Optional[Dict[str, Any]] = None,
     username: Optional[str] = None,
     progress_fn: Optional[Any] = None,
+    language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute the full research pipeline.
@@ -352,6 +369,7 @@ def run_research(
         "research_outputs": {},
         "failed_subjects": [],
         "is_partial_report": False,
+        "quality_gate_aborted": False,
         "report_text": "",
         "report_id": "",
         "user_id": user_id,
@@ -367,6 +385,7 @@ def run_research(
         "actual_input_tokens": 0,
         "actual_output_tokens": 0,
         "actual_cost_usd": None,
+        "language": language,
     }
 
     run_name = (
@@ -374,7 +393,10 @@ def run_research(
         if username
         else f"{ticker.upper()} Research"
     )
-    invoke_config = {**(parent_config or {}), "run_name": run_name}
+    invoke_config = {
+        **(parent_config or {}),
+        "run_name": run_name,
+    }
 
     result = research_graph.invoke(initial_state, config=invoke_config)
     return result

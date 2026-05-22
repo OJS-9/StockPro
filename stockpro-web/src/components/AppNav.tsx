@@ -1,28 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useUser, useClerk } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import Icon from './Icon'
 import { useApiClient } from '../api/client'
 import { useAdmin } from '../hooks/useAdmin'
+import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useResearchProgress } from '../ResearchProgressContext'
+import { useLanguage } from '../LanguageContext'
 
 const navLinks = [
-  { to: '/home', icon: 'dashboard', label: 'Dashboard' },
-  { to: '/portfolio', icon: 'pie_chart', label: 'Portfolio' },
-  { to: '/watchlist', icon: 'visibility', label: 'Watchlist' },
-  { to: '/reports', icon: 'description', label: 'Reports' },
-  { to: '/alerts', icon: 'notifications', label: 'Alerts' },
+  { to: '/home', icon: 'dashboard', tKey: 'nav.dashboard' },
+  { to: '/portfolio', icon: 'pie_chart', tKey: 'nav.portfolio' },
+  { to: '/watchlist', icon: 'visibility', tKey: 'nav.watchlist' },
+  { to: '/reports', icon: 'description', tKey: 'nav.reports' },
+  { to: '/alerts', icon: 'notifications', tKey: 'nav.alerts' },
 ]
 
-function timeAgo(iso: string) {
+function timeAgo(iso: string, locale: string) {
   const diff = Date.now() - new Date(iso).getTime()
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return rtf.format(0, 'minute')
+  if (mins < 60) return rtf.format(-mins, 'minute')
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
+  if (hrs < 24) return rtf.format(-hrs, 'hour')
+  return rtf.format(-Math.floor(hrs / 24), 'day')
 }
 
 export default function AppNav() {
@@ -31,9 +35,16 @@ export default function AppNav() {
   const { signOut } = useClerk()
   const api = useApiClient()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
+  const { lang } = useLanguage()
+  const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const [showPanel, setShowPanel] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLButtonElement>(null)
+  const { isMobile } = useBreakpoint()
+  const navigate = useNavigate()
+  const research = useResearchProgress()
 
   // Read notification data from shared query (NotificationListener in App.tsx handles toasts)
   // Provides its own queryFn so it works even if it renders before NotificationListener
@@ -103,27 +114,27 @@ export default function AppNav() {
     return location.pathname.startsWith(to)
   }
 
+  const showProgressStrip = research.status === 'generating' || research.status === 'ready' || research.status === 'error'
+
   return (
+    <div style={{ position: 'sticky', top: 0, zIndex: 100 }}>
     <nav
       style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 48px',
+        padding: isMobile ? '0 16px' : '0 48px',
         height: 60,
         background: 'rgba(12,10,9,0.95)',
         backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid #292524',
+        borderBottom: showProgressStrip ? 'none' : '1px solid #292524',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
         <Link
           to="/home"
           style={{
-            fontFamily: 'Nunito, sans-serif',
+            fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
             fontSize: 17,
             fontWeight: 700,
             color: '#d6d3d1',
@@ -133,30 +144,65 @@ export default function AppNav() {
         >
           StockPro
         </Link>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {navLinks.map(({ to, icon, label }) => (
-            <Link
-              key={to}
-              to={to}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                color: isActive(to) ? '#fafaf9' : '#a8a29e',
-                textDecoration: 'none',
-                fontSize: 13.5,
-                fontWeight: 500,
-                padding: '6px 12px',
-                borderRadius: 8,
-                background: isActive(to) ? 'rgba(214,211,209,0.07)' : 'transparent',
-                transition: 'all 0.15s',
-              }}
+        {isMobile ? (
+          <>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e7e5e4', display: 'flex', alignItems: 'center', padding: 8 }}
             >
-              <Icon name={icon} size={18} />
-              {label}
-            </Link>
-          ))}
-        </div>
+              <span className="material-symbols-outlined" style={{ fontSize: 24 }}>
+                {menuOpen ? 'close' : 'menu'}
+              </span>
+            </button>
+            {menuOpen && (
+              <div style={{
+                position: 'fixed', top: 60, insetInlineStart: 0, width: '100vw', background: 'rgba(12,10,9,0.98)',
+                borderBottom: '1px solid #292524', zIndex: 200, display: 'flex', flexDirection: 'column', padding: '8px 0'
+              }}>
+                {navLinks.map(link => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 24px',
+                      color: isActive(link.to) ? '#f97316' : '#e7e5e4',
+                      textDecoration: 'none', fontWeight: isActive(link.to) ? 600 : 400, fontSize: 15
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{link.icon}</span>
+                    {t(link.tKey)}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {navLinks.map(({ to, icon, tKey }) => (
+              <Link
+                key={to}
+                to={to}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: isActive(to) ? '#fafaf9' : '#a8a29e',
+                  textDecoration: 'none',
+                  fontSize: 13.5,
+                  fontWeight: 500,
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  background: isActive(to) ? 'rgba(214,211,209,0.07)' : 'transparent',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Icon name={icon} size={18} />
+                {t(tKey)}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -181,6 +227,7 @@ export default function AppNav() {
             </button>
           </Link>
         )}
+        <UpgradePill />
         <Link to="/research" style={{ textDecoration: 'none' }}>
           <button
             style={{
@@ -195,7 +242,7 @@ export default function AppNav() {
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            title="New Research"
+            title={t('nav.newResearch')}
           >
             <Icon name="search" size={18} />
           </button>
@@ -225,7 +272,7 @@ export default function AppNav() {
               <span style={{
                 position: 'absolute',
                 top: 4,
-                right: 4,
+                insetInlineEnd: 4,
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
@@ -241,7 +288,7 @@ export default function AppNav() {
               style={{
                 position: 'absolute',
                 top: 42,
-                right: 0,
+                insetInlineEnd: 0,
                 width: 340,
                 maxHeight: 400,
                 overflowY: 'auto',
@@ -260,7 +307,7 @@ export default function AppNav() {
                 padding: '14px 16px 10px',
                 borderBottom: '1px solid #292524',
               }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafaf9' }}>Notifications</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#fafaf9' }}>{t('nav.notifications')}</span>
                 {notifications.length > 0 && (
                   <button
                     onClick={clearAll}
@@ -274,7 +321,7 @@ export default function AppNav() {
                       borderRadius: 4,
                     }}
                   >
-                    Clear all
+                    {t('nav.clearAll')}
                   </button>
                 )}
               </div>
@@ -282,7 +329,7 @@ export default function AppNav() {
               {/* Notification list */}
               {notifications.length === 0 ? (
                 <div style={{ padding: '32px 16px', textAlign: 'center', color: '#a8a29e', fontSize: 13 }}>
-                  No notifications
+                  {t('nav.noNotifications')}
                 </div>
               ) : (
                 notifications.map((n: any) => (
@@ -302,7 +349,7 @@ export default function AppNav() {
                         <span style={{
                           fontSize: 11,
                           fontWeight: 700,
-                          fontFamily: 'Nunito, sans-serif',
+                          fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
                           padding: '2px 8px',
                           borderRadius: 5,
                           background: '#232120',
@@ -312,7 +359,7 @@ export default function AppNav() {
                           {n.symbol}
                         </span>
                         <span style={{ fontSize: 11, color: '#57534e' }}>
-                          {n.created_at ? timeAgo(n.created_at) : ''}
+                          {n.created_at ? timeAgo(n.created_at, locale) : ''}
                         </span>
                         {!n.read_at && (
                           <span style={{
@@ -356,8 +403,8 @@ export default function AppNav() {
         </div>
 
         <button
-          onClick={() => signOut({ redirectUrl: '/' })}
-          title="Sign out"
+          onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL })}
+          title={t('nav.signOut')}
           style={{
             width: 34,
             height: 34,
@@ -388,7 +435,7 @@ export default function AppNav() {
               fontWeight: 600,
               color: '#d6d3d1',
               cursor: 'pointer',
-              fontFamily: 'Nunito, sans-serif',
+              fontFamily: 'Nunito, "Secular One", Heebo, sans-serif',
             }}
           >
             {user?.imageUrl ? (
@@ -400,5 +447,135 @@ export default function AppNav() {
         </Link>
       </div>
     </nav>
+    {showProgressStrip && (
+      <div
+        style={{
+          background: 'rgba(12,10,9,0.95)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid #292524',
+          padding: isMobile ? '8px 16px' : '10px 48px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, minWidth: 0 }}>
+          <Icon name={research.status === 'ready' ? 'check_circle' : research.status === 'error' ? 'error' : 'auto_awesome'} size={16} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#fafaf9', fontFamily: 'Nunito, sans-serif', whiteSpace: 'nowrap' }}>
+            {research.ticker || 'Report'}
+          </span>
+          {!isMobile && (() => {
+            const codeKey = research.stepCode ? `research.step.${research.stepCode}` : ''
+            let label = ''
+            if (codeKey) {
+              const translated = t(codeKey, { done: research.done ?? 0, total: research.total ?? 0 })
+              if (translated !== codeKey) label = translated
+            }
+            if (!label) label = research.step
+            return label ? (
+              <span style={{ fontSize: 12, color: '#a8a29e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>
+                · {label}
+              </span>
+            ) : null
+          })()}
+        </div>
+        <div style={{ flex: 1, height: 6, background: '#292524', borderRadius: 999, overflow: 'hidden', minWidth: 60 }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${research.progress}%`,
+              borderRadius: 999,
+              background: research.status === 'error' ? '#ef4444' : research.status === 'ready' ? '#22c55e' : '#d6d3d1',
+              transition: 'width 0.4s ease',
+            }}
+          />
+        </div>
+        <span style={{ fontSize: 12, color: '#a8a29e', fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'end', flexShrink: 0 }}>
+          {research.progress}%
+        </span>
+        {research.status === 'ready' && research.reportId && (
+          <button
+            onClick={() => { const id = research.reportId!; research.dismiss(); navigate(`/report/${id}`) }}
+            style={{
+              background: '#d6d3d1',
+              color: '#0c0a09',
+              border: 'none',
+              borderRadius: 8,
+              padding: isMobile ? '6px 10px' : '6px 14px',
+              fontSize: 12.5,
+              fontWeight: 700,
+              fontFamily: 'Nunito, sans-serif',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Icon name="arrow_forward" size={14} />
+            {t('nav.showReport')}
+          </button>
+        )}
+        {(research.status === 'ready' || research.status === 'error') && (
+          <button
+            onClick={() => research.dismiss()}
+            title={t('nav.dismiss')}
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              border: '1px solid #292524',
+              background: 'transparent',
+              color: '#a8a29e',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Icon name="close" size={14} />
+          </button>
+        )}
+      </div>
+    )}
+    </div>
+  )
+}
+
+/** Top-right upgrade pill. Shows for free + starter; hidden for ultra. */
+function UpgradePill() {
+  const api = useApiClient()
+  const { data } = useQuery<{ profile: { tier: string } }>({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await api.get('/api/settings')
+      if (!res.ok) throw new Error('Failed')
+      return res.json()
+    },
+    staleTime: 60_000,
+  })
+  const tier = data?.profile?.tier || 'free'
+  if (tier === 'ultra') return null
+
+  const label = tier === 'free' ? 'Upgrade' : 'Plan'
+  return (
+    <Link
+      to="/settings?section=plan"
+      style={{
+        textDecoration: 'none',
+        padding: '6px 14px',
+        borderRadius: 100,
+        background: tier === 'free' ? '#d6d3d1' : 'transparent',
+        color: tier === 'free' ? '#0c0a09' : '#d6d3d1',
+        border: tier === 'free' ? 'none' : '1px solid #292524',
+        fontSize: 12.5,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </Link>
   )
 }

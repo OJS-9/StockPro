@@ -1,10 +1,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { vitePrerenderPlugin } from 'vite-prerender-plugin'
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  base: mode === 'production' ? '/app/' : '/',
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Bake the Landing page into dist/index.html at build time so non-JS
+    // crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content.
+    // Set SKIP_PRERENDER=1 to skip the slow Puppeteer step during local iteration.
+    ...(process.env.SKIP_PRERENDER ? [] : [
+      vitePrerenderPlugin({
+        renderTarget: '#root',
+        additionalPrerenderRoutes: ['/about', '/press'],
+      }),
+    ]),
+  ],
   build: {
     rollupOptions: {
       output: {
@@ -28,4 +42,4 @@ export default defineConfig({
       '/ws': { target: 'ws://127.0.0.1:5000', ws: true },
     },
   },
-})
+}))

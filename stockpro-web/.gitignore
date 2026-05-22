@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist is intentionally tracked — built by GitHub Actions and consumed by Railway.
+# See .github/workflows/build-frontend.yml
 dist-ssr
 *.local
 

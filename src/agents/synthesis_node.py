@@ -25,6 +25,7 @@ SYNTHESIS_MAX_OUTPUT_TOKENS = int(
 )
 
 _END_MARKER = "END_OF_REPORT"
+_MAX_TOTAL_RESEARCH_CHARS = int(os.getenv("SYNTHESIS_MAX_RESEARCH_CHARS", "30000"))
 # Rough chars-per-token for Gemini (~4). If output >= 90% of the token limit, assume truncation.
 _TRUNCATION_THRESHOLD = 0.9
 
@@ -70,7 +71,7 @@ _TRADE_TYPE_FRAMING = {
 
 
 def _get_synthesis_instructions(
-    ticker: str, trade_type: str, plan: ResearchPlan
+    ticker: str, trade_type: str, plan: ResearchPlan, language: Optional[str] = None
 ) -> str:
     from date_utils import get_datetime_context_string
 
@@ -92,7 +93,7 @@ The user has an existing position in {ticker}. Follow these rules strictly:
   "this factor is worth monitoring if your goal is [goal]".
 - Let the data speak — present facts and observations, not instructions.
 """
-    return f"""You are a senior equity research analyst synthesizing specialized research findings into {framing} for {ticker}.
+    instructions = f"""You are a senior equity research analyst synthesizing specialized research findings into {framing} for {ticker}.
 
 {datetime_context}
 {trade_context_block}{position_rules}
@@ -115,6 +116,15 @@ Your role is to PRESERVE and ORGANIZE all detailed information, NOT to summarize
 - Cite all sources from the research outputs
 - If information is missing for a section, note it clearly
 - Ensure the report is comprehensive and fully utilizes all research findings"""
+
+    if language == "he":
+        instructions += """
+
+IMPORTANT: Write your ENTIRE response in Hebrew. All section headings, analysis, \
+and conclusions must be in Hebrew. Keep ticker symbols, company names, and numerical \
+data in their original form (e.g., AAPL, $150.23). Keep the END_OF_REPORT marker in English."""
+
+    return instructions
 
 
 def _build_report_sections(
@@ -170,6 +180,61 @@ def _build_report_sections(
     return "\n".join(sections)
 
 
+def _truncate_research_text(text: str, max_chars: int) -> str:
+    """Truncate research text while preserving Key Takeaways section if present."""
+    if len(text) <= max_chars:
+        return text
+    # Try to preserve the Key Takeaways section at the end
+    takeaways_markers = ["## Key Takeaways", "**Key Takeaways**", "### Key Takeaways"]
+    for marker in takeaways_markers:
+        idx = text.find(marker)
+        if idx != -1:
+            takeaways = text[idx:]
+            remaining_budget = max_chars - len(takeaways) - 50  # 50 chars for truncation notice
+            if remaining_budget > 200:
+                return (
+                    text[:remaining_budget]
+                    + "\n\n[...content trimmed for synthesis budget...]\n\n"
+                    + takeaways
+                )
+    # No takeaways found — simple truncation
+    return text[:max_chars] + "\n\n[...content trimmed for synthesis budget...]"
+
+
+def _budget_research_outputs(
+    research_outputs: Dict[str, Dict[str, Any]],
+    ordered_ids: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """If total research text exceeds budget, proportionally trim each subject."""
+    total_chars = sum(
+        len(research_outputs[sid].get("research_output", ""))
+        for sid in ordered_ids
+        if sid in research_outputs
+    )
+    if total_chars <= _MAX_TOTAL_RESEARCH_CHARS:
+        return research_outputs
+
+    logger.info(
+        "Research text %s chars exceeds %s budget — trimming proportionally",
+        total_chars, _MAX_TOTAL_RESEARCH_CHARS,
+    )
+    max_per_subject = _MAX_TOTAL_RESEARCH_CHARS // len(ordered_ids)
+    trimmed = {}
+    for sid in ordered_ids:
+        if sid not in research_outputs:
+            continue
+        result = research_outputs[sid].copy()
+        output = result.get("research_output", "")
+        if len(output) > max_per_subject:
+            result["research_output"] = _truncate_research_text(output, max_per_subject)
+        trimmed[sid] = result
+    # Include any outputs not in ordered_ids
+    for sid, result in research_outputs.items():
+        if sid not in trimmed:
+            trimmed[sid] = result
+    return trimmed
+
+
 def _build_synthesis_prompt(
     ticker: str,
     trade_type: str,
@@ -186,6 +251,9 @@ def _build_synthesis_prompt(
     for sid in research_outputs:
         if sid not in ordered_ids:
             ordered_ids.append(sid)
+
+    # Apply per-subject truncation budget to prevent context rot
+    research_outputs = _budget_research_outputs(research_outputs, ordered_ids)
 
     sections_text = _build_report_sections(
         trade_type, ordered_ids, has_position=bool(plan.position_summary)
@@ -220,15 +288,15 @@ def _build_synthesis_prompt(
         ]
 
     prompt_parts += [
-        "**CRITICAL INSTRUCTIONS:**",
-        "",
+        "<instructions>",
         f"Specialized agents have researched {len(ordered_ids)} subjects on {ticker}.",
         "PRESERVE ALL DETAILS — do not summarize away specific numbers, facts, or examples.",
         "",
-        "**Report Structure to follow (in this order):**",
+        "Report Structure to follow (in this order):",
         sections_text,
+        "</instructions>",
         "",
-        "**Research Findings from Specialized Agents:**",
+        "<research_data>",
         "",
     ]
 
@@ -252,6 +320,8 @@ def _build_synthesis_prompt(
                 prompt_parts.append(f"{i}. {source}")
 
         prompt_parts += ["", "---", ""]
+
+    prompt_parts.append("</research_data>")
 
     if plan.position_summary:
         goal_line = ""
@@ -325,11 +395,12 @@ def synthesis_node(state: dict) -> dict:
         ticker,
     )
 
+    language = state.get("language")
     failed_subjects = state.get("failed_subjects", [])
     synthesis_prompt = _build_synthesis_prompt(
         ticker, trade_type, research_outputs, plan, failed_subjects
     )
-    system_instructions = _get_synthesis_instructions(ticker, trade_type, plan)
+    system_instructions = _get_synthesis_instructions(ticker, trade_type, plan, language=language)
 
     llm = ChatGoogleGenerativeAI(
         model=SYNTHESIS_MODEL,

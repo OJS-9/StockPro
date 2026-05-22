@@ -65,7 +65,11 @@ def _make_mcp_handler(mcp_client: MCPClient, mcp_tool_name: str):
             return str(result)
         except Exception as e:
             return json.dumps(
-                {"error": f"Tool execution failed: {e}", "tool": mcp_tool_name},
+                {
+                    "error": f"Tool execution failed: {e}",
+                    "tool": mcp_tool_name,
+                    "suggestion": "Try a yfinance tool or nimble_web_search as an alternative data source.",
+                },
                 indent=2,
             )
 
@@ -172,7 +176,10 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
             )
             return json.dumps(result, indent=2, default=str)
         except Exception as e:
-            return json.dumps({"error": f"Nimble search failed: {e}"})
+            return json.dumps({
+                "error": f"Nimble search failed: {e}",
+                "suggestion": "Try perplexity_research for a synthesized answer, or yfinance tools for financial data.",
+            })
 
     # --- nimble_extract ---
     class NimbleExtractArgs(BaseModel):
@@ -181,12 +188,23 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
             default=False, description="Enable JS rendering for dynamic pages."
         )
 
+    MAX_EXTRACT_CHARS = 10000
+
     def nimble_extract(url: str, render: bool = False) -> str:
         try:
             result = nimble_client.extract(url, render=render)
-            return json.dumps(result, indent=2, default=str)
+            text = json.dumps(result, indent=2, default=str)
+            if len(text) > MAX_EXTRACT_CHARS:
+                return text[:MAX_EXTRACT_CHARS] + (
+                    "\n\n[Content truncated at 10,000 characters. "
+                    "Use nimble_web_search for a summary instead.]"
+                )
+            return text
         except Exception as e:
-            return json.dumps({"error": f"Nimble extract failed: {e}"})
+            return json.dumps({
+                "error": f"Nimble extract failed: {e}",
+                "suggestion": "Check the URL is valid. Try nimble_web_search to find an alternative source.",
+            })
 
     # --- perplexity_research ---
     class PerplexityArgs(BaseModel):
@@ -214,17 +232,20 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
                 )
             return json.dumps({"research": result, "status": "success"})
         except Exception as e:
-            return json.dumps(
-                {"status": "failed", "error": f"perplexity_research failed: {e}"}
-            )
+            return json.dumps({
+                "status": "failed",
+                "error": f"perplexity_research failed: {e}",
+                "suggestion": "Try nimble_web_search for a direct web search, or yfinance tools for financial data.",
+            })
 
     return [
         StructuredTool.from_function(
             func=nimble_web_search,
             name="nimble_web_search",
             description=(
-                "Search the web in real-time using Nimble's infrastructure. "
-                "Use for recent news, analyst reports, company announcements, industry trends."
+                "Search the web for specific facts: news articles, press releases, analyst reports, "
+                "SEC filings, financial data, company announcements. Returns raw search results "
+                "you must analyze yourself. Use this for any factual lookup."
             ),
             args_schema=NimbleSearchArgs,
         ),
@@ -232,8 +253,9 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
             func=nimble_extract,
             name="nimble_extract",
             description=(
-                "Extract and parse content from a specific URL using Nimble's browser infrastructure. "
-                "Use for press releases, SEC filings, earnings transcripts, IR pages."
+                "Extract and parse full page content from a specific URL. "
+                "Use when you have a URL from search results that you need to read in full "
+                "(e.g., a press release, earnings transcript, SEC filing page)."
             ),
             args_schema=NimbleExtractArgs,
         ),
@@ -241,8 +263,10 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
             func=perplexity_research,
             name="perplexity_research",
             description=(
-                "Perform real-time web research using Perplexity (via Nimble). "
-                "Use for recent news, market analysis, company developments, industry trends."
+                "Get a synthesized analytical answer to a complex research question. "
+                "Use ONLY when you need expert-level synthesis across multiple sources — "
+                "e.g. 'What is the consensus view on X competitive moat?' "
+                "Do NOT use for simple fact-finding (use nimble_web_search instead)."
             ),
             args_schema=PerplexityArgs,
         ),
@@ -353,9 +377,10 @@ def create_yfinance_tools() -> List[StructuredTool]:
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
-            return json.dumps(
-                {"error": f"yfinance_fundamentals failed for {symbol}: {e}"}
-            )
+            return json.dumps({
+                "error": f"yfinance_fundamentals failed for {symbol}: {e}",
+                "suggestion": "Try yfinance_analyst for a lighter data pull, or nimble_web_search to find fundamentals online.",
+            })
 
     # --- yfinance_analyst ---
     def yfinance_analyst(symbol: str) -> str:
@@ -385,7 +410,10 @@ def create_yfinance_tools() -> List[StructuredTool]:
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
-            return json.dumps({"error": f"yfinance_analyst failed for {symbol}: {e}"})
+            return json.dumps({
+                "error": f"yfinance_analyst failed for {symbol}: {e}",
+                "suggestion": "Try yfinance_fundamentals for broader data, or nimble_web_search for analyst coverage.",
+            })
 
     # --- yfinance_ownership ---
     def yfinance_ownership(symbol: str) -> str:
@@ -411,7 +439,10 @@ def create_yfinance_tools() -> List[StructuredTool]:
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
-            return json.dumps({"error": f"yfinance_ownership failed for {symbol}: {e}"})
+            return json.dumps({
+                "error": f"yfinance_ownership failed for {symbol}: {e}",
+                "suggestion": "Try nimble_web_search for institutional holder data, or sec_edgar_filings for insider filings.",
+            })
 
     # --- yfinance_options ---
     def yfinance_options(symbol: str) -> str:
@@ -464,7 +495,10 @@ def create_yfinance_tools() -> List[StructuredTool]:
             }
             return json.dumps(_sanitize_nan(result), indent=2, default=str)
         except Exception as e:
-            return json.dumps({"error": f"yfinance_options failed for {symbol}: {e}"})
+            return json.dumps({
+                "error": f"yfinance_options failed for {symbol}: {e}",
+                "suggestion": "Try nimble_web_search for options market data or perplexity_research for technical analysis.",
+            })
 
     return [
         StructuredTool.from_function(
@@ -553,7 +587,10 @@ def create_sec_edgar_tool() -> StructuredTool:
                 })
             return json.dumps(results, indent=2, default=str)
         except Exception as e:
-            return json.dumps({"error": f"SEC EDGAR lookup failed: {e}"})
+            return json.dumps({
+                "error": f"SEC EDGAR lookup failed: {e}",
+                "suggestion": "Try nimble_web_search for SEC filings, or yfinance_fundamentals for financial statement data.",
+            })
 
     return StructuredTool.from_function(
         func=sec_edgar_filings,

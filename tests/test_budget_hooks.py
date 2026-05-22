@@ -66,12 +66,12 @@ def test_specialized_node_uses_effective_caps(monkeypatch):
     def fake_create_react_agent(_llm, _tools, *args, **kwargs):
         agent = MagicMock()
 
-        def _invoke(_payload, config=None):
-                captured["recursion_limit"] = (config or {}).get("recursion_limit")
-                fake_msg = AIMessage(content="OUTPUT")
-                return {"messages": [fake_msg]}
+        def _stream(_payload, config=None, stream_mode=None):
+            captured["recursion_limit"] = (config or {}).get("recursion_limit")
+            fake_msg = AIMessage(content="OUTPUT")
+            yield {"messages": [fake_msg]}
 
-        agent.invoke.side_effect = _invoke
+        agent.stream.side_effect = _stream
         return agent
 
     monkeypatch.setattr(sn, "ChatGoogleGenerativeAI", lambda **kwargs: FakeLLM(**kwargs))

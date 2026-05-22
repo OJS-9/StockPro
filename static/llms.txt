@@ -1,0 +1,35 @@
+# StockPro
+
+> AI-powered stock and crypto research platform. Twelve specialized AI agents produce deep research reports on any ticker in minutes, plus portfolio tracking, watchlists, and price alerts — built for retail investors who want institutional-grade analysis.
+
+StockPro generates structured research reports covering fundamentals, technicals, risk factors, competitive landscape, and news sentiment. A team of 12 specialist AI agents researches in parallel, drawing from live market data, financial filings, and real-time web sources, before a synthesis agent merges everything into one cohesive report. After each report, users can chat with an AI grounded in the report's content (RAG) to dig deeper into any section.
+
+## Product
+
+- [Landing page](https://stock-pro.org/): Overview of StockPro, features, and how it works.
+- [Pricing](https://stock-pro.org/pricing): Free tier and paid plans.
+- [Sign up](https://stock-pro.org/sign-up): Create a free account. No credit card required.
+- [Sign in](https://stock-pro.org/sign-in): Existing users.
+
+## Features
+
+- Deep AI Research: 12 specialized agents research fundamentals, technicals, risk, and news in parallel.
+- Portfolio Tracking: Multiple portfolios with real-time P&L, cost basis, and sector allocation.
+- Smart Watchlists: Custom lists with live prices, sparklines, earnings calendar, and AI news briefings.
+- Price Alerts: Get notified the moment a stock or crypto hits your target.
+- Report Chat: Conversational follow-up grounded in your research reports.
+
+## About / Press
+
+- [About](https://stock-pro.org/about): Founder bio (Or Joshua Salinas), story behind StockPro, and the tech stack.
+- [Press](https://stock-pro.org/press): Press kit, brand assets, boilerplate, and media contact.
+
+## Legal
+
+- [Terms of Service](https://stock-pro.org/legal/terms)
+- [Privacy Policy](https://stock-pro.org/legal/privacy)
+- [Refund Policy](https://stock-pro.org/legal/refund)
+
+## Optional
+
+- StockPro is not a registered investment advisor. Research output is informational and not investment advice.

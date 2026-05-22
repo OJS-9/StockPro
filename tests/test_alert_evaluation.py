@@ -48,6 +48,33 @@ def test_evaluate_fires_when_met(monkeypatch):
     assert call[1] == "u1"
     assert call[2] == "a1"
     assert "AAPL" in call[4] and "$" in call[4]
+    # set_price_alert_active should NOT be called -- deactivation is now
+    # handled atomically inside record_price_alert_trigger
+    db.set_price_alert_active.assert_not_called()
+
+
+def test_evaluate_no_partial_state_on_trigger_failure(monkeypatch):
+    """If record_price_alert_trigger raises, fired count stays 0."""
+    monkeypatch.setenv("STOCKPRO_ALERT_COOLDOWN_SEC", "0")
+    db = MagicMock()
+    db.list_active_alerts_for_symbols.return_value = [
+        {
+            "alert_id": "a1",
+            "user_id": "u1",
+            "symbol": "AAPL",
+            "asset_type": "stock",
+            "direction": "above",
+            "target_price": Decimal("100"),
+            "last_triggered_at": None,
+        }
+    ]
+    db.get_cached_prices.return_value = {
+        "AAPL": {"symbol": "AAPL", "asset_type": "stock", "price": Decimal("101")}
+    }
+    db.record_price_alert_trigger.side_effect = RuntimeError("DB error")
+    n = evaluate_alerts_for_symbols(db, ["AAPL"])
+    assert n == 0
+    db.set_price_alert_active.assert_not_called()
 
 
 def test_evaluate_respects_cooldown(monkeypatch):

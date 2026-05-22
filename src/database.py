@@ -73,16 +73,28 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cur:
 
-                # Trigger function for updated_at auto-update
-                cur.execute("""
-                    CREATE OR REPLACE FUNCTION update_updated_at()
-                    RETURNS TRIGGER AS $$
-                    BEGIN
-                      NEW.updated_at = NOW();
-                      RETURN NEW;
-                    END;
-                    $$ LANGUAGE plpgsql
-                """)
+                # Give this session extra headroom for lock waits during rolling deploys
+                # (old container may still hold pg_proc share locks via active triggers).
+                cur.execute("SET LOCAL statement_timeout = '60s'")
+                cur.execute("SET LOCAL lock_timeout = '30s'")
+
+                # Trigger function for updated_at auto-update.
+                # Skip CREATE OR REPLACE if the function already exists -- that path
+                # takes an exclusive lock on pg_proc and will time out during a
+                # rolling deploy while the old container is still running triggers.
+                cur.execute(
+                    "SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at' LIMIT 1"
+                )
+                if cur.fetchone() is None:
+                    cur.execute("""
+                        CREATE OR REPLACE FUNCTION update_updated_at()
+                        RETURNS TRIGGER AS $$
+                        BEGIN
+                          NEW.updated_at = NOW();
+                          RETURN NEW;
+                        END;
+                        $$ LANGUAGE plpgsql
+                    """)
 
                 # Users
                 cur.execute("""
@@ -239,7 +251,7 @@ class DatabaseManager:
                         name          VARCHAR(100)  NOT NULL DEFAULT 'My Portfolio',
                         description   TEXT,
                         user_id       VARCHAR(36)   REFERENCES users(user_id) ON DELETE SET NULL,
-                        track_cash    BOOLEAN       NOT NULL DEFAULT FALSE,
+                        track_cash    BOOLEAN       NOT NULL DEFAULT TRUE,
                         cash_balance  NUMERIC(18,2) NOT NULL DEFAULT 0,
                         created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
                         updated_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
@@ -434,6 +446,27 @@ class DatabaseManager:
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_price_cache_last_updated ON price_cache (last_updated)"
                 )
+                cur.execute(
+                    "ALTER TABLE price_cache ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'USD'"
+                )
+
+                # Public view (global per-symbol Reddit + X synthesis)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS ticker_public_view (
+                        symbol           VARCHAR(20)  PRIMARY KEY,
+                        summary_md       TEXT,
+                        bullish_pct      INTEGER,
+                        top_themes_json  JSONB,
+                        reddit_posts     JSONB,
+                        x_posts          JSONB,
+                        last_updated     TIMESTAMPTZ,
+                        status           VARCHAR(16),
+                        error_message    TEXT
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_ticker_public_view_last_updated ON ticker_public_view (last_updated)"
+                )
 
                 # Price alerts (user-defined targets vs cached quotes; evaluation in jobs later)
                 cur.execute("""
@@ -541,12 +574,171 @@ class DatabaseManager:
                     )
                 """)
 
+                # Long-lived API tokens for CLI / headless agents
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id           VARCHAR(36) PRIMARY KEY,
+                        user_id      VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        name         VARCHAR(100) NOT NULL,
+                        token_hash   VARCHAR(64)  NOT NULL UNIQUE,
+                        prefix       VARCHAR(16)  NOT NULL,
+                        created_at   TIMESTAMPTZ DEFAULT NOW(),
+                        last_used_at TIMESTAMPTZ,
+                        revoked_at   TIMESTAMPTZ
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_api_keys_token_hash ON api_keys (token_hash)"
+                )
+
+                # Device-code flow: pending agent authorizations awaiting user approval.
+                # access_token holds the raw token between approval and the next agent poll
+                # (max 10 min, deleted on first successful poll).
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS device_codes (
+                        device_code  VARCHAR(128) PRIMARY KEY,
+                        user_code    VARCHAR(16)  NOT NULL UNIQUE,
+                        user_id      VARCHAR(36)  REFERENCES users(user_id) ON DELETE CASCADE,
+                        api_key_id   VARCHAR(36)  REFERENCES api_keys(id) ON DELETE SET NULL,
+                        expires_at   TIMESTAMPTZ  NOT NULL,
+                        approved_at  TIMESTAMPTZ,
+                        access_token TEXT,
+                        created_at   TIMESTAMPTZ  DEFAULT NOW()
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_device_codes_user_code ON device_codes (user_code)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_device_codes_expires_at ON device_codes (expires_at)"
+                )
+
+                # RLS: backend uses the postgres role (bypasses RLS); these policies
+                # only matter for any client that ever connects as `authenticated` or `anon`.
+                cur.execute("ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY")
+                cur.execute("DROP POLICY IF EXISTS api_keys_owner ON api_keys")
+                cur.execute(
+                    "CREATE POLICY api_keys_owner ON api_keys "
+                    "FOR ALL USING (user_id = auth.jwt()->>'sub') "
+                    "WITH CHECK (user_id = auth.jwt()->>'sub')"
+                )
+
+                cur.execute("ALTER TABLE device_codes ENABLE ROW LEVEL SECURITY")
+                cur.execute("DROP POLICY IF EXISTS device_codes_owner ON device_codes")
+                # Once approved, the owner can read their pending/approved rows.
+                # Pre-approval rows have user_id=NULL and are only accessible by service_role.
+                cur.execute(
+                    "CREATE POLICY device_codes_owner ON device_codes "
+                    "FOR ALL USING (user_id = auth.jwt()->>'sub') "
+                    "WITH CHECK (user_id = auth.jwt()->>'sub')"
+                )
+
+                # Subscriptions: Whop is source of truth; we cache the active
+                # membership state here for fast tier/quota lookups.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS subscriptions (
+                        id                  VARCHAR(36) PRIMARY KEY,
+                        user_id             VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        whop_membership_id  VARCHAR(64) NOT NULL UNIQUE,
+                        whop_plan_id        VARCHAR(64) NOT NULL,
+                        tier                VARCHAR(20) NOT NULL,
+                        cadence             VARCHAR(20) NOT NULL,
+                        status              VARCHAR(20) NOT NULL DEFAULT 'active',
+                        current_period_end  TIMESTAMPTZ,
+                        created_at          TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at          TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_status  ON subscriptions (status)"
+                )
+                cur.execute("ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY")
+                cur.execute("DROP POLICY IF EXISTS subscriptions_owner ON subscriptions")
+                cur.execute(
+                    "CREATE POLICY subscriptions_owner ON subscriptions "
+                    "FOR ALL USING (user_id = auth.jwt()->>'sub') "
+                    "WITH CHECK (user_id = auth.jwt()->>'sub')"
+                )
+
+                # Multi-worker shared state: report-generation status replaces
+                # the per-process `_generation_status` dict in app.py so any
+                # gunicorn worker can serve any /api/report_status poll.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS generation_status (
+                        session_id      TEXT PRIMARY KEY,
+                        user_id         TEXT NOT NULL,
+                        status          TEXT NOT NULL,
+                        report_id       TEXT,
+                        progress        INT  DEFAULT 0,
+                        step            TEXT,
+                        step_code       TEXT,
+                        done            INT,
+                        total           INT,
+                        partial         BOOLEAN DEFAULT FALSE,
+                        message         TEXT,
+                        questions       JSONB,
+                        subjects        JSONB,
+                        failed_subjects JSONB,
+                        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        expires_at      TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours')
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_generation_status_user ON generation_status (user_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_generation_status_expires ON generation_status (expires_at)"
+                )
+
+                # SSE event queue: replaces the per-process `_sse_queues` dict
+                # so the producer thread on one worker and the SSE consumer on
+                # another worker can communicate via Postgres.
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS generation_events (
+                        id          BIGSERIAL PRIMARY KEY,
+                        session_id  TEXT   NOT NULL,
+                        seq         BIGINT NOT NULL,
+                        event_type  TEXT   NOT NULL,
+                        payload     JSONB  NOT NULL,
+                        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE (session_id, seq)
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_generation_events_session ON generation_events (session_id, seq)"
+                )
+
+                # admin_events and app_config are managed outside init_schema
+                # (created directly in Supabase). Mirror the RLS lockdown here
+                # so any schema re-create or dev clone keeps PostgREST blocked.
+                # Backend uses the postgres role, which bypasses RLS.
+                cur.execute("""
+                    DO $$
+                    BEGIN
+                        IF to_regclass('public.admin_events') IS NOT NULL THEN
+                            EXECUTE 'ALTER TABLE public.admin_events ENABLE ROW LEVEL SECURITY';
+                        END IF;
+                        IF to_regclass('public.app_config') IS NOT NULL THEN
+                            EXECUTE 'ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY';
+                        END IF;
+                    END $$;
+                """)
+
             conn.commit()
             logger.info("Database schema initialized")
 
-        except psycopg2.errors.InternalError_ as e:
-            # Two processes ran init_schema concurrently (common in Flask debug mode).
-            # The schema is already being initialized by the other process — safe to ignore.
+        except (psycopg2.errors.InternalError_, psycopg2.errors.DeadlockDetected) as e:
+            # Two or more processes ran init_schema concurrently — common when
+            # gunicorn forks N workers that all import app.py at the same time.
+            # The schema is idempotent (CREATE IF NOT EXISTS) so whichever process
+            # commits first wins; the rest can safely roll back and continue.
             if conn:
                 conn.rollback()
             logger.warning("init_schema concurrent update ignored: %s", e)
@@ -554,6 +746,22 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to initialize schema: {e}")
+        finally:
+            self._release(conn)
+
+        # Run data migrations in a separate transaction so they succeed
+        # even when the schema transaction hits a concurrent-update conflict.
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE portfolios SET track_cash = TRUE WHERE track_cash = FALSE"
+                )
+            conn.commit()
+        except Exception:
+            if conn:
+                conn.rollback()
         finally:
             self._release(conn)
 
@@ -896,7 +1104,7 @@ class DatabaseManager:
         name: str = "My Portfolio",
         description: str = "",
         user_id: Optional[str] = None,
-        track_cash: bool = False,
+        track_cash: bool = True,
         cash_balance: float = 0.0,
     ):
         """Create a new portfolio."""
@@ -964,6 +1172,26 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to update cash balance: {e}")
+        finally:
+            self._release(conn)
+
+    def enable_cash_tracking(self, portfolio_id: str) -> None:
+        """Enable cash tracking for a portfolio."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE portfolios SET track_cash = TRUE WHERE portfolio_id = %s
+                """,
+                    (portfolio_id,),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to enable cash tracking: {e}")
         finally:
             self._release(conn)
 
@@ -1544,19 +1772,223 @@ class DatabaseManager:
             self._release(conn)
 
     def user_is_pro(self, user_id: str) -> bool:
-        """Paid / pro users bypass free-tier report quota (stub until billing)."""
+        """Paid users bypass free-tier quotas. True for tier in {starter, ultra}
+        OR legacy is_pro flag = true."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COALESCE(is_pro, FALSE) FROM users WHERE user_id = %s",
+                    "SELECT tier, COALESCE(is_pro, FALSE) FROM users WHERE user_id = %s",
                     (user_id,),
                 )
                 row = cur.fetchone()
-                return bool(row and row[0])
+                if not row:
+                    return False
+                tier = (row[0] or "free").lower()
+                return tier in ("starter", "ultra") or bool(row[1])
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to read user tier: {e}")
+        finally:
+            self._release(conn)
+
+    def set_user_tier(self, user_id: str, tier: str) -> None:
+        """Set users.tier and sync legacy is_pro flag."""
+        tier = (tier or "free").lower()
+        if tier not in ("free", "starter", "ultra"):
+            raise ValueError(f"unknown tier: {tier}")
+        is_pro = tier in ("starter", "ultra")
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET tier = %s, is_pro = %s WHERE user_id = %s",
+                    (tier, is_pro, user_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set tier: {e}")
+        finally:
+            self._release(conn)
+
+    def upsert_subscription(
+        self,
+        *,
+        user_id: str,
+        whop_membership_id: str,
+        whop_plan_id: str,
+        tier: str,
+        cadence: str,
+        status: str = "active",
+        current_period_end=None,
+    ) -> str:
+        """Insert or update a subscription row keyed by whop_membership_id."""
+        import uuid as _uuid
+
+        sub_id = str(_uuid.uuid4())
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO subscriptions
+                        (id, user_id, whop_membership_id, whop_plan_id, tier,
+                         cadence, status, current_period_end, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (whop_membership_id) DO UPDATE SET
+                        whop_plan_id       = EXCLUDED.whop_plan_id,
+                        tier               = EXCLUDED.tier,
+                        cadence            = EXCLUDED.cadence,
+                        status             = EXCLUDED.status,
+                        current_period_end = EXCLUDED.current_period_end,
+                        updated_at         = NOW()
+                    RETURNING id
+                    """,
+                    (sub_id, user_id, whop_membership_id, whop_plan_id, tier,
+                     cadence, status, current_period_end),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return row[0] if row else sub_id
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to upsert subscription: {e}")
+        finally:
+            self._release(conn)
+
+    def get_active_subscription(self, user_id: str):
+        """Return the most recent active subscription row, or None."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, user_id, whop_membership_id, whop_plan_id,
+                           tier, cadence, status, current_period_end,
+                           created_at, updated_at
+                    FROM subscriptions
+                    WHERE user_id = %s AND status = 'active'
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (user_id,),
+                )
+                return cur.fetchone()
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read subscription: {e}")
+        finally:
+            self._release(conn)
+
+    def set_subscription_status(self, whop_membership_id: str, status: str) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE subscriptions SET status = %s, updated_at = NOW() "
+                    "WHERE whop_membership_id = %s",
+                    (status, whop_membership_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set subscription status: {e}")
+        finally:
+            self._release(conn)
+
+    def get_subscription_user(self, whop_membership_id: str):
+        """Look up the user_id behind an existing subscription row."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT user_id FROM subscriptions WHERE whop_membership_id = %s",
+                    (whop_membership_id,),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to read subscription user: {e}")
+        finally:
+            self._release(conn)
+
+    def update_subscription_period_end(self, whop_membership_id: str, period_end) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE subscriptions SET current_period_end = %s, updated_at = NOW() "
+                    "WHERE whop_membership_id = %s",
+                    (period_end, whop_membership_id),
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update period end: {e}")
+        finally:
+            self._release(conn)
+
+    def count_user_portfolios(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM portfolios WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to count portfolios: {e}")
+        finally:
+            self._release(conn)
+
+    def count_user_watchlist_items(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(wi.*)
+                    FROM watchlist_items wi
+                    JOIN watchlists w ON w.watchlist_id = wi.watchlist_id
+                    WHERE w.user_id = %s
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to count watchlist items: {e}")
+        finally:
+            self._release(conn)
+
+    def count_user_active_alerts(self, user_id: str) -> int:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM price_alerts "
+                    "WHERE user_id = %s AND COALESCE(active, TRUE) = TRUE",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        except psycopg2.Error as e:
+            raise RuntimeError(f"Failed to count alerts: {e}")
         finally:
             self._release(conn)
 
@@ -2376,22 +2808,23 @@ class DatabaseManager:
     # ── Price Cache ──────────────────────────────────────────────
 
     def upsert_price_cache(
-        self, symbol, asset_type, price, change_percent, display_name=None
+        self, symbol, asset_type, price, change_percent, display_name=None, currency="USD"
     ):
         conn = self.get_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO price_cache (symbol, asset_type, price, change_percent, display_name, last_updated)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    INSERT INTO price_cache (symbol, asset_type, price, change_percent, display_name, currency, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (symbol) DO UPDATE SET
                         price          = EXCLUDED.price,
                         change_percent = EXCLUDED.change_percent,
                         display_name   = COALESCE(EXCLUDED.display_name, price_cache.display_name),
+                        currency       = EXCLUDED.currency,
                         last_updated   = NOW()
                 """,
-                    (symbol, asset_type, price, change_percent, display_name),
+                    (symbol, asset_type, price, change_percent, display_name, currency),
                 )
             conn.commit()
         finally:
@@ -2431,6 +2864,83 @@ class DatabaseManager:
                 cur.execute("SELECT * FROM price_cache")
                 rows = cur.fetchall()
                 return {row["symbol"]: row for row in rows}
+        finally:
+            self._release(conn)
+
+    # ── Ticker Public View ───────────────────────────────────────
+
+    def upsert_ticker_public_view(
+        self,
+        symbol: str,
+        summary_md: Optional[str] = None,
+        bullish_pct: Optional[int] = None,
+        top_themes: Optional[list] = None,
+        reddit_posts: Optional[list] = None,
+        x_posts: Optional[list] = None,
+        status: str = "ready",
+        error_message: Optional[str] = None,
+    ):
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO ticker_public_view (
+                        symbol, summary_md, bullish_pct, top_themes_json,
+                        reddit_posts, x_posts, status, error_message, last_updated
+                    )
+                    VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s, NOW())
+                    ON CONFLICT (symbol) DO UPDATE SET
+                        summary_md      = EXCLUDED.summary_md,
+                        bullish_pct     = EXCLUDED.bullish_pct,
+                        top_themes_json = EXCLUDED.top_themes_json,
+                        reddit_posts    = EXCLUDED.reddit_posts,
+                        x_posts         = EXCLUDED.x_posts,
+                        status          = EXCLUDED.status,
+                        error_message   = EXCLUDED.error_message,
+                        last_updated    = NOW()
+                    """,
+                    (
+                        symbol.upper(),
+                        summary_md,
+                        bullish_pct,
+                        json.dumps(top_themes) if top_themes is not None else None,
+                        json.dumps(reddit_posts) if reddit_posts is not None else None,
+                        json.dumps(x_posts) if x_posts is not None else None,
+                        status,
+                        error_message,
+                    ),
+                )
+            conn.commit()
+        finally:
+            self._release(conn)
+
+    def get_ticker_public_view(self, symbol: str) -> Optional[dict]:
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM ticker_public_view WHERE symbol = %s",
+                    (symbol.upper(),),
+                )
+                return cur.fetchone()
+        finally:
+            self._release(conn)
+
+    def get_stale_public_view_symbols(self, ttl_hours: int = 24) -> list:
+        """Return symbols whose public view is older than ttl_hours or in 'error' state."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT symbol FROM ticker_public_view
+                    WHERE last_updated IS NULL
+                       OR last_updated < NOW() - (%s || ' hours')::interval
+                    """,
+                    (str(ttl_hours),),
+                )
+                return [row["symbol"] for row in cur.fetchall()]
         finally:
             self._release(conn)
 
@@ -2571,7 +3081,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     UPDATE price_alerts
-                    SET last_triggered_at = NOW()
+                    SET last_triggered_at = NOW(), active = FALSE
                     WHERE alert_id = %s
                     """,
                     (alert_id,),
@@ -2704,6 +3214,205 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to log CSV import: {e}")
+        finally:
+            self._release(conn)
+
+    # --- Multi-worker shared state: generation_status + generation_events ---
+
+    _GEN_STATUS_FIELDS = {
+        "status",
+        "report_id",
+        "progress",
+        "step",
+        "step_code",
+        "done",
+        "total",
+        "partial",
+        "message",
+        "questions",
+        "subjects",
+        "failed_subjects",
+    }
+    _GEN_STATUS_JSON_FIELDS = {"questions", "subjects", "failed_subjects"}
+
+    def set_generation_status(
+        self, session_id: str, user_id: str, **fields: Any
+    ) -> None:
+        """UPSERT a row in generation_status. Fields must be in _GEN_STATUS_FIELDS."""
+        cols = ["session_id", "user_id"]
+        vals: List[Any] = [session_id, user_id]
+        for k, v in fields.items():
+            if k not in self._GEN_STATUS_FIELDS:
+                raise ValueError(f"Unknown generation_status field: {k}")
+            cols.append(k)
+            vals.append(json.dumps(v) if k in self._GEN_STATUS_JSON_FIELDS else v)
+
+        placeholders = ", ".join(["%s"] * len(cols))
+        col_list = ", ".join(cols)
+        update_cols = [c for c in cols if c not in ("session_id", "user_id")]
+        update_clause = ", ".join(f"{c}=EXCLUDED.{c}" for c in update_cols)
+        if update_clause:
+            update_clause += ", updated_at=NOW()"
+        else:
+            update_clause = "updated_at=NOW()"
+
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO generation_status ({col_list})
+                    VALUES ({placeholders})
+                    ON CONFLICT (session_id) DO UPDATE SET {update_clause}
+                    """,
+                    vals,
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to set generation_status: {e}") from e
+        finally:
+            self._release(conn)
+
+    def get_generation_status(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a generation_status row as a dict, or None if missing."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT session_id, user_id, status, report_id, progress, step,
+                           step_code, done, total, partial, message, questions,
+                           subjects, failed_subjects, created_at, updated_at, expires_at
+                    FROM generation_status
+                    WHERE session_id = %s
+                    """,
+                    (session_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                cols = [d[0] for d in cur.description]
+                return dict(zip(cols, row))
+        finally:
+            self._release(conn)
+
+    def update_generation_status(self, session_id: str, **fields: Any) -> None:
+        """UPDATE specific fields on an existing generation_status row."""
+        if not fields:
+            return
+        sets: List[str] = []
+        vals: List[Any] = []
+        for k, v in fields.items():
+            if k not in self._GEN_STATUS_FIELDS:
+                raise ValueError(f"Unknown generation_status field: {k}")
+            sets.append(f"{k}=%s")
+            vals.append(json.dumps(v) if k in self._GEN_STATUS_JSON_FIELDS else v)
+        sets.append("updated_at=NOW()")
+        vals.append(session_id)
+
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"UPDATE generation_status SET {', '.join(sets)} WHERE session_id=%s",
+                    vals,
+                )
+            conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to update generation_status: {e}") from e
+        finally:
+            self._release(conn)
+
+    def append_generation_event(
+        self, session_id: str, event_type: str, payload: Dict[str, Any]
+    ) -> int:
+        """Append an SSE event for a session and return its monotonic seq."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO generation_events (session_id, seq, event_type, payload)
+                    VALUES (
+                        %s,
+                        COALESCE(
+                            (SELECT MAX(seq) FROM generation_events WHERE session_id = %s),
+                            0
+                        ) + 1,
+                        %s,
+                        %s
+                    )
+                    RETURNING seq
+                    """,
+                    (session_id, session_id, event_type, json.dumps(payload)),
+                )
+                seq = cur.fetchone()[0]
+            conn.commit()
+            return int(seq)
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to append generation_event: {e}") from e
+        finally:
+            self._release(conn)
+
+    def read_generation_events_since(
+        self, session_id: str, last_seq: int
+    ) -> List[Dict[str, Any]]:
+        """Return events with seq > last_seq, ordered by seq."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT seq, event_type, payload
+                    FROM generation_events
+                    WHERE session_id = %s AND seq > %s
+                    ORDER BY seq
+                    """,
+                    (session_id, last_seq),
+                )
+                rows = cur.fetchall()
+                return [
+                    {"seq": int(r[0]), "event_type": r[1], "payload": r[2]}
+                    for r in rows
+                ]
+        finally:
+            self._release(conn)
+
+    def evict_stale_generation_data(self) -> int:
+        """Delete expired generation_status rows + their events. Returns rows deleted."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM generation_events
+                    WHERE session_id IN (
+                        SELECT session_id FROM generation_status WHERE expires_at < NOW()
+                    )
+                    """
+                )
+                cur.execute(
+                    "DELETE FROM generation_status WHERE expires_at < NOW()"
+                )
+                deleted = cur.rowcount or 0
+            conn.commit()
+            return deleted
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to evict stale generation data: {e}") from e
         finally:
             self._release(conn)
 

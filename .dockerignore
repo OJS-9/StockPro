@@ -1,0 +1,19 @@
+.env
+.git
+.gitignore
+.claude
+.cursor
+.vscode
+.idea
+.ruff_cache
+.pytest_cache
+__pycache__
+*.pyc
+node_modules
+stockpro-web/node_modules
+# stockpro-web/dist is now built by GitHub Actions and committed to the repo,
+# so Docker should include it (Railway no longer runs the frontend build).
+data/
+audit-screenshots/
+.playwright/
+.playwright-cli/

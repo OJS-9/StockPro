@@ -19,6 +19,7 @@ from flask import (
     jsonify,
     Response,
     abort,
+    send_from_directory,
 )
 from flask_wtf.csrf import CSRFProtect
 from flask_cors import CORS
@@ -48,6 +49,7 @@ from watchlist.watchlist_service import get_watchlist_service
 from data_providers import DataProviderFactory
 from report_storage import ReportStorage
 from pdf_generator import get_pdf_generator
+from currency_utils import convert_to_usd, detect_currency
 
 # Load environment variables
 load_dotenv()
@@ -81,6 +83,12 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"      # blocks cross-site request f
 app.config["SESSION_COOKIE_SECURE"] = _is_production  # HTTPS-only in prod
 
 csrf = CSRFProtect(app)
+
+# Module-level DB manager — used by the new generation_status / generation_events
+# multi-worker shared-state helpers. Existing code paths still create local
+# `db = get_database_manager()` bindings; both reference the same singleton.
+from database import get_database_manager as _bootstrap_get_database_manager
+db = _bootstrap_get_database_manager()
 
 # Exempt all /api/* routes from CSRF — authenticated via Clerk Bearer token.
 # Flask-WTF's csrf_protect runs as the LAST before_request hook added by init_app.
@@ -214,6 +222,19 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" in session:
             return f(*args, **kwargs)
+
+        # Accept long-lived StockPro API tokens (CLI / headless agents).
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer sp_"):
+            from auth_tokens import verify_token
+
+            raw_token = auth_header.split(" ", 1)[1].strip()
+            user_id = verify_token(raw_token)
+            if user_id:
+                session["user_id"] = user_id
+                return f(*args, **kwargs)
+            return jsonify({"error": "Unauthorized"}), 401
+
         # Verify Clerk session token via authenticate_request
         request_state = clerk_client.authenticate_request(
             request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
@@ -309,8 +330,13 @@ def inject_user():
 @app.context_processor
 def inject_active_research_session():
     sid = session.get("session_id")
-    if sid and _generation_status.get(sid, {}).get("status") == "in_progress":
-        return {"active_research_session_id": sid}
+    if sid:
+        try:
+            row = db.get_generation_status(sid)
+            if row and row.get("status") == "in_progress":
+                return {"active_research_session_id": sid}
+        except Exception:
+            pass
     return {"active_research_session_id": None}
 
 
@@ -391,13 +417,64 @@ def _page_range(current, total, delta=2):
 # Global agent instances (keyed by session ID)
 agent_sessions = {}
 
-# SSE step queues — keyed by session_id; cleaned up after stream completes
-_sse_queues: dict = {}
+# SSE events now live in the Postgres `generation_events` table so a producer
+# thread on one gunicorn worker can stream to a consumer connected to another.
+# Report-generation status lives in `generation_status` (see DatabaseManager
+# helpers: get_generation_status / set_generation_status / update_generation_status).
 
-# Background generation status — keyed by session_id
-_generation_status: dict = {}
 
-# Session creation timestamps for TTL eviction
+class _PgEventQueue:
+    """Drop-in replacement for queue.Queue used by StepEmitter / SSE producer.
+
+    `put_nowait` and `put` both append a row to `generation_events` keyed by
+    session_id. Consumers (the /stream/<id> SSE endpoint) poll via
+    db.read_generation_events_since().
+    """
+
+    __slots__ = ("session_id",)
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+
+    def _append(self, item: dict) -> None:
+        try:
+            event_type = (item or {}).get("type") or "step"
+            db.append_generation_event(self.session_id, event_type, item or {})
+        except Exception as e:
+            app.logger.warning("PgEventQueue append failed for %s: %s", self.session_id, e)
+
+    def put_nowait(self, item: dict) -> None:
+        self._append(item)
+
+    def put(self, item: dict, block: bool = True, timeout: float | None = None) -> None:
+        self._append(item)
+
+
+def _step_code_for(progress, english_step: str) -> str:
+    """Map an English step string from the agent into a stable, locale-free code.
+
+    Frontend uses this to render a translated label.
+    """
+    if progress is None:
+        return "researching"
+    s = (english_step or "").lower()
+    if "starting" in s:
+        return "starting"
+    if "planning" in s:
+        return "planning"
+    if "researching" in s and "subjects" in s:
+        return "researching"
+    if "synthesiz" in s:
+        return "synthesizing"
+    if "saving" in s:
+        return "saving"
+    if "ready" in s:
+        return "ready"
+    return "working"
+
+# Per-worker creation timestamps used to evict in-memory `agent_sessions`
+# (LangGraph orchestrator instances). Postgres `generation_status.expires_at`
+# handles TTL for the cross-worker shared status data.
 _session_created_at: dict = {}
 
 
@@ -406,9 +483,12 @@ def _evict_stale_sessions(max_age_seconds: int = 86400):
     stale = [sid for sid, t in _session_created_at.items() if t < cutoff]
     for sid in stale:
         agent_sessions.pop(sid, None)
-        _generation_status.pop(sid, None)
-        _sse_queues.pop(sid, None)
         _session_created_at.pop(sid, None)
+    # Clean up Postgres-side expired rows opportunistically.
+    try:
+        db.evict_stale_generation_data()
+    except Exception as e:
+        app.logger.warning("evict_stale_generation_data failed: %s", e)
 
 
 def initialize_session(session_id: str) -> OrchestratorSession:
@@ -504,6 +584,51 @@ def _fetch_clarifying_questions(ticker: str, trade_type: str) -> list:
 # ==================== Auth Routes ====================
 
 
+# Jinja UI is deprecated. Any GET to a non-allowed path redirects into the React SPA.
+_SPA_PASSTHROUGH_PREFIXES = (
+    "/app/",
+    "/api/",
+    "/stream/",
+    "/ws/",
+    "/static/",
+    "/auth/",
+    "/sign-out",
+    "/cli/auth",
+)
+
+
+# Exact root-level paths that must be served by their own routes, not redirected to /app/.
+# These are AEO/SEO files that AI crawlers and search engines fetch from the domain root.
+_SPA_PASSTHROUGH_EXACT = ("/", "/llms.txt", "/robots.txt", "/sitemap.xml")
+
+# Top-level paths that correspond to real React Router routes inside the SPA.
+# Hits here get redirected to /app<path> (preserving the path) so the SPA can render
+# the right page. Anything not in this set returns a real 404 (no soft-404).
+_SPA_ROUTE_EXACT = frozenset({
+    "/pricing", "/sign-in", "/sign-up", "/home", "/portfolio",
+    "/reports", "/watchlist", "/alerts", "/research", "/settings",
+    "/device", "/legal/terms", "/legal/privacy", "/legal/refund",
+    "/billing/return", "/about", "/press",
+})
+_SPA_ROUTE_PREFIXES = (
+    "/sign-in/", "/sign-up/", "/portfolio/", "/report/", "/chat/", "/ticker/",
+)
+
+
+@app.before_request
+def _force_spa_for_gets():
+    if request.method != "GET":
+        return None
+    path = request.path
+    if path in _SPA_PASSTHROUGH_EXACT or path == "/app" or path.startswith(_SPA_PASSTHROUGH_PREFIXES):
+        return None
+    if _wants_json():
+        return None
+    if path in _SPA_ROUTE_EXACT or path.startswith(_SPA_ROUTE_PREFIXES):
+        return redirect(f"/app{path}", code=301)
+    abort(404)
+
+
 def _safe_redirect_url(next_url, fallback="/"):
     """Allow only relative paths to prevent open redirects."""
     if next_url and next_url.startswith("/") and not next_url.startswith("//"):
@@ -534,6 +659,19 @@ def sign_up():
     if "user_id" in session:
         return redirect(url_for("index"))
     return render_template("sign_up.html")
+
+
+@app.route("/cli/auth")
+def cli_auth():
+    """CLI authentication page -- renders Clerk sign-in, redirects JWT to localhost callback."""
+    port = request.args.get("port", "")
+    if not port.isdigit() or not (1024 <= int(port) <= 65535):
+        return "Invalid port", 400
+    return render_template(
+        "cli_auth.html",
+        callback_port=port,
+        clerk_publishable_key=os.getenv("CLERK_PUBLISHABLE_KEY", ""),
+    )
 
 
 @app.route("/sign-out")
@@ -629,58 +767,31 @@ def _render_authenticated_home():
     )
 
 
+@app.route("/llms.txt")
+def llms_txt():
+    """AI-engine index file (llmstxt.org spec). Served at the domain root for AEO."""
+    return send_from_directory(app.static_folder, "llms.txt", mimetype="text/markdown; charset=utf-8")
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    """Robots policy — allows AI crawlers (GPTBot, PerplexityBot, ClaudeBot, etc.)."""
+    return send_from_directory(app.static_folder, "robots.txt", mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    """XML sitemap of public pages."""
+    return send_from_directory(app.static_folder, "sitemap.xml", mimetype="application/xml")
+
+
 @app.route("/")
 def index():
-    """Unified home page at '/'.
-
-    - Authenticated: show the existing app homepage (Markets).
-    - Unauthenticated: show a public landing page with waitlist signup.
-    """
-    if "user_id" in session:
-        return _render_authenticated_home()
-
-    # If the user has a Clerk session cookie but no Flask session yet, hydrate
-    # the session and redirect to the authenticated homepage.
-    try:
-        request_state = clerk_client.authenticate_request(
-            request, AuthenticateRequestOptions(jwt_key=CLERK_JWT_KEY)
-        )
-        if request_state.is_authenticated:
-            clerk_user_id = request_state.payload["sub"]
-            from database import get_database_manager
-
-            db = get_database_manager()
-            user = db.get_user_by_id(clerk_user_id)
-            if not user:
-                clerk_user = clerk_client.users.get(user_id=clerk_user_id)
-                email = ""
-                username = clerk_user_id
-                if clerk_user.email_addresses:
-                    email = clerk_user.email_addresses[0].email_address or ""
-                if clerk_user.username:
-                    username = clerk_user.username
-                elif clerk_user.first_name or clerk_user.last_name:
-                    username = (
-                        f"{clerk_user.first_name or ''}{clerk_user.last_name or ''}".strip()
-                        or clerk_user_id
-                    )
-                db.create_user(user_id=clerk_user_id, username=username, email=email)
-            else:
-                username = user.get("username", clerk_user_id)
-
-            session["user_id"] = clerk_user_id
-            session["username"] = username
-            threading.Thread(
-                target=_warm_portfolio_cache, args=(clerk_user_id,), daemon=True
-            ).start()
-            get_or_create_session_id()
-            return redirect(url_for("index"))
-    except Exception as exc:
-        app.logger.warning("Clerk auth check on '/' failed: %s", exc, exc_info=True)
-
+    """Redirect root to the React SPA. Jinja UI is deprecated."""
     if _wants_json():
-        return jsonify({"authenticated": False})
-    return render_template("home_public.html", **pop_status())
+        return jsonify({"authenticated": "user_id" in session})
+    # 301 (permanent) so search engines / AI crawlers consolidate ranking signal on /app/.
+    return redirect("/app/", code=301)
 
 
 @app.route("/chat")
@@ -792,15 +903,23 @@ def continue_conversation():
     agent.user_id = session.get("user_id")
     agent.username = session.get("username")
 
+    # Set user language preference for Hebrew chat/report generation
+    try:
+        from database import get_database_manager
+        _db = get_database_manager()
+        _user = _db.get_user_by_id(session.get("user_id"))
+        agent.language = (_user.get("preferences") or {}).get("language", "en") if _user else "en"
+    except Exception:
+        agent.language = "en"
+
     # Snapshot mutable session state so the background thread can read it safely
     previous_report_id = session.get("current_report_id")
     report_chat_mode = session.get("report_chat_mode", False)
     conversation_history_snapshot = list(session.get("conversation_history", []))
     session_ticker = session.get("current_ticker")
 
-    # Create SSE queue and emitter
-    step_q: queue.Queue = queue.Queue()
-    _sse_queues[session_id] = step_q
+    # SSE event sink — Postgres-backed so any worker can consume the stream.
+    step_q = _PgEventQueue(session_id)
     emitter = create_emitter(step_q)
     agent.set_emitter(emitter)
 
@@ -874,33 +993,24 @@ def stream_steps(session_id: str):
     if session.get("session_id") != session_id:
         abort(403)
 
-    step_q = _sse_queues.get(session_id)
-    if step_q is None:
-        # No active stream — send immediate done with empty payload
-        def empty():
-            yield 'data: {"type": "done"}\n\n'
-
-        return Response(
-            empty(),
-            mimetype="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
-
     def event_stream():
-        try:
-            while True:
-                try:
-                    event = step_q.get(timeout=120)
-                except queue.Empty:
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Request timed out'})}\n\n"
+        last_seq = 0
+        deadline = time.time() + 120  # overall stream timeout
+        poll_interval = 0.5
+        while time.time() < deadline:
+            try:
+                events = db.read_generation_events_since(session_id, last_seq)
+            except Exception as e:
+                app.logger.warning("read_generation_events_since failed: %s", e)
+                events = []
+            for ev in events:
+                payload = ev.get("payload") or {}
+                last_seq = ev["seq"]
+                yield f"data: {json.dumps(payload)}\n\n"
+                if payload.get("type") in ("done", "error"):
                     return
-
-                yield f"data: {json.dumps(event)}\n\n"
-
-                if event.get("type") in ("done", "error"):
-                    return
-        finally:
-            _sse_queues.pop(session_id, None)
+            time.sleep(poll_interval)
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Request timed out'})}\n\n"
 
     return Response(
         event_stream(),
@@ -1013,6 +1123,11 @@ def popup_start():
     session["current_ticker"] = ticker
     session["current_trade_type"] = trade_type
 
+    language = (request.form.get("language") or "").strip().lower()
+    if language in ("en", "he"):
+        agent.language = language
+        session["language"] = language
+
     position_summary = (request.form.get("position_summary") or "").strip()
     position_goal = (request.form.get("position_goal") or "").strip()
     if position_summary:
@@ -1082,6 +1197,15 @@ def start_generation():
     agent.user_id = session.get("user_id")
     agent.username = session.get("username")
 
+    # Set user language preference for Hebrew report generation
+    try:
+        from database import get_database_manager
+        _db = get_database_manager()
+        _user = _db.get_user_by_id(session.get("user_id"))
+        agent.language = (_user.get("preferences") or {}).get("language", "en") if _user else "en"
+    except Exception:
+        agent.language = "en"
+
     # Snapshot budget input for the background thread.
     from spend_budget import get_spend_budget_usd
 
@@ -1104,12 +1228,16 @@ def start_generation():
             position_block += f"\nUser's goal for this research: {position_goal}"
         context_str = position_block + ("\n\n" + context_str if context_str else "")
 
-    _generation_status[session_id] = {
-        "status": "in_progress",
-        "report_id": None,
-        "progress": 5,
-        "step": "Starting...",
-    }
+    user_id = session.get("user_id") or ""
+    db.set_generation_status(
+        session_id,
+        user_id,
+        status="in_progress",
+        report_id=None,
+        progress=5,
+        step="Starting...",
+        step_code="starting",
+    )
 
     def run_generation():
         import threading as _threading
@@ -1118,27 +1246,37 @@ def start_generation():
         counter_lock = _threading.Lock()
 
         def progress_fn(progress, step):
-            status = _generation_status.get(session_id)
-            if status is None:
-                return
-            if progress is None:
-                # Subject completed — increment counter, interpolate within 20–75% band
-                with counter_lock:
-                    subject_counter["done"] += 1
-                    done = subject_counter["done"]
-                    total = subject_counter["total"] or 1
-                    pct = 20 + int((done / total) * 55)
-                    status["progress"] = min(pct, 75)
-                    status["step"] = f"Researching: {done}/{total} subjects done"
-            else:
-                status["progress"] = progress
-                status["step"] = step
-                if progress == 20 and "subjects" in step:
-                    # Extract subject count from "Researching N subjects..."
-                    try:
-                        subject_counter["total"] = int(step.split()[1])
-                    except (IndexError, ValueError):
-                        pass
+            try:
+                if progress is None:
+                    # Subject completed — increment counter, interpolate within 20–75% band
+                    with counter_lock:
+                        subject_counter["done"] += 1
+                        done = subject_counter["done"]
+                        total = subject_counter["total"] or 1
+                        pct = 20 + int((done / total) * 55)
+                        db.update_generation_status(
+                            session_id,
+                            progress=min(pct, 75),
+                            step=f"Researching: {done}/{total} subjects done",
+                            step_code="researching",
+                            done=done,
+                            total=total,
+                        )
+                else:
+                    fields = {
+                        "progress": progress,
+                        "step": step,
+                        "step_code": _step_code_for(progress, step),
+                    }
+                    if progress == 20 and "subjects" in (step or ""):
+                        try:
+                            subject_counter["total"] = int(step.split()[1])
+                            fields["total"] = subject_counter["total"]
+                        except (IndexError, ValueError):
+                            pass
+                    db.update_generation_status(session_id, **fields)
+            except Exception as e:
+                app.logger.warning("progress_fn DB update failed: %s", e)
 
         emitter = create_emitter()
         agent.set_emitter(emitter)
@@ -1149,14 +1287,21 @@ def start_generation():
                 selected_subjects=selected_subject_ids,
                 spend_budget_usd=spend_budget_usd,
             )
-            _generation_status[session_id] = {
-                "status": "ready",
-                "report_id": agent.current_report_id,
-                "progress": 100,
-                "step": "Report ready",
-            }
+            db.update_generation_status(
+                session_id,
+                status="ready",
+                report_id=agent.current_report_id,
+                progress=100,
+                step="Report ready",
+                step_code="ready",
+            )
         except Exception as e:
-            _generation_status[session_id] = {"status": "error", "message": str(e)}
+            db.update_generation_status(
+                session_id,
+                status="error",
+                message=str(e),
+                step_code="error",
+            )
         finally:
             agent.set_emitter(None)
             agent.set_progress_fn(None)
@@ -1165,13 +1310,322 @@ def start_generation():
     return jsonify({"success": True})
 
 
+@app.route("/api/health")
+@csrf.exempt
+def api_health():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/report_status/<session_id>")
 @login_required
 def report_status(session_id: str):
     """Poll endpoint for background generation status."""
-    if session.get("session_id") != session_id:
+    user_id = session.get("user_id")
+    row = db.get_generation_status(session_id)
+
+    # No row yet (race between CLI's first poll and the generate handler
+    # registering state, or the cold-worker warm-up case). Return "unknown" so
+    # the caller keeps polling instead of crashing with a 403. No ownership
+    # information is leaked because the response is identical for any caller.
+    if row is None:
+        return jsonify({"status": "unknown"})
+
+    web_session_ok = session.get("session_id") == session_id
+    status_owner = row.get("user_id")
+    api_owner_ok = bool(status_owner) and bool(user_id) and status_owner == user_id
+
+    if not web_session_ok and not api_owner_ok:
+        app.logger.warning(
+            "report_status forbidden: session=%s user=%s owner=%s web_ok=%s",
+            session_id, user_id, status_owner, web_session_ok,
+        )
         return jsonify({"error": "forbidden"}), 403
-    return jsonify(_generation_status.get(session_id, {"status": "unknown"}))
+
+    # Strip internal/timestamp columns and any None values for a clean response.
+    _hidden = {"user_id", "session_id", "created_at", "updated_at", "expires_at"}
+    return jsonify({k: v for k, v in row.items() if k not in _hidden and v is not None})
+
+
+@app.route("/api/reports/generate", methods=["POST"])
+@csrf.exempt
+@login_required
+@limiter.limit(_report_gen_rate_limit, key_func=get_remote_address)
+def api_reports_generate():
+    """Stateless report generation endpoint for headless/CLI clients.
+
+    Accepts JSON body: {ticker, trade_type, context (optional)}
+    Returns: {success: true, session_id: "<uuid>"}
+    Poll GET /api/report_status/<session_id> until status == "ready" or "error".
+    """
+    data = request.get_json(force=True) or {}
+    ticker = (data.get("ticker") or "").strip().upper()
+    trade_type = (data.get("trade_type") or "").strip()
+    context_str = (data.get("context") or "").strip()
+    no_questions = bool(data.get("no_questions"))
+
+    if not ticker or not trade_type:
+        return jsonify({"error": "ticker and trade_type are required"}), 400
+
+    if _session_hits_report_quota():
+        return _report_quota_json_error()
+
+    # Fresh session_id independent of any browser session
+    session_id = str(uuid.uuid4())
+    agent = initialize_session(session_id)
+    agent.reset_conversation()
+
+    user_id = session.get("user_id")
+    agent.user_id = user_id
+
+    # Username: prefer session (Clerk web flow), fall back to DB lookup (Bearer token)
+    agent.username = session.get("username")
+    if not agent.username and user_id:
+        try:
+            from database import get_database_manager as _get_db
+            _user_rec = _get_db().get_user_by_id(user_id)
+            if _user_rec:
+                agent.username = _user_rec.get("username", user_id)
+        except Exception:
+            agent.username = user_id
+
+    # Language preference from user profile
+    try:
+        from database import get_database_manager as _get_db2
+        _user_rec2 = _get_db2().get_user_by_id(user_id)
+        agent.language = (
+            (_user_rec2.get("preferences") or {}).get("language", "en") if _user_rec2 else "en"
+        )
+    except Exception:
+        agent.language = "en"
+
+    # Prime the orchestrator with ticker/trade_type (mirrors popup_start)
+    try:
+        agent.start_research(ticker, trade_type)
+    except Exception:
+        pass
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    # Always surface clarifying questions + subject areas so the CLI flow
+    # matches the web flow. Callers that want to skip (headless automation)
+    # can pass no_questions=True.
+    pending = agent.pending_questions if isinstance(agent.pending_questions, list) else []
+    if not pending:
+        # Fallback matches /ask_questions — ensure the user always gets a prompt.
+        pending = [
+            {
+                "question": f"What is your primary goal for researching {ticker}?",
+                "options": [
+                    "Long-term investment",
+                    "Swing trade",
+                    "Day trade",
+                    "General analysis",
+                ],
+            }
+        ]
+
+    from research_subjects import get_research_subjects_for_trade_type
+    subjects = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "description": s.description,
+            "priority": s.priority.get(trade_type, 99),
+        }
+        for s in get_research_subjects_for_trade_type(trade_type)
+    ]
+
+    if not no_questions:
+        db.set_generation_status(
+            session_id,
+            user_id,
+            status="needs_input",
+            questions=pending,
+            subjects=subjects,
+        )
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "questions": pending,
+            "subjects": subjects,
+        })
+
+    db.set_generation_status(
+        session_id,
+        user_id,
+        status="in_progress",
+        report_id=None,
+        progress=5,
+        step="Starting...",
+        step_code="starting",
+    )
+
+    _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd)
+    return jsonify({"success": True, "session_id": session_id, "questions": []})
+
+
+def _start_report_generation_thread(session_id, agent, context_str, user_id, spend_budget_usd, selected_subjects=None):
+    """Spawn the background report-generation thread for CLI/headless flows."""
+    def run_generation():
+        import threading as _threading
+
+        subject_counter = {"done": 0, "total": 0}
+        counter_lock = _threading.Lock()
+
+        def progress_fn(progress, step):
+            try:
+                if progress is None:
+                    with counter_lock:
+                        subject_counter["done"] += 1
+                        done = subject_counter["done"]
+                        total = subject_counter["total"] or 1
+                        pct = 20 + int((done / total) * 55)
+                        db.update_generation_status(
+                            session_id,
+                            progress=min(pct, 75),
+                            step=f"Researching: {done}/{total} subjects done",
+                        )
+                else:
+                    fields = {"progress": progress, "step": step}
+                    if progress == 20 and "subjects" in (step or ""):
+                        try:
+                            subject_counter["total"] = int(step.split()[1])
+                        except (IndexError, ValueError):
+                            pass
+                    db.update_generation_status(session_id, **fields)
+            except Exception as e:
+                app.logger.warning("progress_fn DB update failed: %s", e)
+
+        emitter = create_emitter()
+        agent.set_emitter(emitter)
+        agent.set_progress_fn(progress_fn)
+        try:
+            agent.generate_report(
+                context=context_str,
+                selected_subjects=selected_subjects,
+                spend_budget_usd=spend_budget_usd,
+            )
+            failed = list(getattr(agent, "last_failed_subjects", []) or [])
+            is_partial = bool(getattr(agent, "last_is_partial", False))
+            gate_aborted = bool(getattr(agent, "last_quality_gate_aborted", False))
+            report_id = agent.current_report_id
+
+            # When the quality gate aborted (>50% subjects failed) or no report
+            # was produced at all, surface this as an error to CLI/headless callers
+            # instead of a misleading "ready". Otherwise the user pays for an
+            # empty report and trusts a fake success.
+            if not report_id or gate_aborted:
+                db.update_generation_status(
+                    session_id,
+                    status="error",
+                    message=(
+                        f"Report generation failed: research could not produce "
+                        f"usable output. Most likely the ticker was invalid or "
+                        f"upstream data sources are down. Failed subjects: "
+                        f"{', '.join(failed) if failed else 'all'}."
+                    ),
+                    failed_subjects=failed,
+                    step_code="error",
+                )
+            elif is_partial and failed:
+                # Some subjects failed but the report has content — succeed but warn.
+                db.update_generation_status(
+                    session_id,
+                    status="ready",
+                    report_id=report_id,
+                    progress=100,
+                    step="Report ready (partial)",
+                    step_code="ready",
+                    partial=True,
+                    failed_subjects=failed,
+                )
+            else:
+                db.update_generation_status(
+                    session_id,
+                    status="ready",
+                    report_id=report_id,
+                    progress=100,
+                    step="Report ready",
+                    step_code="ready",
+                )
+        except Exception as e:
+            db.update_generation_status(
+                session_id,
+                status="error",
+                message=str(e),
+                step_code="error",
+            )
+        finally:
+            agent.set_emitter(None)
+            agent.set_progress_fn(None)
+
+    threading.Thread(target=run_generation, daemon=True).start()
+
+
+@app.route("/api/reports/answer", methods=["POST"])
+@csrf.exempt
+@login_required
+def api_reports_answer():
+    """Submit answers to clarifying questions and kick off generation.
+
+    Accepts JSON body: {session_id, answers: [str, ...] or [{question, answer}, ...]}
+    Reads the paused session (status == needs_input), builds context_str from
+    Q&A pairs, and starts the background generation thread.
+    """
+    data = request.get_json(force=True) or {}
+    session_id = (data.get("session_id") or "").strip()
+    answers_in = data.get("answers") or []
+    selected_subject_ids = data.get("selected_subject_ids") or None
+
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+
+    row = db.get_generation_status(session_id)
+    user_id = session.get("user_id")
+
+    if row is None:
+        return jsonify({"error": "unknown session"}), 404
+    if row.get("user_id") != user_id:
+        return jsonify({"error": "forbidden"}), 403
+    if row.get("status") != "needs_input":
+        return jsonify({"error": f"session not awaiting input (status={row.get('status')})"}), 409
+
+    questions = row.get("questions") or []
+
+    # Accept either a flat list of answer strings (aligned with questions order)
+    # or a list of {question, answer} dicts.
+    lines = []
+    for i, q in enumerate(questions):
+        q_text = q.get("question") if isinstance(q, dict) else str(q)
+        ans = ""
+        if i < len(answers_in):
+            a = answers_in[i]
+            ans = a.get("answer", "") if isinstance(a, dict) else str(a)
+        lines.append(f"Q: {q_text}")
+        lines.append(f"A: {ans}")
+    context_str = "User context:\n" + "\n".join(lines) if lines else ""
+
+    agent = initialize_session(session_id)
+
+    from spend_budget import get_spend_budget_usd
+    spend_budget_usd = get_spend_budget_usd(agent.user_id)
+
+    db.set_generation_status(
+        session_id,
+        user_id,
+        status="in_progress",
+        report_id=None,
+        progress=5,
+        step="Starting...",
+        step_code="starting",
+    )
+
+    _start_report_generation_thread(
+        session_id, agent, context_str, user_id, spend_budget_usd,
+        selected_subjects=selected_subject_ids,
+    )
+    return jsonify({"success": True, "session_id": session_id})
 
 
 @app.route("/api/position_check/<ticker>")
@@ -1297,10 +1751,25 @@ def create_portfolio_route():
     return redirect(url_for("portfolio_detail", portfolio_id=portfolio_id))
 
 
-@app.route("/portfolio/<portfolio_id>/cash", methods=["POST"])
+@app.route("/api/portfolio/<portfolio_id>/toggle-cash", methods=["POST"])
+@login_required
+def toggle_cash_tracking(portfolio_id: str):
+    """Enable cash tracking for a portfolio."""
+    portfolio_service = get_portfolio_service()
+    portfolio_data = portfolio_service.get_portfolio(portfolio_id)
+    if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
+        return {"ok": False, "error": "Not found"}, 404
+    try:
+        portfolio_service.enable_cash_tracking(portfolio_id)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
+
+@app.route("/api/portfolio/<portfolio_id>/cash", methods=["POST"])
 @login_required
 def update_portfolio_cash(portfolio_id: str):
-    """Update cash balance for a portfolio (JSON body: { \"cash_balance\": number })."""
+    """Update cash balance for a portfolio. Supports deposit, withdraw, or set."""
     portfolio_service = get_portfolio_service()
     portfolio_data = portfolio_service.get_portfolio(portfolio_id)
     if not portfolio_data or portfolio_data.get("user_id") != session["user_id"]:
@@ -1308,15 +1777,21 @@ def update_portfolio_cash(portfolio_id: str):
     if not portfolio_data.get("track_cash"):
         return {"ok": False, "error": "Portfolio does not track cash"}, 400
     data = request.get_json(silent=True) or {}
+    action = data.get("action", "set")
     try:
-        cash_balance = float(data.get("cash_balance", 0))
-        if cash_balance < 0:
-            return {"ok": False, "error": "Cash balance cannot be negative"}, 400
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "Invalid cash_balance"}, 400
-    try:
-        portfolio_service.update_cash_balance(portfolio_id, cash_balance)
-        return {"ok": True, "cash_balance": cash_balance}
+        amount = float(data.get("amount", data.get("cash_balance", 0)))
+        if action == "deposit":
+            new_balance = portfolio_service.deposit_cash(portfolio_id, amount)
+        elif action == "withdraw":
+            new_balance = portfolio_service.withdraw_cash(portfolio_id, amount)
+        else:
+            if amount < 0:
+                return {"ok": False, "error": "Cash balance cannot be negative"}, 400
+            portfolio_service.update_cash_balance(portfolio_id, amount)
+            new_balance = amount
+        return {"ok": True, "cash_balance": new_balance}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}, 400
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
@@ -1728,6 +2203,47 @@ def api_delete_transaction(portfolio_id: str, transaction_id: str):
     return jsonify({"success": False, "error": "Delete failed"}), 500
 
 
+@app.route("/api/portfolios", methods=["POST"])
+@login_required
+def api_create_portfolio():
+    """Create a new portfolio (JSON API for React SPA)."""
+    import math as _math
+    from database import get_database_manager
+    from tiers import get_limit
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    limit = get_limit(uid, "portfolios")
+    if limit != _math.inf and db.count_user_portfolios(uid) >= int(limit):
+        return jsonify({
+            "ok": False,
+            "error": "quota_exceeded",
+            "resource": "portfolios",
+            "limit": int(limit),
+            "message": f"Free plan allows {int(limit)} portfolio. Upgrade to add more.",
+        }), 402
+
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Portfolio name is required"}), 400
+    track_cash = data.get("track_cash", True)
+    cash_balance = 0.0
+    if track_cash:
+        try:
+            cash_balance = max(0.0, float(data.get("cash_balance", 0)))
+        except (ValueError, TypeError):
+            cash_balance = 0.0
+    portfolio_service = get_portfolio_service()
+    portfolio_id = portfolio_service.create_portfolio(
+        name=name,
+        user_id=session["user_id"],
+        track_cash=track_cash,
+        cash_balance=cash_balance,
+    )
+    return jsonify({"ok": True, "portfolio_id": portfolio_id})
+
+
 @app.route("/api/portfolios/prices")
 @login_required
 def portfolios_prices():
@@ -1742,11 +2258,19 @@ def portfolios_prices():
 
     def _fetch_summary(pid):
         try:
+            from currency_utils import convert_to_usd
+            from decimal import Decimal as _D
+
             summary = portfolio_service.get_portfolio_summary(pid, with_prices=True)
-            mv = to_float(summary.get("total_market_value")) or 0.0
-            ug = to_float(summary.get("total_unrealized_gain")) or 0.0
+            display_currency = summary.get("display_currency", "USD")
+            # Aggregate totals must stay in USD even if this portfolio displays in ILS.
+            mv_native = summary.get("total_market_value") or _D("0")
+            ug_native = summary.get("total_unrealized_gain") or _D("0")
+            mv = float(convert_to_usd(_D(str(mv_native)), display_currency))
+            ug = float(convert_to_usd(_D(str(ug_native)), display_currency))
             row = {
                 "portfolio_id": pid,
+                "display_currency": display_currency,
                 "total_market_value": to_float(summary.get("total_market_value")),
                 "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
                 "total_unrealized_gain_pct": to_float(summary.get("total_unrealized_gain_pct")),
@@ -1769,10 +2293,16 @@ def portfolios_prices():
                     "market_value": to_float(h.get("market_value")),
                     "unrealized_gain": to_float(h.get("unrealized_gain")),
                     "unrealized_gain_pct": to_float(h.get("unrealized_gain_pct")),
+                    "currency": h.get("currency", "USD"),
                 })
             row["holdings"] = holdings_out
             row["day_change"] = day_change
-            return row, mv, ug, day_change
+            # day_change is summed in native (ILS) when display_currency=ILS
+            # because each h_mv is native; convert to USD for the cross-portfolio aggregate.
+            day_change_usd = float(
+                convert_to_usd(_D(str(day_change)), display_currency)
+            )
+            return row, mv, ug, day_change_usd
         except Exception:
             return {
                 "portfolio_id": pid,
@@ -1833,7 +2363,11 @@ def portfolio_prices(portfolio_id):
         return float(v) if v is not None else None
 
     holdings_out = []
+    has_ils = False
     for h in summary["holdings"]:
+        cur = h.get("currency", "USD")
+        if cur == "ILS":
+            has_ils = True
         holdings_out.append(
             {
                 "symbol": h["symbol"],
@@ -1845,27 +2379,34 @@ def portfolio_prices(portfolio_id):
                 "market_value": to_float(h.get("market_value")),
                 "unrealized_gain": to_float(h.get("unrealized_gain")),
                 "unrealized_gain_pct": to_float(h.get("unrealized_gain_pct")),
+                "currency": cur,
             }
         )
 
-    return jsonify(
-        {
-            "holdings": holdings_out,
-            "total_market_value": to_float(summary.get("total_market_value")),
-            "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
-            "total_unrealized_gain_pct": to_float(
-                summary.get("total_unrealized_gain_pct")
-            ),
-            "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
-            "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
-            "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
-            "breakdowns": {
-                "sector": breakdowns.get("sector", []),
-                "market": breakdowns.get("market", []),
-                "prices_loaded": bool(breakdowns.get("prices_loaded")),
-            },
-        }
-    )
+    resp = {
+        "holdings": holdings_out,
+        "display_currency": summary.get("display_currency", "USD"),
+        "total_cost_basis": to_float(summary.get("total_cost_basis")),
+        "total_market_value": to_float(summary.get("total_market_value")),
+        "total_unrealized_gain": to_float(summary.get("total_unrealized_gain")),
+        "total_unrealized_gain_pct": to_float(
+            summary.get("total_unrealized_gain_pct")
+        ),
+        "stock_allocation_pct": to_float(summary.get("stock_allocation_pct")),
+        "crypto_allocation_pct": to_float(summary.get("crypto_allocation_pct")),
+        "track_cash": bool(summary.get("track_cash")),
+        "cash_balance": to_float(summary.get("cash_balance")),
+        "cash_allocation_pct": to_float(summary.get("cash_allocation_pct")),
+        "breakdowns": {
+            "sector": breakdowns.get("sector", []),
+            "market": breakdowns.get("market", []),
+            "prices_loaded": bool(breakdowns.get("prices_loaded")),
+        },
+    }
+    if has_ils:
+        from currency_utils import get_usd_ils_rate
+        resp["fx_rates"] = {"ILS_USD": to_float(Decimal("1") / get_usd_ils_rate())}
+    return jsonify(resp)
 
 
 @app.route("/api/portfolio/<portfolio_id>/history")
@@ -1990,8 +2531,22 @@ def api_create_alert():
     if asset_type not in ("stock", "crypto"):
         return jsonify({"success": False, "error": "invalid asset_type"}), 400
 
-    alert_id = str(uuid.uuid4())
+    import math as _math
+    from tiers import get_limit
+
+    uid = session["user_id"]
     db = get_database_manager()
+    limit = get_limit(uid, "price_alerts")
+    if limit != _math.inf and db.count_user_active_alerts(uid) >= int(limit):
+        return jsonify({
+            "success": False,
+            "error": "quota_exceeded",
+            "resource": "price_alerts",
+            "limit": int(limit),
+            "message": f"Your plan allows {int(limit)} active alerts. Upgrade to add more.",
+        }), 402
+
+    alert_id = str(uuid.uuid4())
     db.create_price_alert(
         alert_id=alert_id,
         user_id=session["user_id"],
@@ -2104,6 +2659,143 @@ def api_telegram_connect_token():
     return jsonify({"success": True, "token": token, "ttl_minutes": 10})
 
 
+# ==================== Billing (Whop) ====================
+
+
+@app.route("/api/billing/plans", methods=["GET"])
+def api_billing_plans():
+    """Public: tier plan IDs and prices for the SPA pricing page."""
+    from tiers import plans_public
+
+    return jsonify({"success": True, "plans": plans_public()})
+
+
+@app.route("/api/billing/checkout-session", methods=["POST"])
+@login_required
+def api_billing_checkout_session():
+    """Return a Whop hosted checkout URL with user_id/tier/cadence baked in.
+
+    SPA opens this URL in a new tab; on payment Whop fires `membership.activated`
+    with the metadata, which our webhook uses to link the user to a tier.
+    """
+    data = request.get_json(silent=True) or {}
+    tier = (data.get("tier") or "").strip().lower()
+    cadence = (data.get("cadence") or "monthly").strip().lower()
+
+    from tiers import build_checkout_url
+
+    url = build_checkout_url(tier, cadence, session["user_id"])
+    if not url:
+        return jsonify({"success": False, "error": "plan not configured"}), 400
+
+    return jsonify({"success": True, "checkout_url": url})
+
+
+@app.route("/api/billing/webhook", methods=["POST"])
+def api_billing_webhook():
+    """Whop webhook receiver. Verifies HMAC sig, updates DB."""
+    from billing.whop_service import verify_webhook, WhopSignatureError
+    from database import get_database_manager
+    from datetime import datetime, timezone
+
+    raw_body = request.get_data() or b""
+    try:
+        event = verify_webhook(raw_body, dict(request.headers))
+    except WhopSignatureError as e:
+        app.logger.warning("whop webhook rejected: %s", e)
+        return jsonify({"ok": False, "error": "signature"}), 401
+
+    event_type = (event.get("action") or event.get("type") or "").lower()
+    payload = event.get("data") or {}
+    membership_id = (
+        payload.get("id")
+        or payload.get("membership_id")
+        or payload.get("membership", {}).get("id")
+    )
+    plan_id = payload.get("plan_id") or payload.get("plan", {}).get("id")
+    metadata = payload.get("metadata") or {}
+    user_id = metadata.get("user_id")
+
+    db = get_database_manager()
+
+    # Look up the user_id from a previously-stored sub if metadata is missing
+    if not user_id and membership_id:
+        user_id = db.get_subscription_user(membership_id)
+
+    def _parse_period_end():
+        v = (
+            payload.get("expires_at")
+            or payload.get("renewal_period_end")
+            or payload.get("current_period_end")
+        )
+        if not v:
+            return None
+        try:
+            if isinstance(v, (int, float)):
+                return datetime.fromtimestamp(int(v), tz=timezone.utc)
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    if event_type in ("membership.activated", "membership.went_valid", "membership_went_valid"):
+        # Tier + cadence both come from metadata we set on the checkout URL.
+        tier = (metadata.get("tier") or "").lower()
+        cadence = (metadata.get("cadence") or "monthly").lower()
+        if not (user_id and membership_id):
+            return jsonify({"ok": False, "error": "missing user_id/membership_id"}), 400
+        if tier not in ("starter", "ultra"):
+            app.logger.warning("whop webhook: bad/missing tier metadata: %s", tier)
+            return jsonify({"ok": False, "error": "missing tier metadata"}), 400
+        if cadence not in ("monthly", "yearly"):
+            cadence = "monthly"
+        db.upsert_subscription(
+            user_id=user_id,
+            whop_membership_id=membership_id,
+            whop_plan_id=plan_id or "",
+            tier=tier,
+            cadence=cadence,
+            status="active",
+            current_period_end=_parse_period_end(),
+        )
+        db.set_user_tier(user_id, tier)
+        return jsonify({"ok": True})
+
+    if event_type in ("membership.deactivated", "membership.cancelled", "membership_went_invalid"):
+        if membership_id:
+            db.set_subscription_status(membership_id, "canceled")
+        if user_id:
+            db.set_user_tier(user_id, "free")
+        return jsonify({"ok": True})
+
+    if event_type in ("payment.succeeded", "payment_succeeded"):
+        period_end = _parse_period_end()
+        if membership_id and period_end:
+            db.update_subscription_period_end(membership_id, period_end)
+        return jsonify({"ok": True})
+
+    if event_type in ("refund.created", "refund_created"):
+        if membership_id:
+            db.set_subscription_status(membership_id, "canceled")
+        if user_id:
+            db.set_user_tier(user_id, "free")
+        app.logger.info("whop refund processed for membership %s", membership_id)
+        return jsonify({"ok": True})
+
+    # Unknown event types: 200 so Whop doesn't retry forever
+    return jsonify({"ok": True, "ignored": event_type})
+
+
+# Some webhook handlers must NOT receive CSRF protection (Flask-WTF wraps
+# the app); make sure this one is exempt if csrf is initialized.
+try:
+    from flask_wtf.csrf import CSRFProtect  # noqa: F401
+    _csrf = app.extensions.get("csrf") if hasattr(app, "extensions") else None
+    if _csrf is not None and hasattr(_csrf, "exempt"):
+        _csrf.exempt(api_billing_webhook)
+except Exception:
+    pass
+
+
 @app.route("/api/settings", methods=["GET"])
 @login_required
 def api_settings_get():
@@ -2115,6 +2807,8 @@ def api_settings_get():
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 404
 
+    from tiers import get_all_limits
+
     # Never return decrypted email in logs — just expose username
     return jsonify({
         "success": True,
@@ -2123,6 +2817,7 @@ def api_settings_get():
             "display_name": user.get("username", ""),
             "is_pro": bool(user.get("is_pro")),
             "tier": user.get("tier", "free"),
+            "tier_limits": get_all_limits(user["user_id"]),
         },
         "preferences": user.get("preferences") or {},
     })
@@ -3158,26 +3853,98 @@ def api_ticker_fundamentals(symbol: str):
 
     try:
         info = yf.Ticker(symbol.upper()).info
+        raw_currency = info.get("currency", "USD")
+        if raw_currency == "ILA":
+            currency = "ILS"
+            ila_convert = lambda v: v / 100 if v is not None else None
+        else:
+            currency = raw_currency if raw_currency else "USD"
+            ila_convert = lambda v: v
+
+        current_price = _safe(info.get("currentPrice") or info.get("regularMarketPrice"))
+        w52_high = _safe(info.get("fiftyTwoWeekHigh"))
+        w52_low = _safe(info.get("fiftyTwoWeekLow"))
+
         return jsonify({
             "success": True,
             "symbol": symbol.upper(),
             "name": info.get("longName") or info.get("shortName"),
             "sector": info.get("sector"),
             "industry": info.get("industry"),
+            "exchange": info.get("exchange"),
+            "currency": currency,
             "market_cap": _safe(info.get("marketCap")),
             "pe_ratio": _safe(info.get("trailingPE")),
             "eps": _safe(info.get("trailingEps")),
             "revenue": _safe(info.get("totalRevenue")),
             "gross_margin": _safe(info.get("grossMargins")),
-            "week_52_high": _safe(info.get("fiftyTwoWeekHigh")),
-            "week_52_low": _safe(info.get("fiftyTwoWeekLow")),
+            "week_52_high": _safe(ila_convert(w52_high)),
+            "week_52_low": _safe(ila_convert(w52_low)),
             "avg_volume": _safe(info.get("averageVolume")),
             "beta": _safe(info.get("beta")),
             "dividend_yield": _safe(info.get("dividendYield")),
-            "current_price": _safe(info.get("currentPrice") or info.get("regularMarketPrice")),
+            "current_price": _safe(ila_convert(current_price)),
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/ticker/<symbol>/public-view")
+@login_required
+def api_ticker_public_view(symbol: str):
+    """Return cached public-view summary for a symbol (or computing placeholder)."""
+    from database import get_database_manager
+
+    sym = (symbol or "").strip().upper()
+    db = get_database_manager()
+    row = db.get_ticker_public_view(sym)
+    if not row:
+        # Not yet computed — return a placeholder so the UI can show a skeleton.
+        return jsonify({
+            "symbol": sym,
+            "status": "computing",
+            "summary_md": None,
+            "bullish_pct": None,
+            "top_themes": [],
+            "reddit_posts": [],
+            "x_posts": [],
+            "last_updated": None,
+            "error_message": None,
+        })
+    return jsonify({
+        "symbol": sym,
+        "status": row.get("status") or "ready",
+        "summary_md": row.get("summary_md"),
+        "bullish_pct": row.get("bullish_pct"),
+        "top_themes": row.get("top_themes_json") or [],
+        "reddit_posts": row.get("reddit_posts") or [],
+        "x_posts": row.get("x_posts") or [],
+        "last_updated": row["last_updated"].isoformat() if row.get("last_updated") else None,
+        "error_message": row.get("error_message"),
+    })
+
+
+@app.route("/api/ticker/<symbol>/public-view/refresh", methods=["POST"])
+@login_required
+@limiter.limit("1 per minute", key_func=get_remote_address)
+def api_ticker_public_view_refresh(symbol: str):
+    """Force a refresh of the public-view for a symbol (rate-limited)."""
+    import threading as _t
+    from watchlist.public_view_service import refresh_public_view
+    from database import get_database_manager
+
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        return jsonify({"success": False, "error": "missing symbol"}), 400
+
+    db = get_database_manager()
+    try:
+        db.upsert_ticker_public_view(sym, status="computing")
+    except Exception:
+        pass
+
+    _t.Thread(target=refresh_public_view, args=(sym,), daemon=True).start()
+    return jsonify({"success": True, "status": "computing"}), 202
 
 
 @app.route("/api/ticker/search")
@@ -3208,6 +3975,7 @@ def api_ticker_search():
                 "name": c.get("display_name", q),
                 "price": float(c["price"]) if c.get("price") else None,
                 "change_pct": float(c["change_percent"]) if c.get("change_percent") else None,
+                "currency": c.get("currency", "USD"),
             })
     except Exception:
         pass
@@ -3218,6 +3986,10 @@ def api_ticker_search():
         name = info.get("longName") or info.get("shortName") or q
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         change_pct = info.get("regularMarketChangePercent")
+        raw_currency = info.get("currency", "USD")
+        currency = "ILS" if raw_currency == "ILA" else (raw_currency or "USD")
+        if raw_currency == "ILA" and price:
+            price = price / 100
         if not name or name == q:
             return jsonify({"success": True, "valid": False, "symbol": q})
         return jsonify({
@@ -3227,6 +3999,7 @@ def api_ticker_search():
             "name": name,
             "price": float(price) if price else None,
             "change_pct": float(change_pct) if change_pct else None,
+            "currency": currency,
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3424,15 +4197,32 @@ def api_home():
                     current_price = _safe_float(cp.get("price")) if cp else None
                     qty = _safe_float(h.get("total_quantity")) or 0
                     avg_cost = _safe_float(h.get("average_cost")) or 0
+                    # Bug 2: fall back to cost basis when no cached price to avoid
+                    # silently dropping the holding from the total
+                    if current_price is None:
+                        current_price = avg_cost if avg_cost else None
                     if current_price is not None:
+                        cur = detect_currency(sym)
                         mv = current_price * qty
                         ug = mv - (avg_cost * qty)
+                        # Bug 1: convert ILS amounts to USD before accumulating
+                        if cur != "USD":
+                            mv = float(convert_to_usd(Decimal(str(mv)), cur))
+                            ug = float(convert_to_usd(Decimal(str(ug)), cur))
                         p_total_value += mv
                         p_total_pnl += ug
                         # Day change from cached change_percent
                         chg_pct = _safe_float(cp.get("change_percent")) if cp else None
                         if chg_pct:
-                            day_change += qty * current_price * (chg_pct / 100)
+                            day_chg_native = qty * current_price * (chg_pct / 100)
+                            if cur != "USD":
+                                day_change += float(convert_to_usd(Decimal(str(day_chg_native)), cur))
+                            else:
+                                day_change += day_chg_native
+                # Bug 3: include cash balance when cash tracking is enabled
+                if summary.get("track_cash"):
+                    cash = _safe_float(summary.get("cash_balance")) or 0.0
+                    p_total_value += cash
                 # Preview: only first 5 for display
                 for h in all_holdings[:5]:
                     sym = h["symbol"]
@@ -3602,6 +4392,22 @@ def api_watchlist_add_symbol(watchlist_id):
     symbol = (data.get("symbol") or "").strip().upper()
     if not symbol:
         return jsonify({"error": "symbol is required"}), 400
+
+    import math as _math
+    from database import get_database_manager
+    from tiers import get_limit
+
+    uid = session["user_id"]
+    db = get_database_manager()
+    limit = get_limit(uid, "watchlist_items")
+    if limit != _math.inf and db.count_user_watchlist_items(uid) >= int(limit):
+        return jsonify({
+            "error": "quota_exceeded",
+            "resource": "watchlist_items",
+            "limit": int(limit),
+            "message": f"Your plan allows {int(limit)} watchlist items. Upgrade to add more.",
+        }), 402
+
     try:
         watchlist_svc.add_symbol(watchlist_id, symbol, None)
         return jsonify({"success": True, "symbol": symbol})
@@ -3701,12 +4507,116 @@ def api_holding_detail(portfolio_id: str, symbol: str):
         return jsonify({"error": str(e)}), 500
 
 
-try:
-    from realtime.ws_prices import register_ws_routes
+# --- Device-code auth + CLI token management ---
 
-    register_ws_routes(app)
-except ImportError as e:
-    app.logger.warning("WebSocket /ws/prices not registered: %s", e)
+
+@app.route("/api/device/authorize", methods=["POST"])
+@limiter.limit("10/minute")
+def device_authorize():
+    """Start a device-code flow. No auth. Returns {device_code, user_code, expires_in, interval}."""
+    from auth_tokens import create_device_code
+
+    data = create_device_code()
+    # Respect X-Forwarded-Proto so the printed URL uses https behind Railway's proxy.
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    data["verification_uri"] = f"{scheme}://{host}/app/device"
+    return jsonify(data)
+
+
+@app.route("/api/device/token", methods=["POST"])
+@limiter.limit("30/minute")
+def device_token():
+    """Agent polls here with its device_code. Returns status; includes access_token once approved."""
+    from auth_tokens import poll_device_code
+
+    body = request.get_json(silent=True) or {}
+    device_code = (body.get("device_code") or "").strip()
+    if not device_code:
+        return jsonify({"error": "device_code required"}), 400
+    result = poll_device_code(device_code)
+    if result.get("status") == "unknown":
+        return jsonify({"status": "pending"}), 200  # don't leak existence
+    return jsonify(result)
+
+
+@app.route("/api/device/approve", methods=["POST"])
+@login_required
+def device_approve():
+    """Master approves a user_code for their account. Called from /app/device."""
+    from auth_tokens import approve_device_code
+
+    body = request.get_json(silent=True) or {}
+    user_code = body.get("user_code") or ""
+    result = approve_device_code(session["user_id"], user_code)
+    if "error" in result:
+        code = 404 if result["error"] in ("unknown_code", "invalid_code") else 410
+        return jsonify(result), code
+    return jsonify(result)
+
+
+@app.route("/api/tokens", methods=["GET"])
+@login_required
+def tokens_list():
+    from auth_tokens import list_api_keys
+
+    return jsonify({"tokens": list_api_keys(session["user_id"])})
+
+
+@app.route("/api/tokens", methods=["POST"])
+@login_required
+def tokens_create():
+    """Create a token. Returns raw token ONCE."""
+    from auth_tokens import create_api_key
+
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "CLI token").strip()[:100] or "CLI token"
+    key_id, raw_token = create_api_key(session["user_id"], name)
+    return jsonify(
+        {
+            "id": key_id,
+            "name": name,
+            "access_token": raw_token,
+        }
+    )
+
+
+@app.route("/api/tokens/<key_id>", methods=["DELETE"])
+@login_required
+def tokens_revoke(key_id):
+    from auth_tokens import revoke_api_key
+
+    ok = revoke_api_key(session["user_id"], key_id)
+    if not ok:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"status": "revoked"})
+
+
+# --- SPA serving (production) ---
+# In production, serve the React SPA from the built dist/ folder.
+# All non-API, non-static paths fall through to index.html for client-side routing.
+_spa_dist = project_root / "stockpro-web" / "dist"
+
+
+@app.route("/app/", defaults={"path": ""})
+@app.route("/app/<path:path>")
+def serve_spa(path):
+    """Serve the React SPA static files.
+
+    Prerendered routes live at dist/<route>/index.html (vite-prerender-plugin
+    output) so non-JS crawlers see real content per page. We check for that
+    first, then fall back to the root index.html for client-side routing.
+    """
+    if path and (_spa_dist / path).is_file():
+        return send_from_directory(str(_spa_dist), path)
+    if path:
+        prerendered = _spa_dist / path / "index.html"
+        if prerendered.is_file():
+            return send_from_directory(str(_spa_dist / path), "index.html")
+    index = _spa_dist / "index.html"
+    if index.is_file():
+        return send_from_directory(str(_spa_dist), "index.html")
+    return "SPA not built. Run: cd stockpro-web && npm run build", 404
 
 
 # ── Admin API ──────────────────────────────────────────────────────
@@ -3879,13 +4789,15 @@ def main():
         )
 
     from watchlist.price_refresh import start_price_refresh
+    from watchlist.public_view_refresh import start_public_view_refresh
 
     start_price_refresh()
+    start_public_view_refresh()
 
     app.run(
-        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        host=os.getenv("FLASK_HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 5000)),
-        debug=True,
+        debug=not _is_production,
     )
 
 
