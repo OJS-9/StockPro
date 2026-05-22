@@ -664,6 +664,22 @@ class DatabaseManager:
                     "CREATE INDEX IF NOT EXISTS idx_generation_events_session ON generation_events (session_id, seq)"
                 )
 
+                # admin_events and app_config are managed outside init_schema
+                # (created directly in Supabase). Mirror the RLS lockdown here
+                # so any schema re-create or dev clone keeps PostgREST blocked.
+                # Backend uses the postgres role, which bypasses RLS.
+                cur.execute("""
+                    DO $$
+                    BEGIN
+                        IF to_regclass('public.admin_events') IS NOT NULL THEN
+                            EXECUTE 'ALTER TABLE public.admin_events ENABLE ROW LEVEL SECURITY';
+                        END IF;
+                        IF to_regclass('public.app_config') IS NOT NULL THEN
+                            EXECUTE 'ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY';
+                        END IF;
+                    END $$;
+                """)
+
             conn.commit()
             logger.info("Database schema initialized")
 

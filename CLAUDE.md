@@ -2,10 +2,6 @@
 
 AI-powered multi-agent stock research platform with portfolio tracking, watchlists, price alerts, and a Telegram bot. Built for retail investors who want institutional-grade research on any ticker.
 
-## Identity
-
-You are a senior full-stack engineer shipping production-ready code for StockPro. Prioritize simplicity over abstraction, working software over perfect architecture, and user experience over developer convenience. You own both the Flask backend and the React frontend rewrite.
-
 ## NEVER / ALWAYS / CRITICAL
 
 **CRITICAL: Read before every session.** These are hard-won rules from real bugs.
@@ -24,10 +20,7 @@ You are a senior full-stack engineer shipping production-ready code for StockPro
 
 ## Maintenance
 
-- **Prune this file** every few sessions. Target 200-300 lines. If it grows past 300, something belongs in `docs/` instead.
-- **Don't dump here**: full API docs, SQL examples, style guide details, route listings. Reference the source file.
-- **Add to this file**: new gotchas from real bugs, architecture changes, new subsystems, changed conventions.
-- **Progressive disclosure**: detailed RLS rules -> `docs/SUPABASE.md`, deployment -> `docs/DEPLOYMENT.md`, MCP tools -> `docs/TOOL_SELECTION.md`.
+Keep under ~250 lines. Add: new gotchas, architecture shifts, new subsystems. Push detail to `docs/`. Don't dump API docs, SQL examples, or route listings.
 
 ## Tech Stack
 
@@ -37,8 +30,8 @@ You are a senior full-stack engineer shipping production-ready code for StockPro
 - **Database**: PostgreSQL via psycopg2 (Supabase-hosted, ThreadedConnectionPool)
 - **Auth**: Clerk (backend: `clerk-backend-api`, frontend: ClerkJS / `@clerk/clerk-react`)
 - **Data**: yfinance (primary), Alpha Vantage MCP, Nimble SDK, CoinGecko
-- **Frontend (current)**: Jinja2 templates, Tailwind CSS CDN, Marked.js, Quill
-- **Frontend (next-gen)**: React 19 + Vite 8 + TypeScript + Tailwind v4 + React Router 7 + React Query
+- **Frontend**: React 19 + Vite + TypeScript + Tailwind v4 + React Router 7 + React Query (SPA in `stockpro-web/`)
+- **Legacy**: `templates/` Jinja2 files exist but are no longer the live UI — do not add features there
 - **Other**: WeasyPrint (PDF), python-telegram-bot, nest_asyncio, LangSmith tracing
 
 ## Project Layout
@@ -66,7 +59,7 @@ stockpro-web/               # React SPA -- Phase 2 frontend rewrite
   src/api/client.ts         # useApiClient() -- authenticated fetch with Clerk Bearer
   mockups/                  # 14 HTML mockups: visual spec for every screen
 
-templates/                  # 20 Jinja2 templates
+templates/                  # Legacy Jinja2 (dead UI, do not extend)
 scripts/                    # DB init, migrations, telegram bot, CI smoke tests
 tests/                      # 40 pytest files
 ```
@@ -108,13 +101,14 @@ tests/                      # 40 pytest files
 
 - **Portfolio**: multiple per user, simple average cost basis, auto-detect stock vs crypto
 - **Watchlist**: lists/sections/items/pins, 15-min background price refresh, news recap
-- **Alerts**: evaluate on price_cache upsert, cooldown prevents spam, Telegram notify
+- **Alerts**: evaluate on price_cache upsert, cooldown prevents spam, in-app toast/dropdown (Telegram bot currently OFF)
+- **Social sentiment**: Reddit + X community signals shown on TickerPage Public View (live, lead feature)
 - **Report chat**: two-phase RAG (report chunks first, research chunks if score low)
 - **News**: Nimble agent-based briefing, in-memory TTL cache
 
 ## React SPA (stockpro-web/)
 
-- **State**: early scaffold. Routes and providers wired, all pages are placeholders ("Phase 2").
+- **State**: live production UI. ~32 routes implemented (Landing, Home, PortfolioDetail, Watchlist, TickerPage with Reddit+X sentiment, Chat, Alerts, Analytics, Settings, etc.)
 - **Dev**: `npm run dev` on port 3000, proxies `/api`, `/stream`, `/ws` to Flask :5000
 - **Mockups**: 14 HTML files in `mockups/` -- the design source of truth for every screen
 - **Design tokens**: `primary` (#d6d3d1), `background-dark` (#0c0a09), `surface-dark` (#1c1917), `border-dark` (#292524), `accent-up` (#22c55e), `accent-down` (#ef4444)
@@ -123,11 +117,14 @@ tests/                      # 40 pytest files
 
 ### Build & deploy: dist/ is tracked in git
 
-CRITICAL: `stockpro-web/dist/` is **committed to the repo**. Railway serves it directly -- no Node/CI build at deploy time. `vite-prerender-plugin` runs at build time to produce a prerendered `dist/index.html` (~33KB) so AI crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content instead of an empty `<div id="root"></div>`. The plugin uses Puppeteer and hangs in Railway/GitHub Actions runners, so we build locally.
+CRITICAL: `stockpro-web/dist/` is **committed to the repo**. Railway serves it directly -- no Node/CI build at deploy time. `vite-prerender-plugin` runs at build time to produce a prerendered `dist/index.html` (~33KB) so AI crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content instead of an empty `<div id="root"></div>`. The plugin is pure Node (uses `react-dom/server` `renderToString` via dynamic `import()` of the bundled prerender entry -- no Puppeteer/Chromium). We build locally because Railway/CI runners don't need the prerendered output.
+
+**Known issue (see #95):** the prerender step currently hangs after the bundle phase. Workaround: `npm run build:fast` (sets `SKIP_PRERENDER=1`) skips prerender and finishes in ~300ms. While unfixed, AI crawlers lose the prerendered Landing/About/Press HTML.
 
 **After any change to `stockpro-web/src/**` or `index.html`:**
 ```bash
-cd stockpro-web && npm run build
+cd stockpro-web && npm run build       # full build with prerender (currently broken, see #95)
+cd stockpro-web && npm run build:fast  # bundle only, SEO degraded
 git add stockpro-web/dist && git commit -m "..."
 ```
 Forgetting this ships code where humans see new copy but bots see the old prerendered HTML. The Landing page FAQ Q&A and the FAQPage JSON-LD in `index.html` must stay in sync (both consumed by AI engines).
@@ -152,7 +149,7 @@ python src/app.py                    # Flask app
 cd stockpro-web && npm run dev       # React dev (port 3000)
 python scripts/recreate_schema.py    # Recreate DB schema
 python -m pytest                     # Run all tests
-python scripts/run_telegram_bot.py   # Telegram bot
+# Telegram bot is currently OFF — do not start unless explicitly re-enabling
 ```
 
 ## Env Vars

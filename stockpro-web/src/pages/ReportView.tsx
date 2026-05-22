@@ -31,6 +31,23 @@ export default function ReportView() {
   const [tocOpen, setTocOpen] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
 
+  const handleExportPdf = async () => {
+    setExportingPdf(true)
+    try {
+      const res = await api.get(`/report/${id}/pdf`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${report.symbol}_report.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   // /report/<id>?format=json returns {report: {report_id, ticker, trade_type, report_text, created_at, ...}}
   const { data } = useQuery({
     queryKey: ['report', id],
@@ -153,6 +170,24 @@ export default function ReportView() {
                 {text}
               </div>
             ))}
+            {isMobile && (
+              <button
+                onClick={() => { handleExportPdf(); setTocOpen(false) }}
+                disabled={exportingPdf}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  fontSize: 12, color: '#a8a29e',
+                  padding: '6px 12px',
+                  background: 'none', border: 'none',
+                  width: '100%', textAlign: 'start',
+                  cursor: exportingPdf ? 'wait' : 'pointer',
+                  opacity: exportingPdf ? 0.5 : 1,
+                }}
+              >
+                <Icon name="download" size={15} />
+                {exportingPdf ? t('reportView.exporting', 'Exporting...') : t('reportView.exportPdf')}
+              </button>
+            )}
           </div>
         </aside>
 
@@ -183,22 +218,7 @@ export default function ReportView() {
                   </button>
                   <button
                     disabled={exportingPdf}
-                    onClick={async () => {
-                      setExportingPdf(true)
-                      try {
-                        const res = await api.get(`/report/${id}/pdf`)
-                        if (!res.ok) return
-                        const blob = await res.blob()
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = `${report.symbol}_report.pdf`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      } finally {
-                        setExportingPdf(false)
-                      }
-                    }}
+                    onClick={handleExportPdf}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px solid #292524', color: '#a8a29e', fontSize: 12.5, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: exportingPdf ? 'wait' : 'pointer', opacity: exportingPdf ? 0.5 : 1 }}
                   >
                     <Icon name="download" size={15} /> {exportingPdf ? t('reportView.exporting', 'Exporting...') : t('reportView.exportPdf')}
