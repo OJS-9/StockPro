@@ -11,10 +11,13 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
     // Bake the Landing page into dist/index.html at build time so non-JS
     // crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content.
-    vitePrerenderPlugin({
-      renderTarget: '#root',
-      additionalPrerenderRoutes: ['/about', '/press'],
-    }),
+    // Set SKIP_PRERENDER=1 to skip the slow Puppeteer step during local iteration.
+    ...(process.env.SKIP_PRERENDER ? [] : [
+      vitePrerenderPlugin({
+        renderTarget: '#root',
+        additionalPrerenderRoutes: ['/about', '/press'],
+      }),
+    ]),
   ],
   build: {
     rollupOptions: {

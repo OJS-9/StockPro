@@ -117,11 +117,14 @@ tests/                      # 40 pytest files
 
 ### Build & deploy: dist/ is tracked in git
 
-CRITICAL: `stockpro-web/dist/` is **committed to the repo**. Railway serves it directly -- no Node/CI build at deploy time. `vite-prerender-plugin` runs at build time to produce a prerendered `dist/index.html` (~33KB) so AI crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content instead of an empty `<div id="root"></div>`. The plugin uses Puppeteer and hangs in Railway/GitHub Actions runners, so we build locally.
+CRITICAL: `stockpro-web/dist/` is **committed to the repo**. Railway serves it directly -- no Node/CI build at deploy time. `vite-prerender-plugin` runs at build time to produce a prerendered `dist/index.html` (~33KB) so AI crawlers (GPTBot, PerplexityBot, ClaudeBot) see real content instead of an empty `<div id="root"></div>`. The plugin is pure Node (uses `react-dom/server` `renderToString` via dynamic `import()` of the bundled prerender entry -- no Puppeteer/Chromium). We build locally because Railway/CI runners don't need the prerendered output.
+
+**Known issue (see #95):** the prerender step currently hangs after the bundle phase. Workaround: `npm run build:fast` (sets `SKIP_PRERENDER=1`) skips prerender and finishes in ~300ms. While unfixed, AI crawlers lose the prerendered Landing/About/Press HTML.
 
 **After any change to `stockpro-web/src/**` or `index.html`:**
 ```bash
-cd stockpro-web && npm run build
+cd stockpro-web && npm run build       # full build with prerender (currently broken, see #95)
+cd stockpro-web && npm run build:fast  # bundle only, SEO degraded
 git add stockpro-web/dist && git commit -m "..."
 ```
 Forgetting this ships code where humans see new copy but bots see the old prerendered HTML. The Landing page FAQ Q&A and the FAQPage JSON-LD in `index.html` must stay in sync (both consumed by AI engines).
