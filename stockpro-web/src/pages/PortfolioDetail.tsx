@@ -337,7 +337,14 @@ export default function PortfolioDetail() {
 
   const portfolioName = portfolioData?.portfolio?.name || 'Portfolio'
 
-  const filteredValue = useMemo(() => displayHoldings.reduce((s: number, h: any) => s + (h.market_value || 0), 0), [displayHoldings])
+  const displayCurrency: string = pricesData?.display_currency ?? 'USD'
+  const trackCash = pricesData?.track_cash ?? portfolioData?.summary?.track_cash ?? false
+  const cashBalance = pricesData?.cash_balance ?? portfolioData?.summary?.cash_balance ?? 0
+
+  const filteredValue = useMemo(
+    () => displayHoldings.reduce((s: number, h: any) => s + (h.market_value || 0), 0) + (trackCash ? (cashBalance ?? 0) : 0),
+    [displayHoldings, trackCash, cashBalance]
+  )
   const filteredPnl = useMemo(() => displayHoldings.reduce((s: number, h: any) => s + (h.pnl || 0), 0), [displayHoldings])
   const filteredCostBasis = useMemo(() => displayHoldings.reduce((s: number, h: any) => s + (h.avg_cost * h.shares || 0), 0), [displayHoldings])
 
@@ -346,9 +353,6 @@ export default function PortfolioDetail() {
   const pnlPct = isFiltered
     ? (filteredCostBasis > 0 ? (filteredPnl / filteredCostBasis) * 100 : 0)
     : (pricesData?.total_unrealized_gain_pct ?? 0)
-  const displayCurrency: string = pricesData?.display_currency ?? 'USD'
-  const trackCash = pricesData?.track_cash ?? portfolioData?.summary?.track_cash ?? false
-  const cashBalance = pricesData?.cash_balance ?? portfolioData?.summary?.cash_balance ?? 0
   // Per-ticker history — always fetched so the chart can recompute deterministically
   // for any filter/sort combination without waiting on a separate request.
   const holdingSymbols = useMemo(() => holdings.map((h: any) => h.symbol as string), [holdings])
