@@ -339,7 +339,9 @@ export default function PortfolioDetail() {
 
   const displayCurrency: string = pricesData?.display_currency ?? 'USD'
   const trackCash = pricesData?.track_cash ?? portfolioData?.summary?.track_cash ?? false
-  const cashBalance = pricesData?.cash_balance ?? portfolioData?.summary?.cash_balance ?? 0
+  // Coerce: /api/portfolio/<id>.summary.cash_balance comes back as a Decimal-as-string
+  // ("7292.00"). Without Number() the filteredValue sum becomes string-concat -> NaN.
+  const cashBalance = Number(pricesData?.cash_balance ?? portfolioData?.summary?.cash_balance ?? 0) || 0
 
   const filteredValue = useMemo(
     () => displayHoldings.reduce((s: number, h: any) => s + (h.market_value || 0), 0) + (trackCash ? (cashBalance ?? 0) : 0),
