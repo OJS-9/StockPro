@@ -17,6 +17,14 @@ def output(data, pretty: bool = False):
         if "portfolios" in data:
             _print_portfolios(data)
             return
+        # Single portfolio response (from /api/portfolio/{id})
+        if "portfolio_id" in data and "holdings" in data:
+            _print_single_portfolio(data)
+            return
+        # Cash-only summary (from `portfolio cash show`)
+        if "cash_balance" in data and "track_cash" in data and "holdings" not in data:
+            _print_cash_summary(data)
+            return
         # Alerts list
         if "alerts" in data and isinstance(data["alerts"], list):
             _print_alerts(data["alerts"])
@@ -114,6 +122,50 @@ def _print_portfolios(data):
         tp = totals.get("total_pnl", 0)
         sign = "+" if tp >= 0 else ""
         print(f"  Total: ${tv:,.2f}  {sign}${tp:,.2f}")
+
+
+def _print_single_portfolio(p):
+    pid = str(p.get("portfolio_id", "?"))[:8]
+    name = p.get("name", "")
+    total = p.get("total_market_value", 0) or 0
+    gain = p.get("total_unrealized_gain", 0) or 0
+    gain_pct = p.get("total_unrealized_gain_pct", 0) or 0
+    sign = "+" if gain >= 0 else ""
+    header = f"Portfolio {pid}..."
+    if name:
+        header += f"  {name}"
+    print(f"{header}  ${total:,.2f}  {sign}${gain:,.2f} ({sign}{gain_pct:.1f}%)")
+
+    if p.get("track_cash"):
+        cash = p.get("cash_balance", 0) or 0
+        print(f"Cash: ${cash:,.2f}")
+    print()
+
+    holdings = p.get("holdings", [])
+    if not holdings:
+        print("  (no holdings)")
+        return
+
+    print(f"  {'Symbol':<8} {'Price':>10} {'Shares':>8} {'Value':>12} {'P&L':>12} {'P&L %':>8}")
+    print(f"  {'------':<8} {'-----':>10} {'------':>8} {'-----':>12} {'---':>12} {'-----':>8}")
+    for h in sorted(holdings, key=lambda x: x.get("market_value", 0), reverse=True):
+        sym = h.get("symbol", "?")
+        price = h.get("current_price", 0)
+        qty = h.get("total_quantity", 0)
+        mv = h.get("market_value", 0)
+        ug = h.get("unrealized_gain", 0)
+        ugp = h.get("unrealized_gain_pct", 0)
+        cs = currency_symbol(h.get("currency"))
+        sign = "+" if ug >= 0 else ""
+        print(f"  {sym:<8} {cs}{price:>9.2f} {qty:>8.2f} {cs}{mv:>11,.2f} {sign}{cs}{ug:>10,.2f} {sign}{ugp:>6.1f}%")
+
+
+def _print_cash_summary(data):
+    tracking = "on" if data.get("track_cash") else "off"
+    print(f"Cash tracking: {tracking}")
+    if data.get("track_cash"):
+        cash = data.get("cash_balance", 0) or 0
+        print(f"Cash balance:  ${cash:,.2f}")
 
 
 def _print_alerts(alerts):

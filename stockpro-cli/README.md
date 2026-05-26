@@ -100,5 +100,10 @@ Run `stockpro --help` for the full list. Common ones:
 
 - `stockpro auth login | logout | status`
 - `stockpro portfolio list`
+- `stockpro portfolio cash show --id <pid>`
+- `stockpro portfolio cash enable --id <pid>`
+- `stockpro portfolio cash set --id <pid> --amount <X>`
+- `stockpro portfolio cash deposit --id <pid> --amount <X>`
+- `stockpro portfolio cash withdraw --id <pid> --amount <X>`
 - `stockpro report list`
 - `stockpro watchlist list`

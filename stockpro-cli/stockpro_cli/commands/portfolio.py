@@ -121,6 +121,79 @@ def transactions(ctx, portfolio_id, limit):
     output(data, ctx.obj.get("pretty", False))
 
 
+@portfolio.group("cash")
+def cash():
+    """View and edit portfolio cash balance."""
+    pass
+
+
+@cash.command("show")
+@click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
+@click.pass_context
+def cash_show(ctx, portfolio_id):
+    """Show current cash balance and tracking status."""
+    client = get_client(ctx.obj.get("api_url"))
+    data = client.get(f"/api/portfolio/{portfolio_id}")
+    summary = {
+        "portfolio_id": portfolio_id,
+        "cash_balance": data.get("cash_balance"),
+        "track_cash": data.get("track_cash"),
+    }
+    output(summary, ctx.obj.get("pretty", False))
+
+
+def _cash_action(ctx, portfolio_id, action, amount):
+    client = get_client(ctx.obj.get("api_url"))
+    data = client.post(
+        f"/api/portfolio/{portfolio_id}/cash",
+        {"action": action, "amount": amount},
+    )
+    output(data, ctx.obj.get("pretty", False))
+
+
+@cash.command("set")
+@click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
+@click.option("--amount", required=True, type=float, help="New cash balance (>= 0)")
+@click.pass_context
+def cash_set(ctx, portfolio_id, amount):
+    """Set cash balance to an exact amount."""
+    if amount < 0:
+        raise click.BadParameter("amount must be >= 0")
+    _cash_action(ctx, portfolio_id, "set", amount)
+
+
+@cash.command("deposit")
+@click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
+@click.option("--amount", required=True, type=float, help="Amount to deposit (> 0)")
+@click.pass_context
+def cash_deposit(ctx, portfolio_id, amount):
+    """Deposit cash into the portfolio."""
+    if amount <= 0:
+        raise click.BadParameter("amount must be > 0")
+    _cash_action(ctx, portfolio_id, "deposit", amount)
+
+
+@cash.command("withdraw")
+@click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
+@click.option("--amount", required=True, type=float, help="Amount to withdraw (> 0)")
+@click.pass_context
+def cash_withdraw(ctx, portfolio_id, amount):
+    """Withdraw cash from the portfolio."""
+    if amount <= 0:
+        raise click.BadParameter("amount must be > 0")
+    _cash_action(ctx, portfolio_id, "withdraw", amount)
+
+
+@cash.command("enable")
+@click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
+@click.pass_context
+def cash_enable(ctx, portfolio_id):
+    """Enable cash tracking for the portfolio."""
+    client = get_client(ctx.obj.get("api_url"))
+    data = client.post(f"/api/portfolio/{portfolio_id}/toggle-cash", {})
+    output(data, ctx.obj.get("pretty", False))
+
+
 @portfolio.command("holding")
 @click.option("--id", "portfolio_id", required=True, help="Portfolio ID")
 @click.option("--symbol", required=True, help="Ticker symbol (or symbol.TA for TASE)")
