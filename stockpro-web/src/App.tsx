@@ -122,28 +122,11 @@ function DataPrefetcher() {
       })
     })
 
-    // Prefetch portfolios list, then seed each portfolio's price cache
-    // so detail pages render instantly without extra API calls
-    queryClient.prefetchQuery({
-      queryKey: ['portfolios'],
-      queryFn: () => fetchJson('/api/portfolios/prices'),
-      staleTime: 120_000,
-    }).then(() => {
-      const cached = queryClient.getQueryData<any>(['portfolios'])
-      const portfolios = cached?.portfolios || []
-      portfolios.forEach((p: any) => {
-        const pid = p.portfolio_id || p.id
-        if (!pid) return
-        queryClient.setQueryData(['portfolio-prices', String(pid)], {
-          holdings: p.holdings,
-          total_market_value: p.total_market_value,
-          total_unrealized_gain: p.total_unrealized_gain,
-          total_unrealized_gain_pct: p.total_unrealized_gain_pct,
-          stock_allocation_pct: p.stock_allocation_pct,
-          crypto_allocation_pct: p.crypto_allocation_pct,
-        })
-      })
-    })
+    // The portfolios list query is already prefetched above. Don't seed
+    // ['portfolio-prices', pid] from the list payload: it lacks cash_balance
+    // and track_cash, and its .then() can race with PortfolioDetail's own
+    // useQuery — overwriting the fresh per-portfolio fetch with the
+    // incomplete list snapshot, which makes the filtered total render as NaN.
   }, [])
 
   return null
