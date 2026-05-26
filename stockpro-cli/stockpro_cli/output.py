@@ -17,8 +17,9 @@ def output(data, pretty: bool = False):
         if "portfolios" in data:
             _print_portfolios(data)
             return
-        # Single portfolio response (from /api/portfolio/{id})
-        if "portfolio_id" in data and "holdings" in data:
+        # Single portfolio response (from /api/portfolio/{id}):
+        # shape is {"portfolio": {...}, "summary": {...}, "holdings": [...]}.
+        if "portfolio" in data and "summary" in data and "holdings" in data:
             _print_single_portfolio(data)
             return
         # Cash-only summary (from `portfolio cash show`)
@@ -124,12 +125,14 @@ def _print_portfolios(data):
         print(f"  Total: ${tv:,.2f}  {sign}${tp:,.2f}")
 
 
-def _print_single_portfolio(p):
+def _print_single_portfolio(data):
+    p = data.get("portfolio", {}) or {}
+    s = data.get("summary", {}) or {}
     pid = str(p.get("portfolio_id", "?"))[:8]
     name = p.get("name", "")
-    total = p.get("total_market_value", 0) or 0
-    gain = p.get("total_unrealized_gain", 0) or 0
-    gain_pct = p.get("total_unrealized_gain_pct", 0) or 0
+    total = float(s.get("total_market_value", 0) or 0)
+    gain = float(s.get("total_unrealized_gain", 0) or 0)
+    gain_pct = float(s.get("total_unrealized_gain_pct", 0) or 0)
     sign = "+" if gain >= 0 else ""
     header = f"Portfolio {pid}..."
     if name:
@@ -137,11 +140,11 @@ def _print_single_portfolio(p):
     print(f"{header}  ${total:,.2f}  {sign}${gain:,.2f} ({sign}{gain_pct:.1f}%)")
 
     if p.get("track_cash"):
-        cash = p.get("cash_balance", 0) or 0
+        cash = float(p.get("cash_balance", 0) or 0)
         print(f"Cash: ${cash:,.2f}")
     print()
 
-    holdings = p.get("holdings", [])
+    holdings = data.get("holdings", [])
     if not holdings:
         print("  (no holdings)")
         return

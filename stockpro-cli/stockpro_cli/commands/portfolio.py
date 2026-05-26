@@ -134,10 +134,13 @@ def cash_show(ctx, portfolio_id):
     """Show current cash balance and tracking status."""
     client = get_client(ctx.obj.get("api_url"))
     data = client.get(f"/api/portfolio/{portfolio_id}")
+    # The /api/portfolio/{id} response nests cash fields under "portfolio"
+    # (and duplicates them under "summary"). Read from "portfolio".
+    p = data.get("portfolio") or {}
     summary = {
         "portfolio_id": portfolio_id,
-        "cash_balance": data.get("cash_balance"),
-        "track_cash": data.get("track_cash"),
+        "cash_balance": p.get("cash_balance"),
+        "track_cash": p.get("track_cash"),
     }
     output(summary, ctx.obj.get("pretty", False))
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "stockpro-cli"
-version = "0.3.0"
+version = "0.3.1"
 description = "CLI for StockPro -- AI-powered stock research from your terminal"
 readme = "README.md"
 license = { file = "LICENSE" }

@@ -16,23 +16,36 @@ def _invoke(authed_runner, args):
 
 
 @respx.mock
-def test_cash_show_extracts_cash_fields(authed_runner):
+def test_cash_show_extracts_nested_cash_fields(authed_runner):
+    # Real /api/portfolio/{id} shape: cash fields live under "portfolio",
+    # not at the top level. Regression for v0.3.0 where top-level reads
+    # returned null and made tracking appear off.
     respx.get(f"{BASE}/api/portfolio/{PID}").mock(
         return_value=httpx.Response(
             200,
             json={
-                "portfolio_id": PID,
+                "portfolio": {
+                    "portfolio_id": PID,
+                    "name": "Main",
+                    "cash_balance": 7292.0,
+                    "track_cash": True,
+                },
+                "summary": {
+                    "portfolio_id": PID,
+                    "cash_balance": 7292.0,
+                    "track_cash": True,
+                    "total_market_value": 50000.0,
+                    "total_unrealized_gain": 1000.0,
+                    "total_unrealized_gain_pct": 2.0,
+                },
                 "holdings": [],
-                "cash_balance": 1500.0,
-                "track_cash": True,
-                "name": "Main",
             },
         )
     )
     result = _invoke(authed_runner, ["portfolio", "cash", "show", "--id", PID])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload == {"portfolio_id": PID, "cash_balance": 1500.0, "track_cash": True}
+    assert payload == {"portfolio_id": PID, "cash_balance": 7292.0, "track_cash": True}
 
 
 @respx.mock
