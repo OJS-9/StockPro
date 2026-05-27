@@ -3,6 +3,7 @@ Nimble API client for web search and content extraction.
 Uses Nimble's SDK REST API with Bearer token authentication.
 """
 
+import logging
 import os
 from typing import Optional, Dict, Any
 
@@ -10,6 +11,8 @@ import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 NIMBLE_API_BASE = "https://sdk.nimbleway.com/v1"
 NIMBLE_TIMEOUT_SECONDS = float(os.getenv("NIMBLE_TIMEOUT_SECONDS", "60.0"))
@@ -206,5 +209,18 @@ class NimbleClient:
 
                 # Fallback: wrap scalar into a list so callers can iterate safely.
                 return [parsing]
-        except Exception:
+        except httpx.TimeoutException as e:
+            logger.warning(
+                "[Nimble] run_agent '%s' timed out after %ss: %s",
+                agent_name, self.timeout, e,
+            )
+            return []
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "[Nimble] run_agent '%s' HTTP %s: %s",
+                agent_name, e.response.status_code, e,
+            )
+            return []
+        except Exception as e:
+            logger.warning("[Nimble] run_agent '%s' failed: %s", agent_name, e)
             return []

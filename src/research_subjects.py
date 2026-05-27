@@ -398,6 +398,30 @@ Quantify every claim.""",
     priority={"Investment": 2},
 )
 
+MARKET_SENTIMENT = ResearchSubject(
+    id="market_sentiment",
+    name="Market Sentiment",
+    description="Recent Twitter/X and Reddit social sentiment for the ticker",
+    prompt_template="""Research current social media and retail investor sentiment for {ticker}.
+
+Step 1 — Twitter/X: Use nimble_twitter_sentiment with symbol="{ticker}". For less-traded or non-US tickers (e.g. RACE, BABA), also pass the company name in the query field (e.g. "Ferrari RACE stock").
+
+Step 2 — Reddit: Use nimble_reddit_sentiment with symbol="{ticker}". If the symbol alone returns no results, retry with the full company name.
+
+Step 3 — Synthesize a Market Sentiment section covering:
+- Overall sentiment direction: bullish / bearish / mixed / neutral — with 2-3 specific examples from the data
+- Top 2-3 themes or narratives driving discussion (e.g. "short squeeze pressure", "post-earnings disappointment", "AI product launch hype")
+- Any catalyst, news event, or price move that community is reacting to — especially anything from the past 7 days
+- Red flags or outliers worth flagging (e.g. coordinated pumping, unusually high negative sentiment vs. price action)
+
+If one source returns no data, note it briefly ("No recent Reddit discussion found") and rely on the other.
+If both return no data, write: "No recent social sentiment data found for {ticker}."
+Keep the section to 200-300 words.
+""",
+    trade_types=["Day Trade", "Swing Trade", "Investment"],
+    priority={"Day Trade": 1, "Swing Trade": 1, "Investment": 1},
+)
+
 
 # ─── Master List ─────────────────────────────────────────────────────────────
 
@@ -414,6 +438,7 @@ ALL_SUBJECTS: List[ResearchSubject] = [
     COMPETITIVE_POSITION,
     RISK_FACTORS,
     MANAGEMENT_QUALITY,
+    MARKET_SENTIMENT,
 ]
 
 _SUBJECT_MAP: Dict[str, ResearchSubject] = {s.id: s for s in ALL_SUBJECTS}

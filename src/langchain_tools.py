@@ -6,6 +6,7 @@ create_all_tools() returns List[StructuredTool] for use with LangGraph agents.
 import json
 import logging
 import math
+import os
 from typing import Dict, Any, List, Optional
 
 from langchain_core.tools import StructuredTool
@@ -15,6 +16,11 @@ from mcp_tools import execute_tool_by_name
 from nimble_client import NimbleClient
 
 logger = logging.getLogger(__name__)
+
+_NIMBLE_X_AGENT_ID = os.getenv("NIMBLE_X_AGENT_ID", "twitter_search_recent_83bb85e3")
+_NIMBLE_REDDIT_AGENT_ID = os.getenv(
+    "NIMBLE_REDDIT_AGENT_ID", "reddit_thread_search_2026_04_20_5y2qc6yy"
+)
 
 
 def _sanitize_nan(obj):
@@ -129,7 +135,7 @@ def create_mcp_tools(mcp_client: MCPClient) -> List[StructuredTool]:
 
 
 def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
-    """Create LangChain StructuredTools for Nimble web search, extract, and Perplexity."""
+    """Create LangChain StructuredTools for Nimble web search, extract, Perplexity, and social sentiment."""
     if not nimble_client:
         return []
 
@@ -238,6 +244,90 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
                 "suggestion": "Try nimble_web_search for a direct web search, or yfinance tools for financial data.",
             })
 
+    # --- nimble_twitter_sentiment ---
+    class TwitterSentimentArgs(BaseModel):
+        symbol: str = Field(description="Ticker symbol, e.g. 'AAPL' or 'RACE'.")
+        query: str = Field(
+            default="",
+            description=(
+                "Optional custom search query. If empty, defaults to '$SYMBOL'. "
+                "Include company name for less-traded tickers (e.g. 'Ferrari RACE stock')."
+            ),
+        )
+
+    def nimble_twitter_sentiment(symbol: str, query: str = "") -> str:
+        q = query.strip() or f"${symbol}"
+        try:
+            results = nimble_client.run_agent(_NIMBLE_X_AGENT_ID, {"query": q})
+            if not results:
+                return f"No recent tweets found for {symbol}."
+            lines = []
+            for item in results[:15]:
+                inner = item.get("tweet") if isinstance(item.get("tweet"), dict) else item
+                text = (inner.get("full_text") or inner.get("text") or "").strip()[:300]
+                author = inner.get("author") or inner.get("username") or "unknown"
+                likes = inner.get("favorite_count") or inner.get("likes") or 0
+                if text:
+                    lines.append(f"@{author} (\u2665{likes}): {text}")
+            return "\n".join(lines) if lines else f"No usable tweet content found for {symbol}."
+        except Exception as e:
+            logger.warning("[Nimble] twitter_sentiment failed for %s: %s", symbol, e)
+            return f"Twitter sentiment fetch failed for {symbol}: {e}"
+
+    twitter_tool = StructuredTool.from_function(
+        func=nimble_twitter_sentiment,
+        name="nimble_twitter_sentiment",
+        description=(
+            "Fetch recent Twitter/X posts about a stock ticker. "
+            "Use for gauging retail sentiment, identifying trending narratives, "
+            "and catching breaking news or catalyst signals. "
+            "Returns up to 15 recent tweets with author and like count."
+        ),
+        args_schema=TwitterSentimentArgs,
+    )
+
+    # --- nimble_reddit_sentiment ---
+    class RedditSentimentArgs(BaseModel):
+        symbol: str = Field(description="Ticker symbol, e.g. 'AAPL' or 'RACE'.")
+        query: str = Field(
+            default="",
+            description=(
+                "Optional custom search query. If empty, defaults to the symbol. "
+                "Include company name for less-traded tickers."
+            ),
+        )
+
+    def nimble_reddit_sentiment(symbol: str, query: str = "") -> str:
+        q = query.strip() or symbol
+        try:
+            results = nimble_client.run_agent(_NIMBLE_REDDIT_AGENT_ID, {"search_query": q})
+            if not results:
+                return f"No recent Reddit posts found for {symbol}."
+            lines = []
+            for item in results[:15]:
+                title = item.get("title") or item.get("post_title") or ""
+                snippet = (item.get("selftext") or item.get("body") or item.get("snippet") or "")[:250]
+                score = item.get("score") or item.get("upvotes") or 0
+                subreddit = item.get("subreddit") or item.get("community") or "?"
+                if title or snippet:
+                    lines.append(f"r/{subreddit} (\u2191{score}): {title} \u2014 {snippet}".strip(" \u2014"))
+            return "\n".join(lines) if lines else f"No usable Reddit content found for {symbol}."
+        except Exception as e:
+            logger.warning("[Nimble] reddit_sentiment failed for %s: %s", symbol, e)
+            return f"Reddit sentiment fetch failed for {symbol}: {e}"
+
+    reddit_tool = StructuredTool.from_function(
+        func=nimble_reddit_sentiment,
+        name="nimble_reddit_sentiment",
+        description=(
+            "Fetch recent Reddit posts about a stock ticker. "
+            "Use for gauging retail sentiment, community reactions to earnings or news, "
+            "and identifying recurring themes. "
+            "Returns up to 15 recent posts with subreddit and score."
+        ),
+        args_schema=RedditSentimentArgs,
+    )
+
     return [
         StructuredTool.from_function(
             func=nimble_web_search,
@@ -270,6 +360,8 @@ def create_nimble_tools(nimble_client: NimbleClient) -> List[StructuredTool]:
             ),
             args_schema=PerplexityArgs,
         ),
+        twitter_tool,
+        reddit_tool,
     ]
 
 
