@@ -3892,14 +3892,32 @@ def api_ticker_fundamentals(symbol: str):
 @app.route("/api/ticker/<symbol>/public-view")
 @login_required
 def api_ticker_public_view(symbol: str):
-    """Return cached public-view summary for a symbol (or computing placeholder)."""
+    """Return cached public-view summary for a symbol (or computing placeholder).
+
+    If no row exists yet, or the row is stuck on `status='computing'` with a
+    stale `last_updated` (likely from a prior crashed refresh), kick off a
+    background refresh so the next poll picks up real data instead of looping
+    forever on the placeholder.
+    """
+    import threading as _t
+    from datetime import datetime, timezone, timedelta
     from database import get_database_manager
 
     sym = (symbol or "").strip().upper()
     db = get_database_manager()
     row = db.get_ticker_public_view(sym)
+
+    def _kick_refresh():
+        from watchlist.public_view_service import refresh_public_view
+        _t.Thread(target=refresh_public_view, args=(sym,), daemon=True).start()
+
     if not row:
-        # Not yet computed — return a placeholder so the UI can show a skeleton.
+        # Not yet computed — start a refresh and return a placeholder.
+        try:
+            db.upsert_ticker_public_view(sym, status="computing")
+        except Exception:
+            pass
+        _kick_refresh()
         return jsonify({
             "symbol": sym,
             "status": "computing",
@@ -3911,6 +3929,17 @@ def api_ticker_public_view(symbol: str):
             "last_updated": None,
             "error_message": None,
         })
+
+    # Row exists but stuck on "computing" with stale last_updated — re-kick.
+    if (row.get("status") or "ready") == "computing":
+        last = row.get("last_updated")
+        if last is None:
+            _kick_refresh()
+        else:
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - last > timedelta(minutes=2):
+                _kick_refresh()
     return jsonify({
         "symbol": sym,
         "status": row.get("status") or "ready",
