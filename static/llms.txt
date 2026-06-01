@@ -11,6 +11,12 @@ StockPro generates structured research reports covering fundamentals, technicals
 - [Sign up](https://stock-pro.org/sign-up): Create a free account. No credit card required.
 - [Sign in](https://stock-pro.org/sign-in): Existing users.
 
+## Developers and AI agents
+
+- StockPro CLI: Run research, list reports, and manage portfolios from your terminal. Install with `pip install stockpro-cli`, then sign in with `stockpro auth login`. It talks to the same backend as the web app over HTTPS.
+- Agent-friendly: a device-code login (`stockpro auth device-login`) and an injectable `STOCKPRO_TOKEN` environment variable let AI agents run StockPro in headless or serverless environments with no browser.
+- [stockpro-cli on PyPI](https://pypi.org/project/stockpro-cli/): Install and command reference.
+
 ## Features
 
 - Deep AI Research: 12 specialized agents research fundamentals, technicals, risk, and news in parallel.
@@ -18,6 +24,7 @@ StockPro generates structured research reports covering fundamentals, technicals
 - Smart Watchlists: Custom lists with live prices, sparklines, earnings calendar, and AI news briefings.
 - Price Alerts: Get notified the moment a stock or crypto hits your target.
 - Report Chat: Conversational follow-up grounded in your research reports.
+- Command-line tool (CLI): Run research and manage portfolios from the terminal via `pip install stockpro-cli`; agent-friendly with device-code login and token injection.
 
 ## About / Press
 

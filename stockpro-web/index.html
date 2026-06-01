@@ -81,8 +81,17 @@
       "name": "StockPro",
       "url": "https://stock-pro.org/",
       "applicationCategory": "FinanceApplication",
-      "operatingSystem": "Web",
-      "description": "Deep AI research reports on any stock or crypto in minutes. 12 specialized AI agents research fundamentals, technicals, risk, and news in parallel. Includes portfolio tracking, watchlists, and price alerts.",
+      "operatingSystem": "Web, Command-line (pip install stockpro-cli)",
+      "description": "Deep AI research reports on any stock or crypto in minutes. 12 specialized AI agents research fundamentals, technicals, risk, and news in parallel. Includes portfolio tracking, watchlists, and price alerts. A command-line tool (stockpro-cli) brings research and portfolio management to the terminal and is agent-friendly for headless and serverless use.",
+      "downloadUrl": "https://pypi.org/project/stockpro-cli/",
+      "featureList": [
+        "Deep AI research reports from 12 specialized agents",
+        "Portfolio tracking with real-time P&L and cost basis",
+        "Smart watchlists with live prices and AI news briefings",
+        "Price alerts for stocks and crypto",
+        "Report chat grounded in your research (RAG)",
+        "Command-line tool (stockpro-cli) for terminal and AI-agent use"
+      ],
       "offers": {
         "@type": "Offer",
         "price": "0",
@@ -168,6 +177,14 @@
           "acceptedAnswer": {
             "@type": "Answer",
             "text": "Yes. StockPro lets you set price-level alerts for any stock or crypto. When the trigger fires, you get an in-app notification and an optional Telegram message — no need to keep checking quotes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a StockPro command-line tool (CLI)?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The StockPro CLI lets you run research, list reports, and manage portfolios from your terminal. Install it with 'pip install stockpro-cli' and sign in with 'stockpro auth login'; it talks to the same backend as the web app over HTTPS. It is also agent-friendly: a device-code login and an injectable STOCKPRO_TOKEN environment variable let AI agents run it in headless or serverless environments with no browser."
           }
         }
       ]

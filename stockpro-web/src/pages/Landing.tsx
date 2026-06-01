@@ -46,6 +46,7 @@ export default function Landing() {
               {[
                 { label: 'Features', href: '#features' },
                 { label: 'How it works', href: '#how-it-works' },
+                { label: 'CLI', href: '#cli' },
                 { label: 'Pricing', href: '/pricing' },
               ].map(l => (
                 <a key={l.label} href={l.href} style={{ color: '#a8a29e', textDecoration: 'none', fontSize: 14, fontWeight: 500, transition: 'color 0.15s' }}>
@@ -196,6 +197,69 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* CLI */}
+      <section id="cli" style={{ padding: isMobile ? '56px 20px' : '90px 64px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 32 : 56, alignItems: 'center' }}>
+          {/* Copy */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 12 }}>For developers &amp; AI agents</div>
+            <h2 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 26 : 36, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 16, lineHeight: 1.12 }}>
+              Run StockPro research from your terminal
+            </h2>
+            <p style={{ fontSize: 15, color: '#a8a29e', lineHeight: 1.7, marginBottom: 24 }}>
+              The <code style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 5, padding: '1px 6px', fontSize: 13, color: '#d6d3d1' }}>stockpro</code> CLI talks to the same backend as the web app over HTTPS. Pull portfolios, list reports, and trigger research without leaving the command line. It is built to be agent-friendly: a device-code login and an injectable token let AI agents run it in headless or serverless environments.
+            </p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                'Install in one command with pip',
+                'OS keychain token storage, or STOCKPRO_TOKEN for CI and agents',
+                'Device-code sign-in for headless environments — no browser needed',
+              ].map(item => (
+                <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14, color: '#d6d3d1', lineHeight: 1.5 }}>
+                  <Icon name="check_circle" filled size={18} />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <a
+              href="https://pypi.org/project/stockpro-cli/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ background: 'transparent', color: '#d6d3d1', fontSize: 14, fontWeight: 600, padding: '12px 22px', borderRadius: 10, border: '1px solid #292524', display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}
+            >
+              <Icon name="terminal" size={18} />
+              View on PyPI
+            </a>
+          </div>
+          {/* Terminal */}
+          <div style={{ background: '#0c0a09', border: '1px solid #292524', borderRadius: 14, overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' }}>
+            <div style={{ background: '#1c1917', borderBottom: '1px solid #292524', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#292524', display: 'block' }} />
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#292524', display: 'block' }} />
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#292524', display: 'block' }} />
+              <span style={{ marginInlineStart: 8, fontSize: 11.5, color: '#a8a29e' }}>zsh — stockpro</span>
+            </div>
+            <div style={{ padding: isMobile ? 16 : 22, fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', fontSize: isMobile ? 12 : 13, lineHeight: 1.85 }}>
+              {[
+                { p: '$', c: 'pip install stockpro-cli', cmd: true },
+                { p: '$', c: 'stockpro auth login', cmd: true },
+                { p: '', c: 'Opening browser for sign-in... done', cmd: false },
+                { p: '$', c: 'stockpro report list', cmd: true },
+                { p: '', c: 'NVDA   Long thesis      2 days ago', cmd: false },
+                { p: '', c: 'AAPL   Comprehensive    5 days ago', cmd: false },
+                { p: '$', c: 'stockpro portfolio list', cmd: true },
+                { p: '', c: 'Main      $142,830   +14.8%', cmd: false },
+              ].map((line, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, whiteSpace: 'pre', overflowX: 'auto' }}>
+                  {line.p && <span style={{ color: '#22c55e' }}>{line.p}</span>}
+                  <span style={{ color: line.cmd ? '#fafaf9' : '#a8a29e', paddingInlineStart: line.p ? 0 : 18 }}>{line.c}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FAQ */}
       <section id="faq" style={{ padding: isMobile ? '48px 20px' : '80px 64px', maxWidth: 820, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: isMobile ? 32 : 48 }}>
@@ -213,6 +277,7 @@ export default function Landing() {
             { q: "What's the best AI tool for researching stocks?", a: 'StockPro is purpose-built for stock and crypto research — unlike general chatbots, it runs a multi-agent research pipeline that gathers fundamentals, technicals, risk, and news in parallel, then synthesizes a structured report you can chat with. Free to try at stock-pro.org.' },
             { q: 'How do I track a stock portfolio with AI?', a: 'In StockPro, you create one or more portfolios, add transactions (buy/sell, manually or via CSV), and the app tracks cost basis, P&L, sector allocation, and history automatically. AI research is then framed against your actual positions.' },
             { q: 'Can I get AI alerts when a stock hits a target price?', a: 'Yes. StockPro lets you set price-level alerts for any stock or crypto. When the trigger fires, you get an in-app notification and an optional Telegram message — no need to keep checking quotes.' },
+            { q: 'Is there a StockPro command-line tool (CLI)?', a: "Yes. The StockPro CLI lets you run research, list reports, and manage portfolios from your terminal. Install it with 'pip install stockpro-cli' and sign in with 'stockpro auth login'; it talks to the same backend as the web app over HTTPS. It is also agent-friendly: a device-code login and an injectable STOCKPRO_TOKEN environment variable let AI agents run it in headless or serverless environments with no browser." },
           ].map(({ q, a }) => (
             <div key={q} style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: isMobile ? 20 : 24 }}>
               <h3 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 16, fontWeight: 600, margin: 0, marginBottom: 10, color: '#fafaf9' }}>{q}</h3>

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" >
+    <link rel="icon" type="image/svg+xml" href="/app/favicon.svg" >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" >
+    <title>StockPro — AI-Powered Stock Research</title>
+
+    <!-- Primary SEO / AEO meta -->
+    <meta name="description" content="Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and price alerts powered by 12 specialized AI agents." >
+    <link rel="canonical" href="https://stock-pro.org/" >
+    <meta name="theme-color" content="#0c0a09" >
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="StockPro — AI-Powered Stock Research" >
+    <meta property="og:description" content="Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and price alerts." >
+    <meta property="og:type" content="website" >
+    <meta property="og:url" content="https://stock-pro.org/" >
+    <meta property="og:image" content="https://stock-pro.org/app/og-image.png" >
+    <meta property="og:site_name" content="StockPro" >
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" >
+    <meta name="twitter:title" content="StockPro — AI-Powered Stock Research" >
+    <meta name="twitter:description" content="Deep AI research reports on any stock or crypto in minutes. Portfolio tracking, watchlists, and price alerts." >
+    <meta name="twitter:image" content="https://stock-pro.org/app/og-image.png" >
+
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&family=Inter:wght@300;400;500;600&family=Heebo:wght@300;400;500;600;700;800&family=Secular+One&display=swap" rel="stylesheet" >
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" >
+
+    <!-- Structured data: Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "StockPro",
+      "url": "https://stock-pro.org/",
+      "logo": "https://stock-pro.org/app/favicon.svg",
+      "description": "AI-powered stock and crypto research platform with portfolio tracking, watchlists, and price alerts.",
+      "founder": {
+        "@type": "Person",
+        "name": "Or Joshua Salinas",
+        "url": "https://stock-pro.org/about"
+      },
+      "sameAs": [
+        "https://github.com/OJS-9",
+        "https://x.com/OJSsalinas",
+        "https://www.linkedin.com/in/or-joshua-s-891a22141/"
+      ]
+    }
+    </script>
+
+    <!-- Structured data: Person (founder) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "Or Joshua Salinas",
+      "url": "https://stock-pro.org/about",
+      "image": "https://stock-pro.org/app/founder.jpg",
+      "jobTitle": "Founder & Engineer",
+      "description": "Solo founder and engineer of StockPro. Self-taught builder focused on AI-powered stock and crypto research for retail investors.",
+      "worksFor": {
+        "@type": "Organization",
+        "name": "StockPro",
+        "url": "https://stock-pro.org/"
+      },
+      "sameAs": [
+        "https://github.com/OJS-9",
+        "https://x.com/OJSsalinas",
+        "https://www.linkedin.com/in/or-joshua-s-891a22141/"
+      ]
+    }
+    </script>
+
+    <!-- Structured data: SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "StockPro",
+      "url": "https://stock-pro.org/",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web, Command-line (pip install stockpro-cli)",
+      "description": "Deep AI research reports on any stock or crypto in minutes. 12 specialized AI agents research fundamentals, technicals, risk, and news in parallel. Includes portfolio tracking, watchlists, and price alerts. A command-line tool (stockpro-cli) brings research and portfolio management to the terminal and is agent-friendly for headless and serverless use.",
+      "downloadUrl": "https://pypi.org/project/stockpro-cli/",
+      "featureList": [
+        "Deep AI research reports from 12 specialized agents",
+        "Portfolio tracking with real-time P&L and cost basis",
+        "Smart watchlists with live prices and AI news briefings",
+        "Price alerts for stocks and crypto",
+        "Report chat grounded in your research (RAG)",
+        "Command-line tool (stockpro-cli) for terminal and AI-agent use"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Free tier available. No credit card required."
+      }
+    }
+    </script>
+
+    <!-- Structured data: FAQPage -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What makes StockPro different from a normal stock screener?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "StockPro runs 12 specialized AI research agents in parallel — fundamentals, technicals, risk, competitive landscape, news sentiment, and more — and synthesizes their output into a structured research report. Traditional screeners filter tickers by metrics; StockPro explains the company."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does the AI research actually work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A planner agent reads your ticker and picks which specialists to dispatch. Up to 12 expert agents — fundamentals, technicals, risk, competitive landscape, news sentiment, and more — research in parallel using live market data and real-time web sources. A quality gate filters weak outputs before a synthesis agent merges everything into one cohesive report."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is StockPro free to use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. StockPro has a free tier with no credit card required — you can generate research reports, track a portfolio, build watchlists, and set price alerts. Paid plans add higher report limits and premium features."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can AI replace a human stock analyst?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No, and we don't pitch it as a replacement. AI is best at quickly synthesizing structured information — earnings, filings, news, technicals — so you can form your own view faster. Final investment decisions still require human judgment about risk tolerance, time horizon, and conviction."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How accurate is AI-generated stock research?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Accuracy depends on the data sources and the reasoning. Every report is grounded in real-time market data, financial filings, and live web sources, and a quality gate runs before synthesis to reject low-confidence outputs. Reports are informational, not investment advice."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What data sources does AI stock research use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "StockPro pulls live market data and fundamentals for stocks and crypto, real-time news sentiment, and live web search for context and breaking events. Reports cite the underlying sources where applicable."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What's the best AI tool for researching stocks?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "StockPro is purpose-built for stock and crypto research — unlike general chatbots, it runs a multi-agent research pipeline that gathers fundamentals, technicals, risk, and news in parallel, then synthesizes a structured report you can chat with. Free to try at stock-pro.org."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I track a stock portfolio with AI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "In StockPro, you create one or more portfolios, add transactions (buy/sell, manually or via CSV), and the app tracks cost basis, P&L, sector allocation, and history automatically. AI research is then framed against your actual positions."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I get AI alerts when a stock hits a target price?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. StockPro lets you set price-level alerts for any stock or crypto. When the trigger fires, you get an in-app notification and an optional Telegram message — no need to keep checking quotes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a StockPro command-line tool (CLI)?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The StockPro CLI lets you run research, list reports, and manage portfolios from your terminal. Install it with 'pip install stockpro-cli' and sign in with 'stockpro auth login'; it talks to the same backend as the web app over HTTPS. It is also agent-friendly: a device-code login and an injectable STOCKPRO_TOKEN environment variable let AI agents run it in headless or serverless environments with no browser."
+          }
+        }
+      ]
+    }
+    </script>
+    <script type="module" crossorigin src="/app/assets/index-CKRrKy7g.js"></script>
+    <link rel="modulepreload" crossorigin href="/app/assets/rolldown-runtime-BVbofQct.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-clerk-D4aLsSLS.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-react-C6IlSBoZ.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/vendor-query-r7QFMzWK.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/Icon-m1UWVa51.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/useBreakpoint-DgDcCD4U.js">
+    <link rel="modulepreload" crossorigin href="/app/assets/prerender-0q2oINqF.js">
+    <link rel="stylesheet" crossorigin href="/app/assets/index-8C3sx8DE.css">
+  </head>
+  <body>
+    <div id="root"><title>StockPro — Press Kit</title><meta name="description" content="StockPro press kit: boilerplate, brand assets, founder contact, and media inquiries."><meta property="og:title" content="StockPro — Press Kit"><meta property="og:description" content="AI-powered stock and crypto research. Press kit, brand assets, and media contact."><meta property="og:image" content="https://stock-pro.org/app/og-press.png"><meta property="og:url" content="https://stock-pro.org/press"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://stock-pro.org/app/og-press.png"><div style="min-height:100vh;background:#0c0a09;color:#fafaf9;font-family:Inter, Heebo, sans-serif"><nav style="display:flex;align-items:center;justify-content:space-between;padding:0 64px;height:64px;position:sticky;top:0;z-index:100;background:rgba(12,10,9,0.9);backdrop-filter:blur(16px);border-bottom:1px solid rgba(41,37,36,0.6)"><a style="text-decoration:none" href="/" data-discover="true"><span style="font-family:Nunito, sans-serif;font-size:18px;font-weight:700;color:#d6d3d1;letter-spacing:-0.02em">StockPro</span></a><div style="display:flex;gap:10px"><a style="background:#d6d3d1;color:#0c0a09;font-size:13px;font-weight:600;padding:8px 20px;border-radius:8px;text-decoration:none" href="/sign-up" data-discover="true">Get started</a></div></nav><main style="max-width:760px;margin:0 auto;padding:64px 32px 80px"><div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#22c55e;margin-bottom:12px">Press kit</div><h1 style="font-family:Nunito, sans-serif;font-size:48px;font-weight:700;letter-spacing:-0.03em;margin-bottom:16px;line-height:1.1">Press &amp; media</h1><p style="font-size:17px;color:#d6d3d1;line-height:1.6;margin-bottom:40px">Institutional-grade stock research, built solo and free for retail investors.</p><section style="margin-bottom:40px"><h2 style="font-family:Nunito, sans-serif;font-size:22px;font-weight:700;margin-bottom:16px">Quick facts</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="background:#1c1917;border:1px solid #292524;border-radius:12px;padding:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#22c55e;margin-bottom:6px">Founder</div><div style="font-size:14px;color:#d6d3d1">Or Joshua Salinas</div></div><div style="background:#1c1917;border:1px solid #292524;border-radius:12px;padding:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#22c55e;margin-bottom:6px">Launched</div><div style="font-size:14px;color:#d6d3d1">2026</div></div><div style="background:#1c1917;border:1px solid #292524;border-radius:12px;padding:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#22c55e;margin-bottom:6px">HQ</div><div style="font-size:14px;color:#d6d3d1">Remote / Independent</div></div><div style="background:#1c1917;border:1px solid #292524;border-radius:12px;padding:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#22c55e;margin-bottom:6px">Website</div><div style="font-size:14px;color:#d6d3d1">stock-pro.org</div></div></div></section><section style="margin-bottom:40px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h2 style="font-family:Nunito, sans-serif;font-size:22px;font-weight:700;margin:0">Boilerplate</h2><button style="background:transparent;border:1px solid #292524;color:#d6d3d1;font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer">Copy</button></div><div style="background:#1c1917;border:1px solid #292524;border-radius:12px;padding:20px;font-size:14px;color:#a8a29e;line-height:1.7">StockPro (stock-pro.org) is an AI-powered stock and crypto research platform built by solo founder Or Joshua Salinas. It runs 12 specialized AI research agents in parallel — covering fundamentals, technicals, risk, competitive landscape, and news sentiment — to produce institutional-quality research reports on any ticker in under three minutes. The product also includes portfolio tracking, watchlists, and real-time price alerts. StockPro is free to use, with paid tiers for higher report volume. The platform is built on a modern multi-agent AI stack and is independently operated.</div></section><section style="margin-bottom:40px"><h2 style="font-family:Nunito, sans-serif;font-size:22px;font-weight:700;margin-bottom:16px">Brand assets</h2><div style="display:flex;gap:12px;flex-wrap:wrap"><a href="/app/favicon.svg" target="_blank" rel="noopener" style="background:#1c1917;border:1px solid #292524;color:#d6d3d1;font-size:13px;font-weight:500;padding:12px 18px;border-radius:10px;text-decoration:none">Download logo (SVG)</a><a href="/app/og-image.png" target="_blank" rel="noopener" style="background:#1c1917;border:1px solid #292524;color:#d6d3d1;font-size:13px;font-weight:500;padding:12px 18px;border-radius:10px;text-decoration:none">Social card (PNG)</a></div></section><section style="margin-bottom:40px"><h2 style="font-family:Nunito, sans-serif;font-size:22px;font-weight:700;margin-bottom:16px">As seen in</h2><div style="background:#1c1917;border:1px dashed #292524;border-radius:12px;padding:24px;text-align:center;color:#78716c;font-size:13px">Press mentions will appear here.</div></section><section><h2 style="font-family:Nunito, sans-serif;font-size:22px;font-weight:700;margin-bottom:16px">Press contact</h2><div style="background:#1c1917;border:1px solid #292524;border-radius:12px;padding:20px"><div style="font-size:13px;color:#a8a29e;margin-bottom:8px">Or Joshua Salinas, founder</div><a href="mailto:optimusor@gmail.com" style="color:#22c55e;font-size:16px;text-decoration:underline">optimusor@gmail.com</a></div></section></main><footer style="border-top:1px solid #292524;padding:32px 64px;display:flex;flex-direction:row;gap:16px;align-items:center;justify-content:space-between"><span style="font-family:Nunito, sans-serif;font-size:16px;font-weight:700;color:#d6d3d1">StockPro</span><div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center"><a style="font-size:13px;color:#a8a29e;text-decoration:none" href="/about" data-discover="true">About</a><a style="font-size:13px;color:#a8a29e;text-decoration:none" href="/press" data-discover="true">Press</a><a style="font-size:13px;color:#a8a29e;text-decoration:none" href="/legal/privacy" data-discover="true">Privacy</a><a style="font-size:13px;color:#a8a29e;text-decoration:none" href="/legal/terms" data-discover="true">Terms</a></div><span style="font-size:12px;color:#a8a29e">© 2026 StockPro</span></footer></div></div>
+  </body>
+</html>
