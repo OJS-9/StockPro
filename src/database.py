@@ -5,6 +5,7 @@ PostgreSQL database connection and schema management for reports, chunks, and po
 import logging
 import os
 import threading
+import time
 import json
 import uuid
 from decimal import Decimal
@@ -46,17 +47,41 @@ class DatabaseManager:
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to create PostgreSQL connection pool: {e}")
 
+        # Tracks when each pooled connection was last returned (monotonic seconds),
+        # keyed by id(conn). Used to skip the liveness ping on connections that were
+        # in active use moments ago -- only idle ones risk a dropped socket.
+        self._released_at = {}
+        self._released_lock = threading.Lock()
+
     _POOL_ACQUIRE_ATTEMPTS = 3
+    # Only ping a connection that has been idle in the pool longer than this.
+    # Supabase drops idle sockets; a connection reused within this window is still
+    # warm, so we skip the round-trip. Keeps DB-heavy requests (many quick
+    # checkouts) from paying a SELECT 1 on every single one.
+    _PING_IF_IDLE_SECONDS = float(os.getenv("DB_PING_IF_IDLE_SECONDS", "20"))
 
     def get_connection(self):
         """Return a pooled connection that is verified alive. Supabase can drop an
-        idle connection's SSL layer while conn.closed stays 0, so we ping it."""
+        idle connection's SSL layer while conn.closed stays 0, so we ping it -- but
+        only when it has sat idle long enough to plausibly be dead."""
         last_err = None
         for _ in range(self._POOL_ACQUIRE_ATTEMPTS):
             try:
                 conn = self._pool.getconn()
             except psycopg2.Error as e:
                 raise RuntimeError(f"Failed to get connection from pool: {e}")
+
+            with self._released_lock:
+                released_at = self._released_at.pop(id(conn), None)
+
+            # Recently active connection: trust it, skip the ping round-trip.
+            if (
+                not conn.closed
+                and released_at is not None
+                and (time.monotonic() - released_at) < self._PING_IF_IDLE_SECONDS
+            ):
+                return conn
+
             try:
                 if conn.closed:
                     raise psycopg2.OperationalError("pooled connection is closed")
@@ -70,6 +95,8 @@ class DatabaseManager:
                     self._pool.putconn(conn, close=True)
                 except Exception:
                     pass
+                with self._released_lock:
+                    self._released_at.pop(id(conn), None)
         raise RuntimeError(f"Failed to get a live connection after retries: {last_err}")
 
     def _release(self, conn):
@@ -77,6 +104,9 @@ class DatabaseManager:
         if conn is not None:
             try:
                 self._pool.putconn(conn)
+                if not conn.closed:
+                    with self._released_lock:
+                        self._released_at[id(conn)] = time.monotonic()
             except Exception:
                 pass
 
