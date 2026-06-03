@@ -78,10 +78,9 @@ export default function SignUp() {
       {/* Right auth panel */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: isMobile ? '24px 16px' : 48, background: isMobile ? '#1c1917' : undefined }}>
         <ClerkSignUp
-          routing="path"
-          path={`${import.meta.env.BASE_URL}sign-up`}
+          routing="virtual"
           signInUrl={`${import.meta.env.BASE_URL}sign-in`}
-          afterSignUpUrl={`${import.meta.env.BASE_URL}home`}
+          forceRedirectUrl={`${import.meta.env.BASE_URL}home`}
           appearance={{
             variables: {
               colorBackground: '#1c1917',
