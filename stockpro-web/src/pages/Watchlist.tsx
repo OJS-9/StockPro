@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import UpgradeNudge from '../components/UpgradeNudge'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
@@ -56,6 +57,8 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
   const { t } = useTranslation()
   const [symbol, setSymbol] = useState('')
   const [exchange, setExchange] = useState<Exchange>('US')
+  // On 402 quota_exceeded, show an upgrade banner under the input instead of a generic toast.
+  const [quota, setQuota] = useState<{ resource?: string; message?: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -63,9 +66,30 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
   const finalSymbol = appendExchangeSuffix(symbol, exchange)
 
   const addMutation = useMutation({
-    mutationFn: () => api.post(`/api/watchlist/${watchlistId}/symbol`, { symbol: finalSymbol }).then(r => { if (!r.ok) throw new Error() }),
+    mutationFn: async () => {
+      setQuota(null)
+      const res = await api.post(`/api/watchlist/${watchlistId}/symbol`, { symbol: finalSymbol })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 402 || data.error === 'quota_exceeded') {
+          const err = new Error(data.message || 'quota_exceeded')
+          ;(err as Error & { quota?: { resource?: string; message?: string } }).quota = {
+            resource: data.resource,
+            message: data.message,
+          }
+          throw err
+        }
+        throw new Error('Failed')
+      }
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['watchlists'] }); toast.success(t('watchlist.toasts.added', { symbol: finalSymbol })); onDone() },
-    onError: () => toast.error(t('watchlist.toasts.addFailed')),
+    onError: (err: Error & { quota?: { resource?: string; message?: string } }) => {
+      if (err.quota) {
+        setQuota(err.quota)
+      } else {
+        toast.error(t('watchlist.toasts.addFailed'))
+      }
+    },
   })
 
   const submit = () => { if (symbol.trim()) addMutation.mutate() }
@@ -92,6 +116,11 @@ function AddSymbolRow({ watchlistId, onDone }: { watchlistId: string; onDone: ()
           </button>
           <button onClick={onDone} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', fontSize: 13, cursor: 'pointer' }}>{t('alerts.cancel')}</button>
         </div>
+        {quota && (
+          <div style={{ marginTop: 10 }}>
+            <UpgradeNudge resource={quota.resource} message={quota.message} />
+          </div>
+        )}
       </td>
     </tr>
   )

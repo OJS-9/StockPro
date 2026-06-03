@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import UpgradeNudge from '../components/UpgradeNudge'
 import { useApiClient } from '../api/client'
 import { useLanguage } from '../LanguageContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
@@ -22,6 +23,8 @@ export default function Alerts() {
   const [showCreate, setShowCreate] = useState(false)
   const [alertExchange, setAlertExchange] = useState<Exchange>('US')
   const [newAlert, setNewAlert] = useState({ symbol: '', direction: 'above', target: '', asset_type: 'stock' })
+  // On 402 quota_exceeded, show an upgrade banner in the create form instead of a generic toast.
+  const [quota, setQuota] = useState<{ resource?: string; message?: string } | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['alerts'],
@@ -59,13 +62,25 @@ export default function Alerts() {
   const createMutation = useMutation({
     // POST /api/alerts with {symbol, direction, target_price, asset_type}
     mutationFn: async () => {
+      setQuota(null)
       const res = await api.post('/api/alerts', {
         symbol: appendExchangeSuffix(newAlert.symbol, alertExchange),
         direction: newAlert.direction,
         target_price: parseFloat(newAlert.target),
         asset_type: newAlert.asset_type,
       })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 402 || data.error === 'quota_exceeded') {
+          const err = new Error(data.message || 'quota_exceeded')
+          ;(err as Error & { quota?: { resource?: string; message?: string } }).quota = {
+            resource: data.resource,
+            message: data.message,
+          }
+          throw err
+        }
+        throw new Error('Failed')
+      }
       return res.json()
     },
     onSuccess: () => {
@@ -74,7 +89,13 @@ export default function Alerts() {
       setShowCreate(false)
       toast.success(t('alerts.toasts.created'))
     },
-    onError: () => toast.error(t('alerts.toasts.createFailed')),
+    onError: (err: Error & { quota?: { resource?: string; message?: string } }) => {
+      if (err.quota) {
+        setQuota(err.quota)
+      } else {
+        toast.error(t('alerts.toasts.createFailed'))
+      }
+    },
   })
 
   // API fields: alert_id, symbol, direction (above|below), target_price, active (bool), created_at
@@ -164,6 +185,11 @@ export default function Alerts() {
                 <input type="number" value={newAlert.target} onChange={e => setNewAlert(a => ({ ...a, target: e.target.value }))} placeholder="0.00" style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 8, padding: '9px 12px', color: '#fafaf9', fontFamily: 'Inter, Heebo, sans-serif', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
+            {quota && (
+              <div style={{ marginBottom: 16 }}>
+                <UpgradeNudge resource={quota.resource} message={quota.message} />
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowCreate(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer', fontSize: 13 }}>{t('alerts.cancel')}</button>
               <button

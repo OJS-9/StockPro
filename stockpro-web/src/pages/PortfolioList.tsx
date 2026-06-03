@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import UpgradeNudge from '../components/UpgradeNudge'
 import { useApiClient } from '../api/client'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useLanguage } from '../LanguageContext'
@@ -38,18 +39,33 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
   const [name, setName] = useState('')
   const [trackCash, setTrackCash] = useState(true)
   const [cashBalance, setCashBalance] = useState('')
+  // When the API rejects with 402 quota_exceeded, we show an upgrade banner in
+  // the modal instead of a generic failure toast.
+  const [quota, setQuota] = useState<{ resource?: string; message?: string } | null>(null)
   const api = useApiClient()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
 
   const mutation = useMutation({
     mutationFn: async () => {
+      setQuota(null)
       const body: Record<string, unknown> = { name, track_cash: trackCash }
       if (trackCash && cashBalance.trim()) {
         body.cash_balance = parseFloat(cashBalance) || 0
       }
       const res = await api.post('/api/portfolios', body)
-      if (!res.ok) throw new Error('Failed to create portfolio')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 402 || data.error === 'quota_exceeded') {
+          const err = new Error(data.message || 'quota_exceeded')
+          ;(err as Error & { quota?: { resource?: string; message?: string } }).quota = {
+            resource: data.resource,
+            message: data.message,
+          }
+          throw err
+        }
+        throw new Error('Failed to create portfolio')
+      }
       return res.json()
     },
     onSuccess: () => {
@@ -57,7 +73,13 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
       toast.success(t('portfolio.toasts.created'))
       onClose()
     },
-    onError: () => toast.error(t('portfolio.toasts.createFailed')),
+    onError: (err: Error & { quota?: { resource?: string; message?: string } }) => {
+      if (err.quota) {
+        setQuota(err.quota)
+      } else {
+        toast.error(t('portfolio.toasts.createFailed'))
+      }
+    },
   })
 
   return (
@@ -94,6 +116,11 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
               inputMode="decimal"
               style={{ width: '100%', background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '10px 14px', color: '#fafaf9', fontFamily: 'Inter, sans-serif', fontSize: 14, fontVariantNumeric: 'tabular-nums', outline: 'none', boxSizing: 'border-box' }}
             />
+          </div>
+        )}
+        {quota && (
+          <div style={{ marginBottom: 16 }}>
+            <UpgradeNudge resource={quota.resource} message={quota.message} />
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

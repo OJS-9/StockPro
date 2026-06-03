@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
+import UpgradeNudge from '../components/UpgradeNudge'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
 import { useLanguage } from '../LanguageContext'
@@ -78,6 +79,8 @@ export default function ResearchWizard() {
   const [popupData, setPopupData] = useState<PopupData | null>(null)
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([])
   const [answers, setAnswers] = useState<string[]>([])
+  // When the monthly report quota is hit, show an upgrade banner instead of a generic toast.
+  const [reportQuota, setReportQuota] = useState<string | null>(null)
 
   const api = useApiClient()
   const { getToken } = useAuth()
@@ -149,6 +152,7 @@ export default function ResearchWizard() {
 
   const callStartGeneration = async (data: PopupData, subjectIds: string[], userAnswers: string[]) => {
     try {
+      setReportQuota(null)
       const token = await getToken()
       const res = await fetch('/start_generation', {
         method: 'POST',
@@ -163,7 +167,16 @@ export default function ResearchWizard() {
         }),
         credentials: 'include',
       })
-      if (!res.ok) throw new Error('Failed to start research generation')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        if (res.status === 403 && errData.error === 'limit_reached') {
+          const err = new Error(errData.message || 'limit_reached')
+          ;(err as Error & { reportQuota?: string }).reportQuota =
+            errData.message || t('research.toasts.startFailed')
+          throw err
+        }
+        throw new Error('Failed to start research generation')
+      }
       researchProgress.start(data.session_id, ticker.toUpperCase())
       setPhase('setup')
       setPopupData(null)
@@ -171,7 +184,11 @@ export default function ResearchWizard() {
       setAnswers([])
       toast.success(t('research.toasts.started'))
     } catch (e: any) {
-      toast.error(e.message || t('research.toasts.startFailed'))
+      if (e.reportQuota) {
+        setReportQuota(e.reportQuota)
+      } else {
+        toast.error(e.message || t('research.toasts.startFailed'))
+      }
       setPhase('setup')
     }
   }
@@ -320,6 +337,12 @@ export default function ResearchWizard() {
             {launchMutation.isPending ? t('research.checking') : t('research.launchResearch')}
           </button>
         </div>
+
+        {reportQuota && (
+          <div style={{ marginTop: 16 }}>
+            <UpgradeNudge resource="reports_per_month" message={reportQuota} onDismiss={() => setReportQuota(null)} />
+          </div>
+        )}
       </main>
 
       {/* ── MODAL OVERLAY ── */}
