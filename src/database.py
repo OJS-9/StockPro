@@ -46,17 +46,31 @@ class DatabaseManager:
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to create PostgreSQL connection pool: {e}")
 
+    _POOL_ACQUIRE_ATTEMPTS = 3
+
     def get_connection(self):
-        """Get a connection from the pool, validating it is alive."""
-        try:
-            conn = self._pool.getconn()
-            # Check if connection is still alive; discard stale ones
-            if conn.closed:
-                self._pool.putconn(conn, close=True)
+        """Return a pooled connection that is verified alive. Supabase can drop an
+        idle connection's SSL layer while conn.closed stays 0, so we ping it."""
+        last_err = None
+        for _ in range(self._POOL_ACQUIRE_ATTEMPTS):
+            try:
                 conn = self._pool.getconn()
-            return conn
-        except psycopg2.Error as e:
-            raise RuntimeError(f"Failed to get connection from pool: {e}")
+            except psycopg2.Error as e:
+                raise RuntimeError(f"Failed to get connection from pool: {e}")
+            try:
+                if conn.closed:
+                    raise psycopg2.OperationalError("pooled connection is closed")
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                conn.rollback()
+                return conn
+            except psycopg2.Error as e:
+                last_err = e
+                try:
+                    self._pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+        raise RuntimeError(f"Failed to get a live connection after retries: {last_err}")
 
     def _release(self, conn):
         """Return a connection to the pool."""
