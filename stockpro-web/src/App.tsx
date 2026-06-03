@@ -1,6 +1,6 @@
-import { useRef, useEffect, lazy, Suspense } from 'react'
+import { useRef, useEffect, lazy, Suspense, type ReactNode } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
-import { SignedIn, SignedOut } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, ClerkLoading, ClerkLoaded } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useApiClient } from './api/client'
@@ -132,16 +132,46 @@ function DataPrefetcher() {
   return null
 }
 
+/** Full-screen branded loading spinner (shared by Suspense + RequireAuth). */
+function FullScreenSpinner() {
+  return (
+    <div style={{ background: '#0c0a09', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 28, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
+      <div style={{ width: 32, height: 32, border: '3px solid #292524', borderTopColor: '#d6d3d1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+    </div>
+  )
+}
+
+/**
+ * Gate for authenticated pages. While Clerk is restoring the session we show a
+ * spinner (not a blank page or the Landing flash); once loaded we render the page
+ * for signed-in users or redirect signed-out users to /sign-in (preserving where
+ * they were headed via redirect_url).
+ */
+function RequireAuth({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <ClerkLoading><FullScreenSpinner /></ClerkLoading>
+      <ClerkLoaded>
+        <SignedIn>{children}</SignedIn>
+        <SignedOut>
+          <Navigate
+            to={`/sign-in?redirect_url=${encodeURIComponent(
+              typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/'
+            )}`}
+            replace
+          />
+        </SignedOut>
+      </ClerkLoaded>
+    </>
+  )
+}
+
 export default function App() {
   return (
     <>
     <SignedIn><NotificationListener /><DataPrefetcher /></SignedIn>
-    <Suspense fallback={
-      <div style={{ background: '#0c0a09', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <div style={{ fontSize: 28, fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontWeight: 700, color: '#d6d3d1', letterSpacing: '-0.02em' }}>StockPro</div>
-        <div style={{ width: 32, height: 32, border: '3px solid #292524', borderTopColor: '#d6d3d1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      </div>
-    }>
+    <Suspense fallback={<FullScreenSpinner />}>
     <Routes>
       {/* Root: Landing renders unconditionally so it matches the prerendered HTML
           baked in at build time (avoids React 19 hydration mismatch). When Clerk
@@ -168,145 +198,135 @@ export default function App() {
       <Route
         path="/home"
         element={
-          <SignedIn>
+          <RequireAuth>
             <Home />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/portfolio"
         element={
-          <SignedIn>
+          <RequireAuth>
             <PortfolioList />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/portfolio/:id"
         element={
-          <SignedIn>
+          <RequireAuth>
             <PortfolioDetail />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/portfolio/:id/add"
         element={
-          <SignedIn>
+          <RequireAuth>
             <AddTransaction />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/portfolio/:id/import"
         element={
-          <SignedIn>
+          <RequireAuth>
             <ImportCSV />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/portfolio/:id/holding/:symbol"
         element={
-          <SignedIn>
+          <RequireAuth>
             <HoldingDetail />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/portfolio/:id/analytics"
         element={
-          <SignedIn>
+          <RequireAuth>
             <Analytics />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/reports"
         element={
-          <SignedIn>
+          <RequireAuth>
             <ReportsHistory />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/report/:id"
         element={
-          <SignedIn>
+          <RequireAuth>
             <ReportView />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/chat/:reportId"
         element={
-          <SignedIn>
+          <RequireAuth>
             <Chat />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/research"
         element={
-          <SignedIn>
+          <RequireAuth>
             <ResearchWizard />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/watchlist"
         element={
-          <SignedIn>
+          <RequireAuth>
             <Watchlist />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/alerts"
         element={
-          <SignedIn>
+          <RequireAuth>
             <Alerts />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/ticker/:symbol"
         element={
-          <SignedIn>
+          <RequireAuth>
             <TickerPage />
-          </SignedIn>
+          </RequireAuth>
         }
       />
 
       <Route
         path="/settings"
         element={
-          <>
-            <SignedIn>
-              <Settings />
-            </SignedIn>
-            <SignedOut>
-              <Navigate
-                to={`/sign-in?redirect_url=${encodeURIComponent(
-                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/settings'
-                )}`}
-                replace
-              />
-            </SignedOut>
-          </>
+          <RequireAuth>
+            <Settings />
+          </RequireAuth>
         }
       />
 
@@ -314,11 +334,11 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <SignedIn>
+          <RequireAuth>
             <AdminGuard>
               <AdminLayout />
             </AdminGuard>
-          </SignedIn>
+          </RequireAuth>
         }
       >
         <Route index element={<AdminDashboard />} />
@@ -331,19 +351,9 @@ export default function App() {
       <Route
         path="/device"
         element={
-          <>
-            <SignedIn>
-              <DevicePage />
-            </SignedIn>
-            <SignedOut>
-              <Navigate
-                to={`/sign-in?redirect_url=${encodeURIComponent(
-                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/device'
-                )}`}
-                replace
-              />
-            </SignedOut>
-          </>
+          <RequireAuth>
+            <DevicePage />
+          </RequireAuth>
         }
       />
 
@@ -352,19 +362,9 @@ export default function App() {
       <Route
         path="/billing/return"
         element={
-          <>
-            <SignedIn>
-              <BillingReturn />
-            </SignedIn>
-            <SignedOut>
-              <Navigate
-                to={`/sign-in?redirect_url=${encodeURIComponent(
-                  typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/billing/return'
-                )}`}
-                replace
-              />
-            </SignedOut>
-          </>
+          <RequireAuth>
+            <BillingReturn />
+          </RequireAuth>
         }
       />
 

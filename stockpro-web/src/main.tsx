@@ -48,10 +48,20 @@ const tree = (
   </StrictMode>
 )
 
-// If vite-prerender-plugin baked Landing HTML into the root at build time,
-// hydrate over it. Otherwise (dev, or routes without prerender), do a fresh mount.
-if (rootEl.hasChildNodes()) {
+// Only the marketing routes are prerendered (vite.config additionalPrerenderRoutes).
+// For those, hydrate over the baked HTML. For every other route the server still
+// returns the prerendered Landing HTML as a fallback — hydrating that would be a
+// mismatch (DOM says Landing, app renders SignIn/Home), causing a Landing flash and
+// a double render. So on non-prerendered routes we clear the root and fresh-mount.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+let rel = window.location.pathname
+if (base && rel.startsWith(base)) rel = rel.slice(base.length)
+rel = rel.replace(/^\//, '').replace(/\/$/, '')
+const isPrerenderedRoute = rel === '' || rel === 'about' || rel === 'press'
+
+if (rootEl.hasChildNodes() && isPrerenderedRoute) {
   hydrateRoot(rootEl, tree)
 } else {
+  rootEl.innerHTML = ''
   createRoot(rootEl).render(tree)
 }
