@@ -1287,14 +1287,17 @@ class DatabaseManager:
                     """
                     INSERT INTO users (user_id, username, email, email_hash, password_hash, google_id)
                     VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id) DO NOTHING
                 """,
                     (user_id, username, encrypt(email), hmac_email(email), password_hash, google_id),
                 )
+                created = cur.rowcount == 1
             conn.commit()
-            try:
-                self.admin_log_event("signup", user_id, {"username": username})
-            except Exception:
-                pass
+            if created:
+                try:
+                    self.admin_log_event("signup", user_id, {"username": username})
+                except Exception:
+                    pass
         except psycopg2.Error as e:
             if conn:
                 conn.rollback()
