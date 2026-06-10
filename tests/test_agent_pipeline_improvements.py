@@ -131,6 +131,30 @@ class TestQualityGateHeuristics:
         assert "valuation_metrics" in result["research_outputs"]
         assert result["failed_subjects"] == []
 
+    def test_exchange_suffix_ticker_passes_on_base_symbol(self):
+        """A TASE ticker (TEVA.TA) whose output says 'TEVA' (no .TA suffix) must pass.
+
+        Regression for #113: research agents write the base symbol, not the
+        exchange suffix, so matching on the full 'TEVA.TA' spuriously failed
+        every section and aborted the whole report.
+        """
+        outputs = {
+            "earnings_financials": {
+                "subject_id": "earnings_financials",
+                "subject_name": "Earnings & Financials",
+                "research_output": (
+                    "Teva (TEVA) reported revenue of $17.35B over the last twelve months. "
+                    "Gross margin was 52.1%, reaching 56.5% in Q4 2025. "
+                    "Net debt stood at $12.89B with a Net Debt/EBITDA ratio of 2.58x. "
+                    "The current ratio is 1.01 and the quick ratio is 0.75."
+                ),
+                "sources": [],
+            }
+        }
+        result = self._run_gate(outputs, ticker="TEVA.TA")
+        assert "earnings_financials" in result["research_outputs"]
+        assert result["failed_subjects"] == []
+
     def test_mixed_pass_and_fail(self):
         """One good output and one bad should partial-pass."""
         outputs = {

@@ -230,6 +230,10 @@ def quality_gate_node(state: ResearchState) -> dict:
     research_outputs = state["research_outputs"]
     emitter = state.get("emitter")
     ticker = state["ticker"]
+    # Exchange-suffixed tickers (e.g. TASE "TEVA.TA", LSE "VOD.L") are written
+    # in prose by their base symbol -- agents say "TEVA", not "TEVA.TA". Match on
+    # the base symbol so foreign-listed tickers are not spuriously failed here.
+    base_ticker = ticker.upper().split(".")[0]
 
     failed = []
     clean_outputs = {}
@@ -249,7 +253,7 @@ def quality_gate_node(state: ResearchState) -> dict:
                 sid,
             )
             failed.append(sid)
-        elif ticker.upper() not in output.upper():
+        elif base_ticker not in output.upper():
             logger.warning(
                 "%s: output does not reference ticker %s — treating as failure",
                 sid, ticker,
