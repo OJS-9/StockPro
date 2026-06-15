@@ -2333,6 +2333,15 @@ def portfolios_prices():
             }, 0.0, 0.0, 0.0
 
     pids = [p["portfolio_id"] for p in portfolios]
+
+    # Guard: new users have no portfolios. ThreadPoolExecutor(max_workers=0)
+    # raises ValueError, so return an empty result immediately.
+    if not pids:
+        return jsonify({
+            "portfolios": [],
+            "totals": {"total_value": 0.0, "total_pnl": 0.0, "day_change": 0.0},
+        })
+
     with ThreadPoolExecutor(max_workers=min(len(pids), 5)) as pool:
         futures = {pid: pool.submit(_fetch_summary, pid) for pid in pids}
 
