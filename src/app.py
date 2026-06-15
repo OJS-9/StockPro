@@ -1104,6 +1104,28 @@ def clear_conversation():
 # ==================== Popup Q&A + Background Generation Routes ====================
 
 
+# Ticker symbols are short, space-free tokens: letters/digits plus a few
+# exchange separators (TEVA.TA, BRK-B, BTC-USD, ^GSPC, and the NASDAQ ACT
+# preferred form ABR$D). Validated against the full US-listed universe
+# (~12.8k symbols) + every Yahoo format the app handles, with no legit
+# rejects. Free-text like "IBM QUANTOM AND SOFTWARE THESIS.TA" always has
+# spaces, so this gate stops it before a full research run is wasted (#114).
+_TICKER_RE = re.compile(r"^[A-Z0-9.\-^$]{1,20}$")
+
+
+def _ticker_is_valid(ticker: str) -> bool:
+    """True if ticker looks like a real symbol (no whitespace, sane length)."""
+    t = (ticker or "").strip().upper()
+    return bool(_TICKER_RE.match(t)) and any(c.isalnum() for c in t)
+
+
+def _invalid_ticker_message(language: str) -> str:
+    """User-friendly, localized (EN/HE) error for a rejected ticker."""
+    if (language or "").strip().lower() == "he":
+        return "סמל לא תקין. הזן סמל מניה תקין (לדוגמה: AAPL, TEVA.TA)."
+    return "Invalid ticker. Enter a valid symbol (e.g. AAPL, TEVA.TA)."
+
+
 @app.route("/popup_start", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -1115,6 +1137,13 @@ def popup_start():
 
     if not ticker or not trade_type:
         return jsonify({"error": "ticker and trade_type are required"}), 400
+
+    # Reject free-text before any spend: garbage like "IBM QUANTOM AND
+    # SOFTWARE THESIS.TA" otherwise runs the full pipeline and only fails at
+    # the quality gate, burning a generation's worth of LLM spend (#114).
+    if not _ticker_is_valid(ticker):
+        language = (request.form.get("language") or "").strip().lower()
+        return jsonify({"error": _invalid_ticker_message(language)}), 400
 
     session_id = get_or_create_session_id()
     agent = initialize_session(session_id)
