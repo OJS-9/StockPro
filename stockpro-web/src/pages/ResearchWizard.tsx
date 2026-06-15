@@ -128,7 +128,11 @@ export default function ResearchWizard() {
         body: formData,
         credentials: 'include',
       })
-      if (!res.ok) throw new Error('Failed to initialize research')
+      if (!res.ok) {
+        // Surface the backend's localized error (e.g. invalid ticker, #114)
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || t('research.toasts.initFailed'))
+      }
       const data: PopupData = await res.json()
       setPopupData(data)
 
