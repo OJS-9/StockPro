@@ -202,6 +202,24 @@ class TestPortfolioApiJson:
         assert rows[0]["total_market_value"] == 100.0
         assert "totals" in data
 
+    def test_portfolios_prices_empty_returns_zero_totals(self, api_client):
+        import app as app_module
+
+        mock_svc = MagicMock()
+        mock_svc.list_portfolios.return_value = []
+        with patch.object(app_module, "get_portfolio_service", return_value=mock_svc):
+            with api_client.session_transaction() as sess:
+                sess["user_id"] = "me"
+            resp = api_client.get("/api/portfolios/prices")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["portfolios"] == []
+        assert data["totals"] == {
+            "total_value": 0.0,
+            "total_pnl": 0.0,
+            "day_change": 0.0,
+        }
+
     def test_portfolio_history_404_when_not_owner(self, api_client):
         import app as app_module
 
