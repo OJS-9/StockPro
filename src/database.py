@@ -110,6 +110,110 @@ class DatabaseManager:
             except Exception:
                 pass
 
+    # Total checkout attempts for a single read/write operation. One retry is
+    # enough: the issue is a connection silently dropped by Supabase, and it
+    # self-resolves on the next fresh connection. Deliberately not higher, so a
+    # genuine outage fails fast instead of stacking 30s statement_timeouts.
+    _MAX_DB_TRIES = 2
+
+    # Substring backstop for psycopg2.OperationalError raised when Supabase has
+    # dropped the socket. The robust signal is conn.closed != 0 (set after the
+    # error); these markers catch the case where the drop is reported before the
+    # connection object flips closed. Lowercased at compare time.
+    _DROPPED_CONN_MARKERS = (
+        "ssl connection has been closed unexpectedly",
+        "server closed the connection unexpectedly",
+        "connection already closed",
+        "connection not open",
+        "no connection to the server",
+        "terminating connection due to",
+        "could not receive data from server",
+        "could not send data to server",
+    )
+
+    @classmethod
+    def _is_dropped_connection(cls, conn, exc) -> bool:
+        """True only when the connection was dropped underneath us -- not for a
+        genuine query error like a statement timeout (QueryCanceled subclasses
+        OperationalError but leaves the connection open, so it must NOT retry)."""
+        if not isinstance(exc, psycopg2.OperationalError):
+            return False
+        if conn is not None and getattr(conn, "closed", 0):
+            return True
+        msg = str(exc).lower()
+        return any(marker in msg for marker in cls._DROPPED_CONN_MARKERS)
+
+    def _discard(self, conn):
+        """Drop a poisoned connection so the pool replaces it on next checkout."""
+        try:
+            self._pool.putconn(conn, close=True)
+        except Exception:
+            pass
+        with self._released_lock:
+            self._released_at.pop(id(conn), None)
+
+    def _run_read(self, operation):
+        """Run a read-only operation(conn) with one transparent retry if the
+        pooled connection was dropped mid-query. Safe for SELECTs only: a read
+        that fails on a dead socket never reached the server, so re-running it on
+        a fresh connection cannot double-apply anything."""
+        last_err = None
+        for attempt in range(self._MAX_DB_TRIES):
+            conn = self.get_connection()
+            try:
+                return operation(conn)
+            except psycopg2.OperationalError as e:
+                if not self._is_dropped_connection(conn, e):
+                    raise  # real query error -- let it surface, conn released below
+                last_err = e
+                self._discard(conn)
+                conn = None
+                if attempt + 1 < self._MAX_DB_TRIES:
+                    logger.warning(
+                        "DB read hit a dropped connection; retrying on a fresh one"
+                    )
+                    continue
+                raise
+            finally:
+                if conn is not None:
+                    self._release(conn)
+        raise last_err
+
+    def _run_write(self, operation):
+        """Run a write operation(conn) and commit, with one transparent retry if
+        the connection was dropped BEFORE the commit. A pre-commit failure never
+        reached durable state, so the retry is safe. A failure during commit()
+        itself is ambiguous (the server may have committed before the socket
+        died), so commit() lives outside the retryable block and is never retried
+        -- that is what stops a committed-but-unacked write from double-applying."""
+        last_err = None
+        for attempt in range(self._MAX_DB_TRIES):
+            conn = self.get_connection()
+            try:
+                try:
+                    result = operation(conn)
+                except psycopg2.OperationalError as e:
+                    # Failure before commit: nothing durable happened.
+                    if not self._is_dropped_connection(conn, e):
+                        raise  # real query error -- surface it
+                    last_err = e
+                    self._discard(conn)
+                    conn = None
+                    if attempt + 1 < self._MAX_DB_TRIES:
+                        logger.warning(
+                            "DB write hit a dropped connection pre-commit; retrying"
+                        )
+                        continue
+                    raise
+                # operation succeeded; the commit is the ambiguous part. It is
+                # intentionally outside the retry path above.
+                conn.commit()
+                return result
+            finally:
+                if conn is not None:
+                    self._release(conn)
+        raise last_err
+
     def init_schema(self):
         """Initialize database schema (create tables if they don't exist)."""
         conn = None
@@ -2857,8 +2961,7 @@ class DatabaseManager:
     def upsert_price_cache(
         self, symbol, asset_type, price, change_percent, display_name=None, currency="USD"
     ):
-        conn = self.get_connection()
-        try:
+        def op(conn):
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -2873,9 +2976,8 @@ class DatabaseManager:
                 """,
                     (symbol, asset_type, price, change_percent, display_name, currency),
                 )
-            conn.commit()
-        finally:
-            self._release(conn)
+
+        self._run_write(op)
         try:
             if os.getenv("STOCKPRO_ALERT_EVAL_ENABLED", "true").lower() in (
                 "1",
@@ -3091,8 +3193,8 @@ class DatabaseManager:
         if not symbols:
             return []
         norm = [s.upper() for s in symbols]
-        conn = self.get_connection()
-        try:
+
+        def op(conn):
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
@@ -3102,8 +3204,8 @@ class DatabaseManager:
                     (norm,),
                 )
                 return list(cur.fetchall())
-        finally:
-            self._release(conn)
+
+        return self._run_read(op)
 
     def record_price_alert_trigger(
         self,
@@ -3113,9 +3215,7 @@ class DatabaseManager:
         symbol: str,
         body: str,
     ) -> None:
-        conn = None
-        try:
-            conn = self.get_connection()
+        def op(conn):
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -3133,20 +3233,16 @@ class DatabaseManager:
                     """,
                     (alert_id,),
                 )
-            conn.commit()
+
+        try:
+            self._run_write(op)
         except psycopg2.Error as e:
-            if conn:
-                conn.rollback()
             raise RuntimeError(f"Failed to record price alert trigger: {e}")
-        finally:
-            if conn:
-                self._release(conn)
 
     def list_price_alert_notifications_for_user(
         self, user_id: str, limit: int = 50
     ) -> List[Dict[str, Any]]:
-        conn = self.get_connection()
-        try:
+        def op(conn):
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
@@ -3158,12 +3254,11 @@ class DatabaseManager:
                     (user_id, limit),
                 )
                 return list(cur.fetchall())
-        finally:
-            self._release(conn)
+
+        return self._run_read(op)
 
     def count_unread_price_alert_notifications(self, user_id: str) -> int:
-        conn = self.get_connection()
-        try:
+        def op(conn):
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -3174,15 +3269,13 @@ class DatabaseManager:
                 )
                 row = cur.fetchone()
                 return int(row[0]) if row else 0
-        finally:
-            self._release(conn)
+
+        return self._run_read(op)
 
     def mark_price_alert_notification_read(
         self, notification_id: str, user_id: str
     ) -> bool:
-        conn = None
-        try:
-            conn = self.get_connection()
+        def op(conn):
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -3192,16 +3285,12 @@ class DatabaseManager:
                     """,
                     (notification_id, user_id),
                 )
-                ok = cur.rowcount > 0
-            conn.commit()
-            return ok
+                return cur.rowcount > 0
+
+        try:
+            return self._run_write(op)
         except psycopg2.Error as e:
-            if conn:
-                conn.rollback()
             raise RuntimeError(f"Failed to mark notification read: {e}")
-        finally:
-            if conn:
-                self._release(conn)
 
     def mark_all_price_alert_notifications_read(self, user_id: str) -> int:
         conn = None
