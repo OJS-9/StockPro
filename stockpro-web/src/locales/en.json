@@ -342,6 +342,10 @@
   "research.toasts.startFailed": "Failed to start research",
   "research.toasts.initFailed": "Failed to initialize research",
   "research.toasts.failed": "Research failed. Please try again.",
+  "research.upgradeModal.title": "You've used your free reports",
+  "research.upgradeModal.body": "Upgrade to Pro for unlimited research reports, more portfolios, and full watchlist and alert limits.",
+  "research.upgradeModal.upgrade": "Upgrade to Pro",
+  "research.upgradeModal.maybeLater": "Maybe later",
 
   "reports.toasts.deleted": "Report deleted",
   "reports.toasts.deleteFailed": "Failed to delete report",

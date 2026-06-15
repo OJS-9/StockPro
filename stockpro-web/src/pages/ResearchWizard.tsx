@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import AppNav from '../components/AppNav'
 import Icon from '../components/Icon'
-import UpgradeNudge from '../components/UpgradeNudge'
+import UpgradeModal from '../components/UpgradeModal'
 import { useApiClient } from '../api/client'
 import { useAuth } from '@clerk/clerk-react'
 import { useLanguage } from '../LanguageContext'
@@ -343,9 +343,7 @@ export default function ResearchWizard() {
         </div>
 
         {reportQuota && (
-          <div style={{ marginTop: 16 }}>
-            <UpgradeNudge resource="reports_per_month" message={reportQuota} onDismiss={() => setReportQuota(null)} />
-          </div>
+          <UpgradeModal message={reportQuota} onDismiss={() => setReportQuota(null)} />
         )}
       </main>
 
