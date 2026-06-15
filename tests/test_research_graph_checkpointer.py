@@ -446,3 +446,52 @@ def test_storage_node_completeness_flag_partial(monkeypatch):
 
     assert captured["metadata"]["completeness"] == "partial"
     assert captured["metadata"]["failed_subjects"] == ["company_overview"]
+
+
+def test_storage_node_failure_clears_report_id_and_logs_research_failed(monkeypatch):
+    """When store_report raises, storage_node returns an empty report_id and logs
+    a 'research_failed' event (not 'research_complete') so callers cannot report a
+    fake 'ready' status with no saved report behind it (issue #102)."""
+    import research_graph as rg
+    import sys
+    from unittest.mock import MagicMock
+
+    # ReportStorage.store_report blows up (simulates a DB/storage failure).
+    mock_storage = MagicMock()
+    mock_storage.store_report.side_effect = RuntimeError("storage exploded")
+    fake_storage_module = MagicMock()
+    fake_storage_module.ReportStorage = lambda: mock_storage
+    monkeypatch.setitem(sys.modules, "report_storage", fake_storage_module)
+
+    # Capture admin events emitted during the failure path.
+    events = []
+    fake_db = MagicMock()
+    fake_db.admin_log_event.side_effect = lambda event_type, user_id, payload: (
+        events.append((event_type, payload))
+    )
+    fake_db_module = MagicMock()
+    fake_db_module.get_database_manager = lambda: fake_db
+    monkeypatch.setitem(sys.modules, "database", fake_db_module)
+
+    plan = MagicMock()
+    plan.selected_subject_ids = ["news_catalysts"]
+    plan.trade_context = ""
+    plan.planner_reasoning = ""
+
+    result = rg.storage_node({
+        "ticker": "HMM.A.TA",
+        "trade_type": "investment",
+        "report_text": "synthesized report body",
+        "plan": plan,
+        "user_id": "user_123",
+        "emitter": None,
+        "is_partial_report": False,
+        "failed_subjects": [],
+    })
+
+    # No DB row was saved, so the returned report_id must be falsy.
+    assert result["report_id"] == ""
+    # The event must be 'research_failed', never a 'research_complete'.
+    event_types = [e[0] for e in events]
+    assert "research_failed" in event_types
+    assert "research_complete" not in event_types
