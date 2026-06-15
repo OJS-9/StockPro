@@ -73,12 +73,12 @@ def _send_telegram_alert_if_connected(db, user_id: str, symbol: str, body: str) 
 
 
 def _send_email_alert_if_configured(db, user_id: str, symbol: str, body: str) -> None:
-    """Best-effort email delivery via Resend for users with an email on file.
+    """Best-effort email delivery via Brevo for users with an email on file.
 
-    Skips silently if Resend is not configured or the user has no email.
+    Skips silently if Brevo is not configured or the user has no email.
     Never logs the email address (it is an AES-encrypted field).
     """
-    api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    api_key = (os.getenv("BREVO_API_KEY") or "").strip()
     from_email = (os.getenv("ALERT_FROM_EMAIL") or "").strip()
     if not api_key or not from_email:
         return
@@ -88,19 +88,19 @@ def _send_email_alert_if_configured(db, user_id: str, symbol: str, body: str) ->
         if not email:
             return
         resp = requests.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {api_key}"},
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": api_key, "accept": "application/json"},
             json={
-                "from": from_email,
-                "to": [email],
+                "sender": {"email": from_email, "name": "StockPro Alerts"},
+                "to": [{"email": email}],
                 "subject": f"{symbol} price alert",
-                "text": body,
+                "textContent": body,
             },
             timeout=15,
         )
         if resp.status_code >= 400:
             logger.warning(
-                "Resend alert email failed for user_id=%s symbol=%s: status=%s",
+                "Brevo alert email failed for user_id=%s symbol=%s: status=%s",
                 user_id,
                 symbol,
                 resp.status_code,

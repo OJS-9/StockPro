@@ -139,7 +139,7 @@ def test_send_telegram_alert_if_connected(monkeypatch):
 
 
 def test_send_email_alert_if_configured(monkeypatch):
-    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
     monkeypatch.setenv("ALERT_FROM_EMAIL", "alerts@stockpro.test")
     db = MagicMock()
     db.get_user_by_id.return_value = {"user_id": "u1", "email": "user@example.com"}
@@ -147,23 +147,25 @@ def test_send_email_alert_if_configured(monkeypatch):
     captured = {}
 
     class _Resp:
-        status_code = 200
+        status_code = 201
 
     def _fake_post(url, headers=None, json=None, timeout=None):
         captured["url"] = url
+        captured["headers"] = headers
         captured["to"] = json["to"]
-        captured["text"] = json["text"]
+        captured["text"] = json["textContent"]
         return _Resp()
 
     monkeypatch.setattr("requests.post", _fake_post)
     _send_email_alert_if_configured(db, "u1", "AAPL", "AAPL is now $101")
-    assert captured["url"] == "https://api.resend.com/emails"
-    assert captured["to"] == ["user@example.com"]
+    assert captured["url"] == "https://api.brevo.com/v3/smtp/email"
+    assert captured["headers"]["api-key"] == "xkeysib-test"
+    assert captured["to"] == [{"email": "user@example.com"}]
     assert "AAPL" in captured["text"]
 
 
 def test_send_email_alert_skips_when_unconfigured(monkeypatch):
-    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("BREVO_API_KEY", raising=False)
     monkeypatch.delenv("ALERT_FROM_EMAIL", raising=False)
     db = MagicMock()
 
@@ -177,7 +179,7 @@ def test_send_email_alert_skips_when_unconfigured(monkeypatch):
 
 def test_send_email_alert_swallows_send_failure(monkeypatch):
     """A send exception must not propagate (error isolation)."""
-    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
     monkeypatch.setenv("ALERT_FROM_EMAIL", "alerts@stockpro.test")
     db = MagicMock()
     db.get_user_by_id.return_value = {"user_id": "u1", "email": "user@example.com"}
