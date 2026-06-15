@@ -33,6 +33,58 @@ def test_popup_start_400_without_ticker_or_trade_type(api_client):
     assert "error" in resp.get_json()
 
 
+def test_popup_start_400_rejects_free_text_ticker(api_client):
+    """Free-text input (the #114 production case) is rejected before any
+    research run starts — agent.start_research must not be called."""
+    import app as app_module
+
+    mock_agent = MagicMock()
+
+    with patch.object(app_module, "initialize_session", return_value=mock_agent):
+        with api_client.session_transaction() as sess:
+            sess["user_id"] = "u1"
+            sess["username"] = "u"
+        resp = api_client.post(
+            "/popup_start",
+            data={
+                "ticker": "IBM QUANTOM AND SOFTWARE THESIS.TA",
+                "trade_type": "Investment",
+            },
+        )
+
+    assert resp.status_code == 400
+    assert "error" in resp.get_json()
+    mock_agent.start_research.assert_not_called()
+
+
+def test_popup_start_he_invalid_ticker_message_is_localized(api_client):
+    import app as app_module
+
+    mock_agent = MagicMock()
+
+    with patch.object(app_module, "initialize_session", return_value=mock_agent):
+        with api_client.session_transaction() as sess:
+            sess["user_id"] = "u1"
+            sess["username"] = "u"
+        resp = api_client.post(
+            "/popup_start",
+            data={"ticker": "apple stock", "trade_type": "Investment", "language": "he"},
+        )
+
+    assert resp.status_code == 400
+    # Hebrew message contains Hebrew characters
+    assert any("֐" <= ch <= "ת" for ch in resp.get_json()["error"])
+
+
+def test_ticker_is_valid_accepts_real_symbols_rejects_garbage():
+    from app import _ticker_is_valid
+
+    for good in ["AAPL", "BRK-B", "TEVA.TA", "BTC-USD", "^GSPC", "ABR$D", "0700.HK"]:
+        assert _ticker_is_valid(good), good
+    for bad in ["", "   ", "apple stock", "IBM QUANTOM AND SOFTWARE THESIS.TA", "TSLA?", "A" * 21]:
+        assert not _ticker_is_valid(bad), bad
+
+
 def test_popup_start_returns_questions_json(api_client):
     import app as app_module
 
