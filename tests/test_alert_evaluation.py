@@ -140,7 +140,7 @@ def test_send_telegram_alert_if_connected(monkeypatch):
 
 def test_send_email_alert_if_configured(monkeypatch):
     monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
-    monkeypatch.setenv("ALERT_FROM_EMAIL", "alerts@stockpro.test")
+    monkeypatch.setenv("ALERT_FROM_SENDER", "alerts@stockpro.test")
     db = MagicMock()
     db.get_user_by_id.return_value = {"user_id": "u1", "email": "user@example.com"}
 
@@ -166,7 +166,7 @@ def test_send_email_alert_if_configured(monkeypatch):
 
 def test_send_email_alert_skips_when_unconfigured(monkeypatch):
     monkeypatch.delenv("BREVO_API_KEY", raising=False)
-    monkeypatch.delenv("ALERT_FROM_EMAIL", raising=False)
+    monkeypatch.delenv("ALERT_FROM_SENDER", raising=False)
     db = MagicMock()
 
     def _boom(*args, **kwargs):
@@ -180,7 +180,7 @@ def test_send_email_alert_skips_when_unconfigured(monkeypatch):
 def test_send_email_alert_swallows_send_failure(monkeypatch):
     """A send exception must not propagate (error isolation)."""
     monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
-    monkeypatch.setenv("ALERT_FROM_EMAIL", "alerts@stockpro.test")
+    monkeypatch.setenv("ALERT_FROM_SENDER", "alerts@stockpro.test")
     db = MagicMock()
     db.get_user_by_id.return_value = {"user_id": "u1", "email": "user@example.com"}
 

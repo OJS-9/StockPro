@@ -79,7 +79,7 @@ def _send_email_alert_if_configured(db, user_id: str, symbol: str, body: str) ->
     Never logs the email address (it is an AES-encrypted field).
     """
     api_key = (os.getenv("BREVO_API_KEY") or "").strip()
-    from_email = (os.getenv("ALERT_FROM_EMAIL") or "").strip()
+    from_email = (os.getenv("ALERT_FROM_SENDER") or "").strip()
     if not api_key or not from_email:
         return
     try:
