@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
@@ -33,9 +33,12 @@ function Sparkline({ gain = true }: { gain?: boolean }) {
 
 interface NewPortfolioModalProps {
   onClose: () => void
+  // When set, after the portfolio is created we send the user straight to its
+  // add-holding flow with this ticker pre-filled (post-report CTA, issue #111).
+  redirectAddSymbol?: string
 }
 
-function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
+function NewPortfolioModal({ onClose, redirectAddSymbol }: NewPortfolioModalProps) {
   const [name, setName] = useState('')
   const [trackCash, setTrackCash] = useState(true)
   const [cashBalance, setCashBalance] = useState('')
@@ -44,6 +47,7 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
   const [quota, setQuota] = useState<{ resource?: string; message?: string } | null>(null)
   const api = useApiClient()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { t } = useTranslation()
 
   const mutation = useMutation({
@@ -68,10 +72,13 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
       }
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (data: { portfolio_id?: string }) => {
       queryClient.invalidateQueries({ queryKey: ['portfolios'] })
       toast.success(t('portfolio.toasts.created'))
       onClose()
+      if (redirectAddSymbol && data?.portfolio_id) {
+        navigate(`/portfolio/${data.portfolio_id}/add?symbol=${encodeURIComponent(redirectAddSymbol)}`)
+      }
     },
     onError: (err: Error & { quota?: { resource?: string; message?: string } }) => {
       if (err.quota) {
@@ -140,11 +147,16 @@ function NewPortfolioModal({ onClose }: NewPortfolioModalProps) {
 
 export default function PortfolioList() {
   const [showModal, setShowModal] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
   const api = useApiClient()
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { isMobile } = useBreakpoint()
   const { lang } = useLanguage()
+  // ?add=TICKER arrives from a report's "Add to Portfolio" CTA (issue #111).
+  const [searchParams] = useSearchParams()
+  const addSymbol = (searchParams.get('add') || '').toUpperCase()
+  const addResolvedRef = useRef(false)
 
   const locale = lang === 'he' ? 'he-IL' : 'en-US'
   const fmt = (n: number, currency = 'USD') => formatCurrency(n, currency, locale)
@@ -173,12 +185,56 @@ export default function PortfolioList() {
     holdings_count: p.holdings_count ?? (Array.isArray(p.holdings) ? p.holdings.length : 0),
   }))
 
+  // Resolve an incoming ?add=TICKER once portfolios have loaded:
+  //  - exactly one portfolio -> jump straight to its add-holding flow
+  //  - none -> open the create modal, then redirect into the add flow
+  //  - several -> ask the user which portfolio via the picker popup
+  useEffect(() => {
+    if (!addSymbol || isLoading || addResolvedRef.current) return
+    addResolvedRef.current = true
+    if (portfolios.length === 1) {
+      navigate(`/portfolio/${portfolios[0].id}/add?symbol=${encodeURIComponent(addSymbol)}`, { replace: true })
+    } else if (portfolios.length === 0) {
+      setShowModal(true)
+    } else {
+      setShowPicker(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addSymbol, isLoading])
+
   const dotColors = ['#60a5fa', '#a78bfa', '#22c55e', '#f59e0b', '#f472b6']
 
   return (
     <div style={{ background: '#0c0a09', minHeight: '100vh', color: '#fafaf9' }}>
       <AppNav />
-      {showModal && <NewPortfolioModal onClose={() => setShowModal(false)} />}
+      {showModal && <NewPortfolioModal onClose={() => setShowModal(false)} redirectAddSymbol={addSymbol || undefined} />}
+      {showPicker && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => e.target === e.currentTarget && setShowPicker(false)}
+        >
+          <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 16, padding: 28, width: 380, maxWidth: '90vw' }}>
+            <h2 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: 18, fontWeight: 600, marginBottom: 18, letterSpacing: '-0.02em' }}>
+              {t('portfolio.pickForSymbol', { symbol: addSymbol })}
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+              {portfolios.map((p: any) => (
+                <button
+                  key={p.id}
+                  onClick={() => navigate(`/portfolio/${p.id}/add?symbol=${encodeURIComponent(addSymbol)}`)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: '#232120', border: '1px solid #292524', borderRadius: 10, padding: '12px 14px', color: '#fafaf9', fontSize: 14, fontWeight: 500, cursor: 'pointer', textAlign: 'start' }}
+                >
+                  <span>{p.name}</span>
+                  <Icon name="chevron_right" size={16} />
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowPicker(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #292524', background: 'transparent', color: '#a8a29e', cursor: 'pointer', fontSize: 13 }}>{t('portfolio.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '20px 16px 60px' : '36px 48px 80px' }}>
 
         {/* HEADER */}

@@ -236,6 +236,26 @@ export default function ReportView() {
 
           {/* CONTENT */}
           <div ref={contentRef} style={{ padding: isMobile ? '24px 16px 60px' : '40px 48px 100px', maxWidth: 740 }}>
+            {/* POST-REPORT CTA: bridge the user from reading to acting (issue #111) */}
+            {report.symbol && report.symbol !== '?' && (
+              <div style={{ background: '#1c1917', border: '1px solid #292524', borderRadius: 14, padding: isMobile ? '16px' : '20px 24px', marginBottom: 32 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a8a29e', marginBottom: 14 }}>{t('reportView.cta.heading')}</div>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
+                  <Link
+                    to={`/portfolio?add=${encodeURIComponent(report.symbol)}`}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#d6d3d1', color: '#0c0a09', fontSize: 13.5, fontWeight: 600, padding: '12px 16px', borderRadius: 10, textDecoration: 'none' }}
+                  >
+                    <Icon name="account_balance_wallet" size={18} /> {t('reportView.cta.addToPortfolio', { symbol: report.symbol })}
+                  </Link>
+                  <Link
+                    to={`/alerts?new=1&symbol=${encodeURIComponent(report.symbol)}`}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'transparent', border: '1px solid #292524', color: '#fafaf9', fontSize: 13.5, fontWeight: 600, padding: '12px 16px', borderRadius: 10, textDecoration: 'none' }}
+                  >
+                    <Icon name="notifications_active" size={18} /> {t('reportView.cta.setAlert', { symbol: report.symbol })}
+                  </Link>
+                </div>
+              </div>
+            )}
             <h1 style={{ fontFamily: 'Nunito, "Secular One", Heebo, sans-serif', fontSize: isMobile ? 20 : 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 32, lineHeight: 1.25 }}>
 
               {report.title || `${report.symbol} ${t('reportView.researchReport')}`}
