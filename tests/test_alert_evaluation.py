@@ -5,6 +5,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from alerts.evaluation import (
+    _send_email_alert_if_configured,
     _send_telegram_alert_if_connected,
     condition_met,
     evaluate_alerts_for_symbols,
@@ -135,3 +136,57 @@ def test_send_telegram_alert_if_connected(monkeypatch):
     monkeypatch.setattr("telegram_service.send_telegram_text_sync", _fake_send)
     _send_telegram_alert_if_connected(db, "u1", "AAPL", "AAPL is now $101")
     assert sent["count"] == 1
+
+
+def test_send_email_alert_if_configured(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("ALERT_FROM_SENDER", "alerts@stockpro.test")
+    db = MagicMock()
+    db.get_user_by_id.return_value = {"user_id": "u1", "email": "user@example.com"}
+
+    captured = {}
+
+    class _Resp:
+        status_code = 201
+
+    def _fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["to"] = json["to"]
+        captured["text"] = json["textContent"]
+        return _Resp()
+
+    monkeypatch.setattr("requests.post", _fake_post)
+    _send_email_alert_if_configured(db, "u1", "AAPL", "AAPL is now $101")
+    assert captured["url"] == "https://api.brevo.com/v3/smtp/email"
+    assert captured["headers"]["api-key"] == "xkeysib-test"
+    assert captured["to"] == [{"email": "user@example.com"}]
+    assert "AAPL" in captured["text"]
+
+
+def test_send_email_alert_skips_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("BREVO_API_KEY", raising=False)
+    monkeypatch.delenv("ALERT_FROM_SENDER", raising=False)
+    db = MagicMock()
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("requests.post must not be called when unconfigured")
+
+    monkeypatch.setattr("requests.post", _boom)
+    _send_email_alert_if_configured(db, "u1", "AAPL", "body")
+    db.get_user_by_id.assert_not_called()
+
+
+def test_send_email_alert_swallows_send_failure(monkeypatch):
+    """A send exception must not propagate (error isolation)."""
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("ALERT_FROM_SENDER", "alerts@stockpro.test")
+    db = MagicMock()
+    db.get_user_by_id.return_value = {"user_id": "u1", "email": "user@example.com"}
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr("requests.post", _boom)
+    # Must not raise.
+    _send_email_alert_if_configured(db, "u1", "AAPL", "body")

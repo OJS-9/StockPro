@@ -10,6 +10,8 @@ from decimal import Decimal
 from typing import Any, Iterable, List
 from zoneinfo import ZoneInfo
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +72,45 @@ def _send_telegram_alert_if_connected(db, user_id: str, symbol: str, body: str) 
         )
 
 
+def _send_email_alert_if_configured(db, user_id: str, symbol: str, body: str) -> None:
+    """Best-effort email delivery via Brevo for users with an email on file.
+
+    Skips silently if Brevo is not configured or the user has no email.
+    Never logs the email address (it is an AES-encrypted field).
+    """
+    api_key = (os.getenv("BREVO_API_KEY") or "").strip()
+    from_email = (os.getenv("ALERT_FROM_SENDER") or "").strip()
+    if not api_key or not from_email:
+        return
+    try:
+        user = db.get_user_by_id(user_id)
+        email = (user or {}).get("email") if user else None
+        if not email:
+            return
+        resp = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": api_key, "accept": "application/json"},
+            json={
+                "sender": {"email": from_email, "name": "StockPro Alerts"},
+                "to": [{"email": email}],
+                "subject": f"{symbol} price alert",
+                "textContent": body,
+            },
+            timeout=15,
+        )
+        if resp.status_code >= 400:
+            logger.warning(
+                "Brevo alert email failed for user_id=%s symbol=%s: status=%s",
+                user_id,
+                symbol,
+                resp.status_code,
+            )
+    except Exception:
+        logger.exception(
+            "Email alert send failed for user_id=%s symbol=%s", user_id, symbol
+        )
+
+
 def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
     """
     Check active alerts for the given symbols against price_cache.
@@ -126,6 +167,7 @@ def evaluate_alerts_for_symbols(db, symbols: Iterable[str]) -> int:
                 nid, alert["user_id"], alert["alert_id"], sym, body
             )
             _send_telegram_alert_if_connected(db, alert["user_id"], sym, body)
+            _send_email_alert_if_configured(db, alert["user_id"], sym, body)
             # One-shot: deactivate alert after successful trigger
             try:
                 db.set_price_alert_active(alert["alert_id"], alert["user_id"], False)
