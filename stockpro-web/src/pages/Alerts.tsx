@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
@@ -23,6 +24,17 @@ export default function Alerts() {
   const [showCreate, setShowCreate] = useState(false)
   const [alertExchange, setAlertExchange] = useState<Exchange>('US')
   const [newAlert, setNewAlert] = useState({ symbol: '', direction: 'above', target: '', asset_type: 'stock' })
+  const [searchParams] = useSearchParams()
+  // Deep link from a report's "Set Price Alert" CTA: ?new=1&symbol=TICKER opens the
+  // create form with the ticker pre-filled. Runs once on mount.
+  useEffect(() => {
+    const sym = (searchParams.get('symbol') || '').toUpperCase()
+    if (searchParams.get('new') === '1' || sym) {
+      if (sym) setNewAlert(a => ({ ...a, symbol: sym }))
+      setShowCreate(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // On 402 quota_exceeded, show an upgrade banner in the create form instead of a generic toast.
   const [quota, setQuota] = useState<{ resource?: string; message?: string } | null>(null)
 

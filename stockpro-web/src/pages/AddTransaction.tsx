@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import AppNav from '../components/AppNav'
@@ -17,8 +17,11 @@ export default function AddTransaction() {
   const queryClient = useQueryClient()
   const { isMobile } = useBreakpoint()
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
+  // Optional ?symbol= pre-fills the ticker (e.g. from a report's "Add to Portfolio" CTA)
+  const prefillSymbol = (searchParams.get('symbol') || '').toUpperCase()
   const [exchange, setExchange] = useState<Exchange>('US')
-  const [form, setForm] = useState({ symbol: '', type: 'BUY', shares: '', price: '', date: new Date().toISOString().split('T')[0] })
+  const [form, setForm] = useState({ symbol: prefillSymbol, type: 'BUY', shares: '', price: '', date: new Date().toISOString().split('T')[0] })
 
   const total = parseFloat(form.shares || '0') * parseFloat(form.price || '0')
 

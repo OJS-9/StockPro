@@ -88,6 +88,7 @@
   "portfolio.myPortfolios": "My Portfolios",
   "portfolio.lastUpdated": "Last updated just now",
   "portfolio.newPortfolio": "New Portfolio",
+  "portfolio.pickForSymbol": "Add {{symbol}} to which portfolio?",
   "portfolio.portfolioName": "Portfolio name",
   "portfolio.cancel": "Cancel",
   "portfolio.creating": "Creating...",
@@ -148,6 +149,9 @@
   "reportView.exportPdf": "Export PDF",
   "reportView.chatWithAi": "Chat with AI",
   "reportView.researchReport": "Research Report",
+  "reportView.cta.heading": "Take the next step",
+  "reportView.cta.addToPortfolio": "Add {{symbol}} to Portfolio",
+  "reportView.cta.setAlert": "Set a Price Alert for {{symbol}}",
 
   "chat.reportContext": "Report context",
   "chat.viewFullReport": "View full report",
