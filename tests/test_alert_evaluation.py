@@ -154,14 +154,31 @@ def test_send_email_alert_if_configured(monkeypatch):
         captured["headers"] = headers
         captured["to"] = json["to"]
         captured["text"] = json["textContent"]
+        captured["html"] = json["htmlContent"]
         return _Resp()
 
     monkeypatch.setattr("requests.post", _fake_post)
-    _send_email_alert_if_configured(db, "u1", "AAPL", "AAPL is now $101")
+    _send_email_alert_if_configured(
+        db, "u1", "AAPL", "AAPL is now $101", 101.0, 100.0, "above"
+    )
     assert captured["url"] == "https://api.brevo.com/v3/smtp/email"
     assert captured["headers"]["api-key"] == "xkeysib-test"
     assert captured["to"] == [{"email": "user@example.com"}]
     assert "AAPL" in captured["text"]
+    # HTML body is branded and carries the ticker + accent color (above -> green).
+    assert "StockPro" in captured["html"]
+    assert "AAPL" in captured["html"]
+    assert "#22c55e" in captured["html"]
+    assert "/ticker/AAPL" in captured["html"]
+
+
+def test_alert_email_html_uses_down_color_for_below():
+    from alerts.evaluation import _build_alert_email_html
+
+    html = _build_alert_email_html("BTC", 90.0, 100.0, "below")
+    assert "#ef4444" in html  # accent-down
+    assert "#22c55e" not in html
+    assert "BTC" in html
 
 
 def test_send_email_alert_skips_when_unconfigured(monkeypatch):
@@ -173,7 +190,7 @@ def test_send_email_alert_skips_when_unconfigured(monkeypatch):
         raise AssertionError("requests.post must not be called when unconfigured")
 
     monkeypatch.setattr("requests.post", _boom)
-    _send_email_alert_if_configured(db, "u1", "AAPL", "body")
+    _send_email_alert_if_configured(db, "u1", "AAPL", "body", 101.0, 100.0, "above")
     db.get_user_by_id.assert_not_called()
 
 
@@ -189,4 +206,4 @@ def test_send_email_alert_swallows_send_failure(monkeypatch):
 
     monkeypatch.setattr("requests.post", _boom)
     # Must not raise.
-    _send_email_alert_if_configured(db, "u1", "AAPL", "body")
+    _send_email_alert_if_configured(db, "u1", "AAPL", "body", 101.0, 100.0, "above")
