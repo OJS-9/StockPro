@@ -321,6 +321,17 @@ class DatabaseManager:
                         END IF;
                     END $$
                 """)
+                # activation_email_sent: one-time 24h post-signup nudge flag (issue #120)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'activation_email_sent'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN activation_email_sent BOOLEAN DEFAULT FALSE;
+                        END IF;
+                    END $$
+                """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
                 )
@@ -2102,6 +2113,97 @@ class DatabaseManager:
                 return int(row[0]) if row else 0
         except psycopg2.Error as e:
             raise RuntimeError(f"Failed to count portfolios: {e}")
+        finally:
+            self._release(conn)
+
+    def claim_activation_email_candidates(self) -> List[Dict[str, Any]]:
+        """Atomically select-and-mark users due the 24h activation email (#120).
+
+        Eligible = signed up 23-25h ago, zero portfolios, not yet sent. A single
+        UPDATE ... RETURNING claims the rows, so concurrent runners (multiple
+        gunicorn workers, overlapping cron invocations) never double-send. The
+        caller sends each email and, on failure, calls reset_activation_email_flag
+        so the user retries on the next run (still inside the 23-25h window).
+
+        Returns dicts: user_id, username, email (decrypted), ticker (most recent
+        report ticker or None), language ('en' or 'he').
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET activation_email_sent = TRUE
+                    WHERE user_id IN (
+                        SELECT u.user_id
+                        FROM users u
+                        LEFT JOIN portfolios p ON p.user_id = u.user_id
+                        WHERE u.created_at BETWEEN NOW() - INTERVAL '25 hours'
+                                              AND NOW() - INTERVAL '23 hours'
+                          AND p.portfolio_id IS NULL
+                          AND u.activation_email_sent IS NOT TRUE
+                    )
+                    RETURNING user_id, username, email,
+                              COALESCE(preferences, '{}') AS preferences
+                    """
+                )
+                rows = [dict(r) for r in cur.fetchall()]
+                ticker_by_user: Dict[str, str] = {}
+                if rows:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT ON (user_id) user_id, ticker
+                        FROM reports
+                        WHERE user_id = ANY(%s)
+                        ORDER BY user_id, created_at DESC
+                        """,
+                        ([r["user_id"] for r in rows],),
+                    )
+                    ticker_by_user = {
+                        t["user_id"]: t["ticker"] for t in cur.fetchall()
+                    }
+                conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to claim activation email candidates: {e}")
+        finally:
+            self._release(conn)
+
+        results: List[Dict[str, Any]] = []
+        for row in rows:
+            prefs = row.get("preferences") or {}
+            language = (prefs.get("language") or "en").strip().lower()
+            if language not in ("en", "he"):
+                language = "en"
+            results.append(
+                {
+                    "user_id": row["user_id"],
+                    "username": row["username"],
+                    "email": decrypt(row["email"]) if row.get("email") else None,
+                    "ticker": ticker_by_user.get(row["user_id"]),
+                    "language": language,
+                }
+            )
+        return results
+
+    def reset_activation_email_flag(self, user_id: str) -> None:
+        """Clear activation_email_sent so a failed send is retried next run (#120)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET activation_email_sent = FALSE WHERE user_id = %s",
+                    (user_id,),
+                )
+                conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to reset activation email flag: {e}")
         finally:
             self._release(conn)
 
