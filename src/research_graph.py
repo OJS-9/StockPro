@@ -206,11 +206,15 @@ def storage_node(state: ResearchState) -> dict:
         except Exception:
             pass
     except Exception as e:
-        logger.warning("Storage failed (report still available): %s", e)
+        logger.warning("Storage failed, no report saved: %s", e)
+        # Storage failed: the pre-generated report_id points to no DB row, so
+        # clear it. A non-empty orphan id would let callers report a fake
+        # "ready" status with no report behind it (issue #102).
+        report_id = ""
         try:
             from database import get_database_manager
             _db = get_database_manager()
-            _db.admin_log_event("research_complete", user_id, {
+            _db.admin_log_event("research_failed", user_id, {
                 "ticker": ticker, "status": "error", "error": str(e)[:200],
             })
         except Exception:

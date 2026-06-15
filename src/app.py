@@ -1307,14 +1307,29 @@ def start_generation():
                 selected_subjects=selected_subject_ids,
                 spend_budget_usd=spend_budget_usd,
             )
-            db.update_generation_status(
-                session_id,
-                status="ready",
-                report_id=agent.current_report_id,
-                progress=100,
-                step="Report ready",
-                step_code="ready",
-            )
+            # Guard against a missing report_id: storage can fail without
+            # raising (it logs research_failed and clears report_id), so an
+            # empty id here means no report was saved. Surface an error rather
+            # than a misleading "ready" with no report behind it (issue #102).
+            if not agent.current_report_id:
+                db.update_generation_status(
+                    session_id,
+                    status="error",
+                    message=(
+                        "Report generation failed: the research ran but the "
+                        "report could not be saved. Please try again."
+                    ),
+                    step_code="error",
+                )
+            else:
+                db.update_generation_status(
+                    session_id,
+                    status="ready",
+                    report_id=agent.current_report_id,
+                    progress=100,
+                    step="Report ready",
+                    step_code="ready",
+                )
         except Exception as e:
             db.update_generation_status(
                 session_id,
