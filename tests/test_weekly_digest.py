@@ -52,6 +52,7 @@ def test_digest_en_up_week(monkeypatch):
     assert ok is True
     assert captured["to"] == [{"email": "user@example.com"}]
     assert captured["sender"]["name"] == "StockPro Alerts"
+    assert captured["sender"]["email"] == "alerts@stock-pro.org"
     assert "up 2.3%" in captured["subject"]
     assert "Sam" in captured["html"]
     assert "$12,345.67" in captured["html"]

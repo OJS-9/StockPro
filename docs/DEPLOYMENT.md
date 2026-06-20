@@ -179,9 +179,9 @@ For each script above:
 3. **Settings** -> **Variables**: the cron service needs `DATABASE_URL`,
    `BREVO_API_KEY`, `ALERT_FROM_SENDER`, and `APP_BASE_URL` (for the email CTA
    links). Share them from the web service or set the same values. The report
-   expiry nudge also sends from `ALERTS_FROM_SENDER` (optional, defaults to
-   `alerts@stock-pro.org`) -- this address must be a **verified sender** in Brevo
-   (the `stock-pro.org` domain auth covers it).
+   expiry nudge and the weekly digest send from `ALERTS_FROM_SENDER` (optional,
+   defaults to `alerts@stock-pro.org`) -- this address must be a **verified
+   sender** in Brevo (the `stock-pro.org` domain auth covers it).
 4. Disable the public domain / healthcheck for the service -- it is a one-shot
    job, not a web server. Railway runs the start command on the schedule and the
    container exits when the script returns.
