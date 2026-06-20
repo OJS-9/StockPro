@@ -933,18 +933,43 @@ class PortfolioService:
         }
 
     def _fetch_week_ago_prices(self, holdings: List[Dict]) -> Dict[str, Decimal]:
-        """Best-effort price per symbol ~7 days ago, in the symbol's native currency.
+        """Best-effort price per symbol ~7 days ago, in the SAME units as each
+        holding's current_price.
 
-        Stocks: yfinance daily closes. Crypto: CoinGecko daily history (reused
-        from the history service). Symbols with no available history are omitted,
-        so the caller treats them as having no week-over-week baseline.
+        The weekly move is computed as a ratio (weekago_close / latest_close)
+        from a single price series -- yfinance for stocks, CoinGecko for crypto --
+        and applied to the holding's current price. Deriving a ratio from one
+        source keeps the comparison currency/scale-consistent: TASE (.TA) tickers
+        quote in agorot in yfinance while the app stores shekels, so comparing a
+        raw yfinance close against the app's current price would show a bogus
+        ~100x move. The ratio cancels the unit out. Symbols with no usable series
+        are omitted, so the caller treats them as having no baseline.
         """
+        import math
         from datetime import date
 
         target = date.today() - timedelta(days=7)
+        current_price = {
+            h["symbol"]: h.get("current_price")
+            for h in holdings
+            if h.get("current_price") is not None
+        }
         prices: Dict[str, Decimal] = {}
         stock_syms = {h["symbol"] for h in holdings if h.get("asset_type") == "stock"}
         crypto_syms = {h["symbol"] for h in holdings if h.get("asset_type") == "crypto"}
+
+        def _finite_closes(pairs) -> Dict:
+            # Skip NaN/inf closes (yfinance can return them) so they never reach
+            # the Decimal math, where a NaN comparison would raise InvalidOperation.
+            out = {}
+            for d, p in pairs:
+                try:
+                    p = float(p)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(p):
+                    out[d] = p
+            return out
 
         for sym in stock_syms:
             try:
@@ -955,10 +980,14 @@ class PortfolioService:
                 )
                 if hist.empty:
                     continue
-                closes = {idx.date(): float(row["Close"]) for idx, row in hist.iterrows()}
-                price = _closest_on_or_before(closes, target)
-                if price is not None:
-                    prices[sym] = Decimal(str(price))
+                closes = _finite_closes(
+                    (idx.date(), row["Close"]) for idx, row in hist.iterrows()
+                )
+                wap = _week_ago_price_from_series(
+                    current_price.get(sym), closes, target
+                )
+                if wap is not None:
+                    prices[sym] = wap
             except Exception:
                 continue
 
@@ -976,10 +1005,14 @@ class PortfolioService:
                     daily = hs._get_crypto_prices(sym)  # {YYYY-MM-DD: price}
                     if not daily:
                         continue
-                    closes = {date.fromisoformat(d): p for d, p in daily.items()}
-                    price = _closest_on_or_before(closes, target)
-                    if price is not None:
-                        prices[sym] = Decimal(str(price))
+                    closes = _finite_closes(
+                        (date.fromisoformat(d), p) for d, p in daily.items()
+                    )
+                    wap = _week_ago_price_from_series(
+                        current_price.get(sym), closes, target
+                    )
+                    if wap is not None:
+                        prices[sym] = wap
                 except Exception:
                     continue
 
@@ -994,6 +1027,23 @@ def _closest_on_or_before(prices_by_date: Dict, target) -> Optional[float]:
     if on_or_before:
         return prices_by_date[max(on_or_before)]
     return prices_by_date[min(prices_by_date)]
+
+
+def _week_ago_price_from_series(current_price, prices_by_date: Dict, target) -> Optional[Decimal]:
+    """Week-ago price in current_price's units, via the series' own weekly ratio.
+
+    Scales the holding's current price by (weekago_close / latest_close) from the
+    same series so currency/scale (e.g. TASE agorot vs shekels) cancels out.
+    Returns None when current_price is missing or the series yields no usable ratio.
+    """
+    if current_price is None or not prices_by_date:
+        return None
+    latest = prices_by_date[max(prices_by_date)]
+    weekago = _closest_on_or_before(prices_by_date, target)
+    if not latest or latest <= 0 or weekago is None or weekago <= 0:
+        return None
+    ratio = Decimal(str(weekago)) / Decimal(str(latest))
+    return Decimal(str(current_price)) * ratio
 
 
 # Global service instance
