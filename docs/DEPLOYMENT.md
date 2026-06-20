@@ -142,7 +142,62 @@ RUN apt-get update && apt-get install -y \
 - [ ] Install WeasyPrint system dependencies on the server
 - [ ] Restrict database access (firewall, user grants)
 - [ ] Keep `.env` out of version control
+- [ ] Set up the scheduled-jobs cron services (see section 8)
 
 ---
 
-*Last updated: April 2026*
+## 8. Scheduled Jobs (Railway Cron)
+
+Background timers started from `app.main()` (e.g. the watchlist price refresh)
+do **not** fire under Gunicorn in production -- the web service runs `app:app`,
+not `main()`. Anything that must run on a schedule is a standalone script under
+`scripts/`, run by a **separate Railway cron service**. The Railway CLI cannot
+set a cron schedule, so these are created in the Railway dashboard (one-time).
+
+### Cron scripts
+
+| Script | Purpose | Schedule (UTC) | Issue |
+|--------|---------|----------------|-------|
+| `scripts/send_activation_emails.py` | 24h post-signup activation nudge (users with no portfolio) | `0 * * * *` (hourly) | #120 |
+| `scripts/send_weekly_digest.py` | Weekly portfolio digest (Mon morning) | `0 13 * * 1` (~9am US Eastern, Mon) | #129 |
+
+Each script is idempotent and safe to re-run: it atomically claims candidates
+(`UPDATE ... RETURNING`) so overlapping runs never double-send, and clears the
+send flag on failure so the user is retried next run.
+
+### Create a cron service in the Railway dashboard
+
+For each script above:
+
+1. In the **StockPro** project, **New** -> **Service** -> deploy from the same
+   GitHub repo (same Dockerfile image as the web service).
+2. Service **Settings** -> **Deploy**:
+   - **Custom Start Command**: `python scripts/send_weekly_digest.py`
+     (or `scripts/send_activation_emails.py`).
+   - **Cron Schedule**: the value from the table above.
+3. **Settings** -> **Variables**: the cron service needs `DATABASE_URL`,
+   `BREVO_API_KEY`, `ALERT_FROM_SENDER`, and `APP_BASE_URL` (for the email CTA
+   links). Share them from the web service or set the same values.
+4. Disable the public domain / healthcheck for the service -- it is a one-shot
+   job, not a web server. Railway runs the start command on the schedule and the
+   container exits when the script returns.
+
+Railway cron fires in **UTC**. `0 13 * * 1` is roughly 9am US Eastern on Monday;
+adjust if you want a different local send time.
+
+### Test a cron script manually
+
+Run the exact production command locally with production environment variables
+injected (sends real emails to eligible users, so check the blast radius first):
+
+```bash
+railway run python scripts/send_weekly_digest.py
+```
+
+Opt-out: the weekly digest respects the existing Settings "Weekly portfolio
+summary" toggle (`preferences.notifications.weekly_summary`). Users with it off,
+or with no holdings, are never claimed.
+
+---
+
+*Last updated: June 2026*
