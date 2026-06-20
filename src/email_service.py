@@ -26,20 +26,32 @@ def _base_url() -> str:
     return (os.getenv("APP_BASE_URL") or "https://stock-pro.org").rstrip("/")
 
 
+def _alerts_from_sender() -> str:
+    """From-address for alert-style emails (the report expiry nudge).
+
+    Env-overridable; defaults to alerts@stock-pro.org so the nudge sends from the
+    alerts mailbox rather than the personal ALERT_FROM_SENDER (or@stock-pro.org)
+    used by the activation email. Must be a verified sender in Brevo.
+    """
+    return (os.getenv("ALERTS_FROM_SENDER") or "alerts@stock-pro.org").strip()
+
+
 def _post_brevo_email(
     to_email: str,
     subject: str,
     html_content: str,
     text_content: str,
     sender_name: str = "StockPro",
+    from_email: Optional[str] = None,
 ) -> bool:
     """POST a single email to Brevo. Returns True on a 2xx/3xx response.
 
+    `from_email` overrides the default sender address (ALERT_FROM_SENDER env).
     Silently returns False (logging a warning) if Brevo is not configured or the
     request fails. Never logs the recipient address (email is an encrypted field).
     """
     api_key = (os.getenv("BREVO_API_KEY") or "").strip()
-    from_email = (os.getenv("ALERT_FROM_SENDER") or "").strip()
+    from_email = (from_email or os.getenv("ALERT_FROM_SENDER") or "").strip()
     if not api_key or not from_email or not to_email:
         return False
     try:
@@ -281,11 +293,16 @@ def send_report_expiry_email(
         return False
     copy = _report_expiry_copy(username or "there", ticker, language)
     html = _build_activation_email_html(copy)
-    # Send under the "StockPro Alerts" sender name, matching the price-alert
-    # email, so the nudge reads as an alert rather than the default "StockPro"
-    # used by the activation email.
+    # Send as "StockPro Alerts" <alerts@stock-pro.org> so the nudge reads as an
+    # alert, distinct from the activation email's default "StockPro"
+    # <or@stock-pro.org> sender.
     return _post_brevo_email(
-        email, copy["subject"], html, copy["text"], sender_name="StockPro Alerts"
+        email,
+        copy["subject"],
+        html,
+        copy["text"],
+        sender_name="StockPro Alerts",
+        from_email=_alerts_from_sender(),
     )
 
 

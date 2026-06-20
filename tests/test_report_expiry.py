@@ -32,8 +32,10 @@ def test_expiry_en(monkeypatch):
 
     assert ok is True
     assert captured["to"] == [{"email": "user@example.com"}]
-    # Sends under the "StockPro Alerts" sender name (matches the price-alert email).
+    # Sends as "StockPro Alerts" <alerts@stock-pro.org>, distinct from the
+    # activation email's default "StockPro" <or@stock-pro.org> sender.
     assert captured["sender"]["name"] == "StockPro Alerts"
+    assert captured["sender"]["email"] == "alerts@stock-pro.org"
     assert "NVDA" in captured["subject"]
     assert "7 days old" in captured["subject"]
     assert "Sam" in captured["html"]
