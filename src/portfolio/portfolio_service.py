@@ -857,6 +857,144 @@ class PortfolioService:
 
         return {"prices_loaded": True, "sector": sector, "market": market}
 
+    def get_weekly_performance(self, user_id: str) -> Optional[Dict]:
+        """Aggregate a user's weekly portfolio performance for the digest email (#129).
+
+        Compares each holding's current price against its price ~7 days ago (live
+        recompute, no stored snapshots) and rolls the holdings up across all of
+        the user's portfolios. Holdings with no week-ago price (e.g. bought in the
+        last week) count toward the total value but not the week-over-week change.
+
+        Returns None when there is nothing worth emailing (no priced holdings or
+        zero total value). Otherwise a dict:
+            - total_value: Decimal  -- current total market value, USD
+            - week_change_pct: Decimal | None  -- week-over-week %, None if no baseline
+            - top_mover: {"symbol": str, "pct": Decimal} | None  -- largest |weekly move|
+            - holdings_count: int
+        """
+        from currency_utils import convert_to_usd
+
+        portfolios = self.list_portfolios(user_id=user_id)
+        holdings: List[Dict] = []
+        for p in portfolios:
+            holdings.extend(self.get_holdings(p["portfolio_id"], with_prices=True))
+        holdings = [h for h in holdings if h.get("price_available")]
+        if not holdings:
+            return None
+
+        week_ago = self._fetch_week_ago_prices(holdings)
+
+        total_value = Decimal("0")
+        comparable_current = Decimal("0")
+        comparable_prev = Decimal("0")
+        top_symbol: Optional[str] = None
+        top_pct: Optional[Decimal] = None
+
+        for h in holdings:
+            symbol = h["symbol"]
+            qty = Decimal(str(h.get("total_quantity") or 0))
+            cur_price = Decimal(str(h.get("current_price") or 0))
+            currency = h.get("currency") or "USD"
+            cur_value = convert_to_usd(qty * cur_price, currency)
+            total_value += cur_value
+
+            prev_price = week_ago.get(symbol)
+            if prev_price is None or cur_price <= 0:
+                continue
+            prev_price = Decimal(str(prev_price))
+            if prev_price <= 0:
+                continue
+
+            comparable_current += cur_value
+            comparable_prev += convert_to_usd(qty * prev_price, currency)
+
+            pct = (cur_price - prev_price) / prev_price * Decimal("100")
+            if top_pct is None or abs(pct) > abs(top_pct):
+                top_pct = pct
+                top_symbol = symbol
+
+        if total_value <= 0:
+            return None
+
+        week_change_pct = None
+        if comparable_prev > 0:
+            week_change_pct = (
+                (comparable_current - comparable_prev) / comparable_prev * Decimal("100")
+            )
+
+        top_mover = (
+            {"symbol": top_symbol, "pct": top_pct} if top_symbol is not None else None
+        )
+        return {
+            "total_value": total_value,
+            "week_change_pct": week_change_pct,
+            "top_mover": top_mover,
+            "holdings_count": len(holdings),
+        }
+
+    def _fetch_week_ago_prices(self, holdings: List[Dict]) -> Dict[str, Decimal]:
+        """Best-effort price per symbol ~7 days ago, in the symbol's native currency.
+
+        Stocks: yfinance daily closes. Crypto: CoinGecko daily history (reused
+        from the history service). Symbols with no available history are omitted,
+        so the caller treats them as having no week-over-week baseline.
+        """
+        from datetime import date
+
+        target = date.today() - timedelta(days=7)
+        prices: Dict[str, Decimal] = {}
+        stock_syms = {h["symbol"] for h in holdings if h.get("asset_type") == "stock"}
+        crypto_syms = {h["symbol"] for h in holdings if h.get("asset_type") == "crypto"}
+
+        for sym in stock_syms:
+            try:
+                import yfinance as yf
+
+                hist = yf.Ticker(sym).history(
+                    period="14d", interval="1d", auto_adjust=True
+                )
+                if hist.empty:
+                    continue
+                closes = {idx.date(): float(row["Close"]) for idx, row in hist.iterrows()}
+                price = _closest_on_or_before(closes, target)
+                if price is not None:
+                    prices[sym] = Decimal(str(price))
+            except Exception:
+                continue
+
+        if crypto_syms:
+            try:
+                from portfolio.history_service import get_history_service
+
+                hs = get_history_service()
+            except Exception:
+                hs = None
+            for sym in crypto_syms:
+                if hs is None:
+                    break
+                try:
+                    daily = hs._get_crypto_prices(sym)  # {YYYY-MM-DD: price}
+                    if not daily:
+                        continue
+                    closes = {date.fromisoformat(d): p for d, p in daily.items()}
+                    price = _closest_on_or_before(closes, target)
+                    if price is not None:
+                        prices[sym] = Decimal(str(price))
+                except Exception:
+                    continue
+
+        return prices
+
+
+def _closest_on_or_before(prices_by_date: Dict, target) -> Optional[float]:
+    """Return the price on the latest date <= target, or the earliest if none qualify."""
+    if not prices_by_date:
+        return None
+    on_or_before = [d for d in prices_by_date if d <= target]
+    if on_or_before:
+        return prices_by_date[max(on_or_before)]
+    return prices_by_date[min(prices_by_date)]
+
 
 # Global service instance
 _portfolio_service: Optional[PortfolioService] = None
