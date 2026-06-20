@@ -26,20 +26,32 @@ def _base_url() -> str:
     return (os.getenv("APP_BASE_URL") or "https://stock-pro.org").rstrip("/")
 
 
+def _alerts_from_sender() -> str:
+    """From-address for alert-style emails (the report expiry nudge).
+
+    Env-overridable; defaults to alerts@stock-pro.org so the nudge sends from the
+    alerts mailbox rather than the personal ALERT_FROM_SENDER (or@stock-pro.org)
+    used by the activation email. Must be a verified sender in Brevo.
+    """
+    return (os.getenv("ALERTS_FROM_SENDER") or "alerts@stock-pro.org").strip()
+
+
 def _post_brevo_email(
     to_email: str,
     subject: str,
     html_content: str,
     text_content: str,
     sender_name: str = "StockPro",
+    from_email: Optional[str] = None,
 ) -> bool:
     """POST a single email to Brevo. Returns True on a 2xx/3xx response.
 
+    `from_email` overrides the default sender address (ALERT_FROM_SENDER env).
     Silently returns False (logging a warning) if Brevo is not configured or the
     request fails. Never logs the recipient address (email is an encrypted field).
     """
     api_key = (os.getenv("BREVO_API_KEY") or "").strip()
-    from_email = (os.getenv("ALERT_FROM_SENDER") or "").strip()
+    from_email = (from_email or os.getenv("ALERT_FROM_SENDER") or "").strip()
     if not api_key or not from_email or not to_email:
         return False
     try:
@@ -210,6 +222,88 @@ def send_activation_email(
     copy = _activation_copy(username or "there", ticker, language)
     html = _build_activation_email_html(copy)
     return _post_brevo_email(email, copy["subject"], html, copy["text"])
+
+
+def _report_expiry_copy(username: str, ticker: str, language: str) -> dict:
+    """Return subject + body strings for the 7-day report expiry nudge (en/he).
+
+    Same copy-dict shape as _activation_copy so it can render through
+    _build_activation_email_html. The CTA points at the research wizard with the
+    ticker prefilled (/research?ticker=...) so one click regenerates the report.
+    """
+    he = (language or "").strip().lower() == "he"
+    cta_url = f"{_base_url()}/research?ticker={ticker}"
+
+    if he:
+        subject = f"הדוח שלך על {ticker} בן 7 ימים - השוק זז מאז"
+        greeting = f"היי {username},"
+        intro = (
+            f"הדוח שלך ב-StockPro על {ticker} בן 7 ימים. שבוע הוא הרבה זמן בשוק - "
+            f"מחירים, חדשות וסנטימנט יכלו להשתנות מאז."
+        )
+        step = "הרצת דוח חדש לוקחת דקה ונותנת לך ניתוח מעודכן לפעול לפיו."
+        cta = f"הרצת דוח חדש על {ticker}"
+        footer = "השוק זז מהר. תישאר מעודכן."
+        signoff = "צוות StockPro"
+    else:
+        subject = f"Your {ticker} report is 7 days old - markets have moved"
+        greeting = f"Hi {username},"
+        intro = (
+            f"Your StockPro report on {ticker} is now 7 days old. A week is a long "
+            f"time in the market - prices, news, and sentiment may have shifted "
+            f"since then."
+        )
+        step = (
+            "Running a fresh report takes about a minute and gives you up-to-date "
+            "analysis to act on."
+        )
+        cta = f"Generate a fresh {ticker} report"
+        footer = "Markets move fast. Stay current."
+        signoff = "The StockPro team"
+
+    text_content = (
+        f"{greeting}\n\n{intro}\n\n{step}\n\n{cta}: {cta_url}\n\n{footer}\n\n- {signoff}"
+    )
+    return {
+        "subject": subject,
+        "greeting": greeting,
+        "intro": intro,
+        "step": step,
+        "cta": cta,
+        "cta_url": cta_url,
+        "footer": footer,
+        "signoff": signoff,
+        "text": text_content,
+        "rtl": he,
+    }
+
+
+def send_report_expiry_email(
+    email: str,
+    username: str,
+    ticker: str,
+    language: str = "en",
+) -> bool:
+    """Send the 7-day report expiry nudge. Returns True if accepted by Brevo.
+
+    Best-effort: returns False (no raise) if Brevo is unconfigured, the email or
+    ticker is missing, or the provider errors, so the caller can retry next run.
+    """
+    if not email or not ticker:
+        return False
+    copy = _report_expiry_copy(username or "there", ticker, language)
+    html = _build_activation_email_html(copy)
+    # Send as "StockPro Alerts" <alerts@stock-pro.org> so the nudge reads as an
+    # alert, distinct from the activation email's default "StockPro"
+    # <or@stock-pro.org> sender.
+    return _post_brevo_email(
+        email,
+        copy["subject"],
+        html,
+        copy["text"],
+        sender_name="StockPro Alerts",
+        from_email=_alerts_from_sender(),
+    )
 
 
 _ACCENT_UP = "#22c55e"

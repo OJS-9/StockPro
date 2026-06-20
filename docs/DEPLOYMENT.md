@@ -160,6 +160,7 @@ set a cron schedule, so these are created in the Railway dashboard (one-time).
 |--------|---------|----------------|-------|
 | `scripts/send_activation_emails.py` | 24h post-signup activation nudge (users with no portfolio) | `0 * * * *` (hourly) | #120 |
 | `scripts/send_weekly_digest.py` | Weekly portfolio digest (Mon morning) | `0 13 * * 1` (~9am US Eastern, Mon) | #129 |
+| `scripts/send_report_expiry_nudges.py` | 7-day report expiry nudge (regenerate a stale report) | `0 14 * * *` (~9-10am US Eastern, daily) | #130 |
 
 Each script is idempotent and safe to re-run: it atomically claims candidates
 (`UPDATE ... RETURNING`) so overlapping runs never double-send, and clears the
@@ -177,7 +178,10 @@ For each script above:
    - **Cron Schedule**: the value from the table above.
 3. **Settings** -> **Variables**: the cron service needs `DATABASE_URL`,
    `BREVO_API_KEY`, `ALERT_FROM_SENDER`, and `APP_BASE_URL` (for the email CTA
-   links). Share them from the web service or set the same values.
+   links). Share them from the web service or set the same values. The report
+   expiry nudge also sends from `ALERTS_FROM_SENDER` (optional, defaults to
+   `alerts@stock-pro.org`) -- this address must be a **verified sender** in Brevo
+   (the `stock-pro.org` domain auth covers it).
 4. Disable the public domain / healthcheck for the service -- it is a one-shot
    job, not a web server. Railway runs the start command on the schedule and the
    container exits when the script returns.
@@ -197,6 +201,16 @@ railway run python scripts/send_weekly_digest.py
 Opt-out: the weekly digest respects the existing Settings "Weekly portfolio
 summary" toggle (`preferences.notifications.weekly_summary`). Users with it off,
 or with no holdings, are never claimed.
+
+The report expiry nudge (`send_report_expiry_nudges.py`) claims reports created
+7-14 days ago that are the newest report for their (user, ticker) pair, skipping
+users who set `preferences.notifications.report_expiry` to `false` (defaults on).
+For safe testing against production, pass `--only-user <user_id>` to restrict the
+run to a single user so no real user can be claimed or emailed:
+
+```bash
+railway run python scripts/send_report_expiry_nudges.py --only-user <user_id>
+```
 
 ---
 

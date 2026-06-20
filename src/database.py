@@ -386,6 +386,10 @@ class DatabaseManager:
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_report_user_id    ON reports (user_id)"
                 )
+                # expiry_nudge_sent: per-report 7-day staleness nudge flag (issue #130)
+                cur.execute(
+                    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS expiry_nudge_sent BOOLEAN DEFAULT FALSE"
+                )
 
                 # Report chunks
                 cur.execute("""
@@ -2306,6 +2310,120 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to reset weekly digest flag: {e}")
+        finally:
+            self._release(conn)
+
+    def claim_report_expiry_candidates(
+        self, only_user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Atomically select-and-mark reports due the 7-day expiry nudge (#130).
+
+        Eligible report = created 7-14 days ago, not yet nudged, belongs to a
+        user, is the newest report for that (user, ticker) pair (so superseded
+        reports are skipped), and the user has not turned off the 'report_expiry'
+        notification preference. A single UPDATE ... RETURNING claims the rows by
+        stamping expiry_nudge_sent = TRUE, so overlapping cron invocations never
+        double-send. The 7-14 day window also bounds the backlog on first deploy
+        and gives a failed send several days of retry headroom (the caller calls
+        reset_report_expiry_flag on failure).
+
+        Pass only_user_id to restrict the claim to a single user -- used for safe
+        testing so a live run can never touch real users' reports.
+
+        Returns dicts: report_id, user_id, ticker, username, email (decrypted),
+        language ('en' or 'he').
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                user_filter = "AND r.user_id = %s" if only_user_id else ""
+                params = (only_user_id,) if only_user_id else ()
+                cur.execute(
+                    f"""
+                    UPDATE reports
+                    SET expiry_nudge_sent = TRUE
+                    WHERE report_id IN (
+                        SELECT r.report_id
+                        FROM reports r
+                        JOIN users u ON u.user_id = r.user_id
+                        WHERE r.user_id IS NOT NULL
+                          AND r.expiry_nudge_sent IS NOT TRUE
+                          AND r.created_at <= NOW() - INTERVAL '7 days'
+                          AND r.created_at >= NOW() - INTERVAL '14 days'
+                          AND NOT EXISTS (
+                              SELECT 1 FROM reports r2
+                              WHERE r2.user_id = r.user_id
+                                AND r2.ticker = r.ticker
+                                AND r2.created_at > r.created_at
+                          )
+                          AND COALESCE(
+                              u.preferences -> 'notifications' ->> 'report_expiry',
+                              'true'
+                          ) <> 'false'
+                          {user_filter}
+                    )
+                    RETURNING report_id, user_id, ticker
+                    """,
+                    params,
+                )
+                rows = [dict(r) for r in cur.fetchall()]
+                users_by_id: Dict[str, Dict[str, Any]] = {}
+                if rows:
+                    cur.execute(
+                        """
+                        SELECT user_id, username, email,
+                               COALESCE(preferences, '{}') AS preferences
+                        FROM users
+                        WHERE user_id = ANY(%s)
+                        """,
+                        ([r["user_id"] for r in rows],),
+                    )
+                    users_by_id = {u["user_id"]: dict(u) for u in cur.fetchall()}
+                conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to claim report expiry candidates: {e}")
+        finally:
+            self._release(conn)
+
+        results: List[Dict[str, Any]] = []
+        for row in rows:
+            user = users_by_id.get(row["user_id"])
+            if not user:
+                continue
+            prefs = user.get("preferences") or {}
+            language = (prefs.get("language") or "en").strip().lower()
+            if language not in ("en", "he"):
+                language = "en"
+            results.append(
+                {
+                    "report_id": row["report_id"],
+                    "user_id": row["user_id"],
+                    "ticker": row["ticker"],
+                    "username": user.get("username"),
+                    "email": decrypt(user["email"]) if user.get("email") else None,
+                    "language": language,
+                }
+            )
+        return results
+
+    def reset_report_expiry_flag(self, report_id: str) -> None:
+        """Clear expiry_nudge_sent so a failed send is retried next run (#130)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE reports SET expiry_nudge_sent = FALSE WHERE report_id = %s",
+                    (report_id,),
+                )
+                conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to reset report expiry flag: {e}")
         finally:
             self._release(conn)
 
