@@ -224,6 +224,28 @@ def test_closest_on_or_before():
     assert _closest_on_or_before({}, date(2026, 6, 9)) is None
 
 
+def test_week_ago_price_is_currency_consistent():
+    """A TASE series quoted in agorot must not produce a bogus ~100x move
+    against an app current price stored in shekels."""
+    from portfolio.portfolio_service import _week_ago_price_from_series
+
+    # Series in agorot (~100x the shekel current price), +1% over the week.
+    closes = {date(2026, 6, 12): 495.0, date(2026, 6, 19): 500.0}
+    current_price_shekels = Decimal("5.0")
+    wap = _week_ago_price_from_series(current_price_shekels, closes, date(2026, 6, 12))
+
+    # ratio 495/500 = 0.99 -> 5.0 * 0.99 = 4.95 (a sane ~+1% move, not a 100x drop)
+    assert wap is not None
+    assert abs(wap - Decimal("4.95")) < Decimal("0.001")
+
+    # Degenerate inputs yield no baseline.
+    assert _week_ago_price_from_series(Decimal("5.0"), {}, date(2026, 6, 12)) is None
+    assert _week_ago_price_from_series(None, closes, date(2026, 6, 12)) is None
+    assert _week_ago_price_from_series(
+        Decimal("5.0"), {date(2026, 6, 19): 0.0}, date(2026, 6, 12)
+    ) is None
+
+
 # --------------------------------------------------------------------------- #
 # Cron script orchestration
 # --------------------------------------------------------------------------- #
