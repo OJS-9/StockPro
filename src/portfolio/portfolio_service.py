@@ -862,12 +862,14 @@ class PortfolioService:
 
         Compares each holding's current price against its price ~7 days ago (live
         recompute, no stored snapshots) and rolls the holdings up across all of
-        the user's portfolios. Holdings with no week-ago price (e.g. bought in the
-        last week) count toward the total value but not the week-over-week change.
+        the user's portfolios. The total value also includes tracked cash, so it
+        matches the value the app shows. Holdings with no week-ago price (e.g.
+        bought in the last week) count toward the total value but not the
+        week-over-week change, which is measured on comparable holdings only.
 
         Returns None when there is nothing worth emailing (no priced holdings or
         zero total value). Otherwise a dict:
-            - total_value: Decimal  -- current total market value, USD
+            - total_value: Decimal  -- current total value incl cash, USD
             - week_change_pct: Decimal | None  -- week-over-week %, None if no baseline
             - top_mover: {"symbol": str, "pct": Decimal} | None  -- largest |weekly move|
             - holdings_count: int
@@ -875,8 +877,12 @@ class PortfolioService:
         from currency_utils import convert_to_usd
 
         portfolios = self.list_portfolios(user_id=user_id)
+        cash_total = Decimal("0")
         holdings: List[Dict] = []
         for p in portfolios:
+            if p.get("track_cash"):
+                # Cash is stored in USD (see get_portfolio_summary).
+                cash_total += Decimal(str(p.get("cash_balance") or 0))
             holdings.extend(self.get_holdings(p["portfolio_id"], with_prices=True))
         holdings = [h for h in holdings if h.get("price_available")]
         if not holdings:
@@ -884,7 +890,7 @@ class PortfolioService:
 
         week_ago = self._fetch_week_ago_prices(holdings)
 
-        total_value = Decimal("0")
+        holdings_value = Decimal("0")
         comparable_current = Decimal("0")
         comparable_prev = Decimal("0")
         top_symbol: Optional[str] = None
@@ -896,7 +902,7 @@ class PortfolioService:
             cur_price = Decimal(str(h.get("current_price") or 0))
             currency = h.get("currency") or "USD"
             cur_value = convert_to_usd(qty * cur_price, currency)
-            total_value += cur_value
+            holdings_value += cur_value
 
             prev_price = week_ago.get(symbol)
             if prev_price is None or cur_price <= 0:
@@ -913,6 +919,8 @@ class PortfolioService:
                 top_pct = pct
                 top_symbol = symbol
 
+        # Total value includes cash so it matches the app's portfolio value.
+        total_value = holdings_value + cash_total
         if total_value <= 0:
             return None
 

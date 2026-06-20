@@ -200,6 +200,30 @@ def test_weekly_performance_new_holding_has_no_baseline(monkeypatch):
     assert result["top_mover"]["symbol"] == "AAPL"
 
 
+def test_weekly_performance_includes_cash(monkeypatch):
+    """Total value must include tracked cash so it matches the app's number."""
+    from portfolio.portfolio_service import PortfolioService
+
+    holdings = [
+        {"symbol": "AAPL", "asset_type": "stock", "currency": "USD",
+         "total_quantity": Decimal("10"), "current_price": Decimal("110"), "price_available": True},
+    ]
+    svc = PortfolioService()
+    monkeypatch.setattr(
+        svc, "list_portfolios",
+        lambda user_id=None: [{"portfolio_id": "p1", "track_cash": True, "cash_balance": Decimal("500")}],
+    )
+    monkeypatch.setattr(svc, "get_holdings", lambda pid, with_prices=True: holdings)
+    monkeypatch.setattr(svc, "_fetch_week_ago_prices", lambda h: {"AAPL": Decimal("100")})
+
+    result = svc.get_weekly_performance("u1")
+
+    # holdings 10*110 = 1100, plus 500 cash = 1600
+    assert result["total_value"] == Decimal("1600")
+    # Week % is measured on comparable holdings only, not diluted by cash.
+    assert round(float(result["week_change_pct"]), 1) == 10.0
+
+
 def test_weekly_performance_none_when_no_priced_holdings(monkeypatch):
     holdings = [
         {"symbol": "AAPL", "asset_type": "stock", "currency": "USD",
