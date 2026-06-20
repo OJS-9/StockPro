@@ -493,4 +493,13 @@ def send_weekly_digest_email(
         return False
     copy = _weekly_digest_copy(username or "there", language, data)
     html = _build_weekly_digest_email_html(copy)
-    return _post_brevo_email(email, copy["subject"], html, copy["text"])
+    # Send as "StockPro Alerts" <alerts@stock-pro.org>, matching the report-expiry
+    # email, so both alert-style emails share one identity.
+    return _post_brevo_email(
+        email,
+        copy["subject"],
+        html,
+        copy["text"],
+        sender_name="StockPro Alerts",
+        from_email=_alerts_from_sender(),
+    )
