@@ -18,6 +18,7 @@ def _capture_post(captured, status_code=201):
     def _fake_post(url, headers=None, json=None, timeout=None):
         captured["url"] = url
         captured["to"] = json["to"]
+        captured["sender"] = json["sender"]
         captured["subject"] = json["subject"]
         captured["text"] = json["textContent"]
         captured["html"] = json["htmlContent"]
@@ -50,6 +51,7 @@ def test_digest_en_up_week(monkeypatch):
 
     assert ok is True
     assert captured["to"] == [{"email": "user@example.com"}]
+    assert captured["sender"]["name"] == "StockPro Alerts"
     assert "up 2.3%" in captured["subject"]
     assert "Sam" in captured["html"]
     assert "$12,345.67" in captured["html"]

@@ -493,4 +493,8 @@ def send_weekly_digest_email(
         return False
     copy = _weekly_digest_copy(username or "there", language, data)
     html = _build_weekly_digest_email_html(copy)
-    return _post_brevo_email(email, copy["subject"], html, copy["text"])
+    # Send under the "StockPro Alerts" sender name (matches the price-alert and
+    # report-expiry emails). From-address stays ALERT_FROM_SENDER (or@stock-pro.org).
+    return _post_brevo_email(
+        email, copy["subject"], html, copy["text"], sender_name="StockPro Alerts"
+    )
