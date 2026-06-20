@@ -59,3 +59,7 @@ audit-screenshots/
 
 
 data/
+
+# Local scratch: diagnostic scripts and Supabase CLI temp
+outputs/
+supabase/

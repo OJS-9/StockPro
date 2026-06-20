@@ -332,6 +332,17 @@ class DatabaseManager:
                         END IF;
                     END $$
                 """)
+                # weekly_digest_last_sent: date of last weekly portfolio digest (issue #129)
+                cur.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'weekly_digest_last_sent'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN weekly_digest_last_sent DATE;
+                        END IF;
+                    END $$
+                """)
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_username  ON users (username)"
                 )
@@ -2204,6 +2215,92 @@ class DatabaseManager:
             if conn:
                 conn.rollback()
             raise RuntimeError(f"Failed to reset activation email flag: {e}")
+        finally:
+            self._release(conn)
+
+    def claim_weekly_digest_candidates(self) -> List[Dict[str, Any]]:
+        """Atomically select-and-mark users due the weekly portfolio digest (#129).
+
+        Eligible = has at least one holding with a positive quantity, has not
+        turned off the 'weekly_summary' notification preference, and has not been
+        sent a digest in the last 6 days. A single UPDATE ... RETURNING claims the
+        rows by stamping weekly_digest_last_sent = CURRENT_DATE, so overlapping
+        cron invocations never double-send. The caller computes and sends each
+        digest and, on failure, calls reset_weekly_digest_flag so the user is
+        retried on the next run.
+
+        Returns dicts: user_id, username, email (decrypted), language ('en'/'he').
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET weekly_digest_last_sent = CURRENT_DATE
+                    WHERE user_id IN (
+                        SELECT u.user_id
+                        FROM users u
+                        WHERE EXISTS (
+                            SELECT 1 FROM holdings h
+                            JOIN portfolios p ON p.portfolio_id = h.portfolio_id
+                            WHERE p.user_id = u.user_id
+                              AND h.total_quantity > 0
+                        )
+                        AND COALESCE(
+                            u.preferences -> 'notifications' ->> 'weekly_summary',
+                            'true'
+                        ) <> 'false'
+                        AND (
+                            u.weekly_digest_last_sent IS NULL
+                            OR u.weekly_digest_last_sent < CURRENT_DATE - INTERVAL '6 days'
+                        )
+                    )
+                    RETURNING user_id, username, email,
+                              COALESCE(preferences, '{}') AS preferences
+                    """
+                )
+                rows = [dict(r) for r in cur.fetchall()]
+                conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to claim weekly digest candidates: {e}")
+        finally:
+            self._release(conn)
+
+        results: List[Dict[str, Any]] = []
+        for row in rows:
+            prefs = row.get("preferences") or {}
+            language = (prefs.get("language") or "en").strip().lower()
+            if language not in ("en", "he"):
+                language = "en"
+            results.append(
+                {
+                    "user_id": row["user_id"],
+                    "username": row["username"],
+                    "email": decrypt(row["email"]) if row.get("email") else None,
+                    "language": language,
+                }
+            )
+        return results
+
+    def reset_weekly_digest_flag(self, user_id: str) -> None:
+        """Clear weekly_digest_last_sent so a failed send is retried next run (#129)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET weekly_digest_last_sent = NULL WHERE user_id = %s",
+                    (user_id,),
+                )
+                conn.commit()
+        except psycopg2.Error as e:
+            if conn:
+                conn.rollback()
+            raise RuntimeError(f"Failed to reset weekly digest flag: {e}")
         finally:
             self._release(conn)
 

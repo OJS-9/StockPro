@@ -210,3 +210,193 @@ def send_activation_email(
     copy = _activation_copy(username or "there", ticker, language)
     html = _build_activation_email_html(copy)
     return _post_brevo_email(email, copy["subject"], html, copy["text"])
+
+
+_ACCENT_UP = "#22c55e"
+_ACCENT_DOWN = "#ef4444"
+
+
+def _fmt_money(amount) -> str:
+    try:
+        return f"${amount:,.2f}"
+    except Exception:
+        return f"${amount}"
+
+
+def _fmt_pct(pct) -> str:
+    """Signed percent to one decimal, e.g. '+2.3%' / '-1.2%'."""
+    return f"{pct:+.1f}%"
+
+
+def _weekly_digest_copy(username: str, language: str, data: dict) -> dict:
+    """Return subject + body fields for the weekly portfolio digest in en or he."""
+    he = (language or "").strip().lower() == "he"
+    cta_url = f"{_base_url()}/portfolio"
+
+    total_value = data.get("total_value")
+    week_change_pct = data.get("week_change_pct")
+    top_mover = data.get("top_mover") or None
+
+    value_str = _fmt_money(total_value)
+    change_str = _fmt_pct(week_change_pct) if week_change_pct is not None else None
+    change_up = week_change_pct is not None and week_change_pct >= 0
+
+    mover_symbol = top_mover.get("symbol") if top_mover else None
+    mover_pct = top_mover.get("pct") if top_mover else None
+    mover_str = (
+        f"{mover_symbol} {_fmt_pct(mover_pct)}"
+        if mover_symbol is not None and mover_pct is not None
+        else None
+    )
+    mover_up = mover_pct is not None and mover_pct >= 0
+
+    if he:
+        if change_str is not None:
+            direction = "עלה ב-" if change_up else "ירד ב-"
+            subject = f"התיק שלך {direction}{abs(week_change_pct):.1f}% השבוע"
+        else:
+            subject = "הסיכום השבועי של התיק שלך"
+        greeting = f"היי {username},"
+        value_label = "שווי התיק"
+        change_label = "השבוע"
+        mover_label = "המניה הבולטת"
+        cta = "צפייה בתיק המלא"
+        footer = "אפשר לבטל את הסיכום השבועי בכל עת בהגדרות."
+        signoff = "צוות StockPro"
+    else:
+        if change_str is not None:
+            direction = "up" if change_up else "down"
+            subject = f"Your portfolio is {direction} {abs(week_change_pct):.1f}% this week"
+        else:
+            subject = "Your weekly portfolio update"
+        greeting = f"Hi {username},"
+        value_label = "Portfolio value"
+        change_label = "This week"
+        mover_label = "Top mover"
+        cta = "View full portfolio"
+        footer = "You can turn off weekly summaries anytime in Settings."
+        signoff = "The StockPro team"
+
+    text_lines = [greeting, "", f"{value_label}: {value_str}"]
+    if change_str is not None:
+        text_lines.append(f"{change_label}: {change_str}")
+    if mover_str is not None:
+        text_lines.append(f"{mover_label}: {mover_str}")
+    text_lines += ["", f"{cta}: {cta_url}", "", footer, "", f"- {signoff}"]
+
+    return {
+        "subject": subject,
+        "greeting": greeting,
+        "value_label": value_label,
+        "value_str": value_str,
+        "change_label": change_label,
+        "change_str": change_str,
+        "change_up": change_up,
+        "mover_label": mover_label,
+        "mover_str": mover_str,
+        "mover_up": mover_up,
+        "cta": cta,
+        "cta_url": cta_url,
+        "footer": footer,
+        "signoff": signoff,
+        "text": "\n".join(text_lines),
+        "rtl": he,
+    }
+
+
+def _build_weekly_digest_email_html(copy: dict) -> str:
+    """Render a StockPro-styled dark-theme HTML digest from a copy dict.
+
+    Email-safe: table layout, inline styles, explicit colors (SPA design tokens),
+    no external CSS or web fonts. Mirrors the activation email styling.
+    """
+    dir_attr = "rtl" if copy["rtl"] else "ltr"
+    align = "right" if copy["rtl"] else "left"
+
+    stat_rows = (
+        f'<p style="font-family:{_BODY_FONT};font-size:13px;line-height:18px;'
+        f'color:#a8a29e;margin:0;">{copy["value_label"]}</p>'
+        f'<p style="font-family:{_DISPLAY_FONT};font-size:30px;line-height:36px;'
+        f'font-weight:800;color:#f5f5f4;margin:4px 0 0 0;">{copy["value_str"]}</p>'
+    )
+    if copy["change_str"] is not None:
+        change_color = _ACCENT_UP if copy["change_up"] else _ACCENT_DOWN
+        stat_rows += (
+            f'<p style="font-family:{_BODY_FONT};font-size:15px;line-height:22px;'
+            f'color:#d6d3d1;margin:16px 0 0 0;">{copy["change_label"]}: '
+            f'<span style="color:{change_color};font-weight:700;">{copy["change_str"]}</span></p>'
+        )
+    if copy["mover_str"] is not None:
+        mover_color = _ACCENT_UP if copy["mover_up"] else _ACCENT_DOWN
+        stat_rows += (
+            f'<p style="font-family:{_BODY_FONT};font-size:15px;line-height:22px;'
+            f'color:#d6d3d1;margin:6px 0 0 0;">{copy["mover_label"]}: '
+            f'<span style="color:{mover_color};font-weight:700;">{copy["mover_str"]}</span></p>'
+        )
+
+    return f"""<!DOCTYPE html>
+<html dir="{dir_attr}">
+<body style="margin:0;padding:0;background-color:#0c0a09;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0c0a09;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="480" cellpadding="0" cellspacing="0" dir="{dir_attr}" style="max-width:480px;width:100%;background-color:#1c1917;border:1px solid #292524;border-radius:16px;">
+          <tr>
+            <td style="padding:28px 32px 0 32px;text-align:{align};">
+              <div style="font-family:{_DISPLAY_FONT};font-size:18px;font-weight:800;color:#f5f5f4;letter-spacing:-0.3px;">StockPro</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 0 32px;text-align:{align};">
+              <p style="font-family:{_BODY_FONT};font-size:16px;line-height:24px;color:#f5f5f4;margin:0;font-weight:700;">{copy['greeting']}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px 0 32px;text-align:{align};">
+              {stat_rows}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 0 32px;text-align:{align};">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background-color:#f5f5f4;border-radius:9999px;">
+                    <a href="{copy['cta_url']}" style="display:inline-block;padding:12px 28px;font-family:{_BODY_FONT};font-size:14px;font-weight:700;color:#0c0a09;text-decoration:none;border-radius:9999px;">{copy['cta']}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px 28px 32px;text-align:{align};">
+              <p style="font-family:{_BODY_FONT};font-size:13px;line-height:18px;color:#78716c;margin:24px 0 0 0;border-top:1px solid #292524;padding-top:20px;">{copy['footer']}</p>
+              <p style="font-family:{_BODY_FONT};font-size:13px;line-height:18px;color:#78716c;margin:8px 0 0 0;">- {copy['signoff']}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_weekly_digest_email(
+    email: str,
+    username: str,
+    data: dict,
+    language: str = "en",
+) -> bool:
+    """Send the weekly portfolio digest. Returns True if accepted by Brevo.
+
+    `data` is the dict returned by PortfolioService.get_weekly_performance:
+    total_value, week_change_pct (or None), top_mover (or None), holdings_count.
+
+    Best-effort: returns False (no raise) if Brevo is unconfigured, the email or
+    data is missing, or the provider errors, so the caller can retry next run.
+    """
+    if not email or not data:
+        return False
+    copy = _weekly_digest_copy(username or "there", language, data)
+    html = _build_weekly_digest_email_html(copy)
+    return _post_brevo_email(email, copy["subject"], html, copy["text"])
