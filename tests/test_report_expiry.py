@@ -12,6 +12,7 @@ def _capture_post(captured, status_code=201):
     def _fake_post(url, headers=None, json=None, timeout=None):
         captured["url"] = url
         captured["to"] = json["to"]
+        captured["sender"] = json["sender"]
         captured["subject"] = json["subject"]
         captured["text"] = json["textContent"]
         captured["html"] = json["htmlContent"]
@@ -31,6 +32,8 @@ def test_expiry_en(monkeypatch):
 
     assert ok is True
     assert captured["to"] == [{"email": "user@example.com"}]
+    # Sends under the "StockPro Alerts" sender name (matches the price-alert email).
+    assert captured["sender"]["name"] == "StockPro Alerts"
     assert "NVDA" in captured["subject"]
     assert "7 days old" in captured["subject"]
     assert "Sam" in captured["html"]

@@ -281,7 +281,12 @@ def send_report_expiry_email(
         return False
     copy = _report_expiry_copy(username or "there", ticker, language)
     html = _build_activation_email_html(copy)
-    return _post_brevo_email(email, copy["subject"], html, copy["text"])
+    # Send under the "StockPro Alerts" sender name, matching the price-alert
+    # email, so the nudge reads as an alert rather than the default "StockPro"
+    # used by the activation email.
+    return _post_brevo_email(
+        email, copy["subject"], html, copy["text"], sender_name="StockPro Alerts"
+    )
 
 
 _ACCENT_UP = "#22c55e"
