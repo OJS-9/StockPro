@@ -1659,6 +1659,11 @@ class DatabaseManager:
         self, event_type: str, user_id: Optional[str] = None, payload: Optional[Dict] = None
     ) -> None:
         """Write a structured event to admin_events. Fire-and-forget safe."""
+        if not user_id:
+            # Analytics events with no user attribution are useless and corrupt
+            # aggregates grouped by user_id. Drop rather than insert a null row
+            # (issue #145). Callers that legitimately lack a user should not log.
+            return
         conn = None
         try:
             conn = self.get_connection()
