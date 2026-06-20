@@ -4,6 +4,7 @@ Tests for WSJ Nimble agent integration in news_service.py.
 
 import sys
 import os
+import logging
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -130,3 +131,66 @@ class TestRefreshPrimaryWsj:
         assert publishers[0] == "Bloomberg"
         assert publishers[1] == "Morningstar"
         assert publishers[2] == "WSJ"
+
+
+class TestEmptyResultHandling:
+    """Empty/placeholder agent results must be dropped and logged, not silently served."""
+
+    def _make_article(self, title):
+        return {
+            "headline": title,
+            "summary": "Summary",
+            "image_url": "",
+            "article_url": f"https://example.com/{title.replace(' ', '-').lower()}",
+        }
+
+    def test_empty_dict_record_does_not_become_ghost_article(self):
+        """A source returning [{}] (Nimble's empty-result shape) yields no blank card."""
+        mock_client = MagicMock()
+        mock_client.run_agent.side_effect = lambda agent, params: {
+            news_service.BLOOMBERG_AGENT: [{}],  # empty placeholder record
+            news_service.MORNINGSTAR_AGENT: [self._make_article("Morningstar 1")],
+            news_service.WSJ_AGENT: [self._make_article("WSJ 1")],
+        }.get(agent, [])
+
+        import nimble_client as nimble_module
+        with patch.object(nimble_module, 'NimbleClient', return_value=mock_client):
+            news_service._cache["primary"]["fetched_at"] = None
+            news_service._refresh_primary()
+
+        articles = news_service._cache["primary"]["articles"]
+        assert all(a["title"] for a in articles)
+        assert "Bloomberg" not in [a["publisher"] for a in articles]
+
+    def test_empty_source_logs_warning(self, caplog):
+        mock_client = MagicMock()
+        mock_client.run_agent.side_effect = lambda agent, params: {
+            news_service.BLOOMBERG_AGENT: [{}],
+            news_service.MORNINGSTAR_AGENT: [self._make_article("Morningstar 1")],
+            news_service.WSJ_AGENT: [self._make_article("WSJ 1")],
+        }.get(agent, [])
+
+        import nimble_client as nimble_module
+        with patch.object(nimble_module, 'NimbleClient', return_value=mock_client):
+            news_service._cache["primary"]["fetched_at"] = None
+            with caplog.at_level(logging.WARNING):
+                news_service._refresh_primary()
+
+        assert "Bloomberg" in caplog.text
+        assert "no usable articles" in caplog.text
+
+    def test_all_sources_empty_logs_aggregate_error(self, caplog):
+        mock_client = MagicMock()
+        mock_client.run_agent.side_effect = lambda agent, params: []
+
+        import nimble_client as nimble_module
+        with patch.object(nimble_module, 'NimbleClient', return_value=mock_client):
+            news_service._cache["primary"]["fetched_at"] = None
+            with caplog.at_level(logging.ERROR):
+                news_service._refresh_primary()
+
+        assert news_service._cache["primary"]["articles"] == []
+        assert any(
+            r.levelno == logging.ERROR and "all news sources returned no usable articles" in r.message
+            for r in caplog.records
+        )

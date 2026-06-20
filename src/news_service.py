@@ -74,25 +74,39 @@ def _do_refresh_primary(client) -> None:
         morningstar_results = f_morningstar.result()
         wsj_results = f_wsj.result()
 
-    # Sort each source by image presence before interleaving, so image articles
-    # lead within each source without collapsing all no-image sources to the end.
+    # Map, then drop records with no headline. Nimble agents intermittently
+    # return empty placeholder records (an empty {} normalizes to [{}]); without
+    # this filter those render as blank "ghost" cards in the briefing.
+    # Finally sort by image presence so image articles lead within each source
+    # without collapsing all no-image sources to the end.
     def _sort_by_image(items, publisher):
         mapped = [_map_article(item, publisher) for item in items]
+        mapped = [a for a in mapped if a["title"]]
         mapped.sort(key=lambda a: 0 if a["image"] else 1)
         return mapped
 
     sources = [
-        _sort_by_image(bloomberg_results, "Bloomberg"),
-        _sort_by_image(morningstar_results, "Morningstar"),
-        _sort_by_image(wsj_results, "WSJ"),
+        ("Bloomberg", _sort_by_image(bloomberg_results, "Bloomberg")),
+        ("Morningstar", _sort_by_image(morningstar_results, "Morningstar")),
+        ("WSJ", _sort_by_image(wsj_results, "WSJ")),
     ]
 
+    # Surface degradation: an agent that returns HTTP 200 with empty results is
+    # otherwise silent (nimble_client only logs on exceptions), so a degraded or
+    # empty briefing would have no signal at all.
+    for name, items in sources:
+        if not items:
+            logger.warning("news refresh: source '%s' returned no usable articles", name)
+    if all(not items for _, items in sources):
+        logger.error("news refresh: all news sources returned no usable articles; briefing is empty")
+
     # Round-robin interleave: Bloomberg → Morningstar → WSJ
+    source_lists = [items for _, items in sources]
     indices = [0, 0, 0]
     interleaved = []
     while True:
         added = False
-        for i, items in enumerate(sources):
+        for i, items in enumerate(source_lists):
             if indices[i] < len(items):
                 interleaved.append(items[indices[i]])
                 indices[i] += 1
