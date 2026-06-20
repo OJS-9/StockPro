@@ -212,6 +212,78 @@ def send_activation_email(
     return _post_brevo_email(email, copy["subject"], html, copy["text"])
 
 
+def _report_expiry_copy(username: str, ticker: str, language: str) -> dict:
+    """Return subject + body strings for the 7-day report expiry nudge (en/he).
+
+    Same copy-dict shape as _activation_copy so it can render through
+    _build_activation_email_html. The CTA points at the research wizard with the
+    ticker prefilled (/research?ticker=...) so one click regenerates the report.
+    """
+    he = (language or "").strip().lower() == "he"
+    cta_url = f"{_base_url()}/research?ticker={ticker}"
+
+    if he:
+        subject = f"הדוח שלך על {ticker} בן 7 ימים - השוק זז מאז"
+        greeting = f"היי {username},"
+        intro = (
+            f"הדוח שלך ב-StockPro על {ticker} בן 7 ימים. שבוע הוא הרבה זמן בשוק - "
+            f"מחירים, חדשות וסנטימנט יכלו להשתנות מאז."
+        )
+        step = "הרצת דוח חדש לוקחת דקה ונותנת לך ניתוח מעודכן לפעול לפיו."
+        cta = f"הרצת דוח חדש על {ticker}"
+        footer = "השוק זז מהר. תישאר מעודכן."
+        signoff = "צוות StockPro"
+    else:
+        subject = f"Your {ticker} report is 7 days old - markets have moved"
+        greeting = f"Hi {username},"
+        intro = (
+            f"Your StockPro report on {ticker} is now 7 days old. A week is a long "
+            f"time in the market - prices, news, and sentiment may have shifted "
+            f"since then."
+        )
+        step = (
+            "Running a fresh report takes about a minute and gives you up-to-date "
+            "analysis to act on."
+        )
+        cta = f"Generate a fresh {ticker} report"
+        footer = "Markets move fast. Stay current."
+        signoff = "The StockPro team"
+
+    text_content = (
+        f"{greeting}\n\n{intro}\n\n{step}\n\n{cta}: {cta_url}\n\n{footer}\n\n- {signoff}"
+    )
+    return {
+        "subject": subject,
+        "greeting": greeting,
+        "intro": intro,
+        "step": step,
+        "cta": cta,
+        "cta_url": cta_url,
+        "footer": footer,
+        "signoff": signoff,
+        "text": text_content,
+        "rtl": he,
+    }
+
+
+def send_report_expiry_email(
+    email: str,
+    username: str,
+    ticker: str,
+    language: str = "en",
+) -> bool:
+    """Send the 7-day report expiry nudge. Returns True if accepted by Brevo.
+
+    Best-effort: returns False (no raise) if Brevo is unconfigured, the email or
+    ticker is missing, or the provider errors, so the caller can retry next run.
+    """
+    if not email or not ticker:
+        return False
+    copy = _report_expiry_copy(username or "there", ticker, language)
+    html = _build_activation_email_html(copy)
+    return _post_brevo_email(email, copy["subject"], html, copy["text"])
+
+
 _ACCENT_UP = "#22c55e"
 _ACCENT_DOWN = "#ef4444"
 

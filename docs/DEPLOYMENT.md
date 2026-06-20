@@ -160,6 +160,7 @@ set a cron schedule, so these are created in the Railway dashboard (one-time).
 |--------|---------|----------------|-------|
 | `scripts/send_activation_emails.py` | 24h post-signup activation nudge (users with no portfolio) | `0 * * * *` (hourly) | #120 |
 | `scripts/send_weekly_digest.py` | Weekly portfolio digest (Mon morning) | `0 13 * * 1` (~9am US Eastern, Mon) | #129 |
+| `scripts/send_report_expiry_nudges.py` | 7-day report expiry nudge (regenerate a stale report) | `0 14 * * *` (~9-10am US Eastern, daily) | #130 |
 
 Each script is idempotent and safe to re-run: it atomically claims candidates
 (`UPDATE ... RETURNING`) so overlapping runs never double-send, and clears the
@@ -197,6 +198,16 @@ railway run python scripts/send_weekly_digest.py
 Opt-out: the weekly digest respects the existing Settings "Weekly portfolio
 summary" toggle (`preferences.notifications.weekly_summary`). Users with it off,
 or with no holdings, are never claimed.
+
+The report expiry nudge (`send_report_expiry_nudges.py`) claims reports created
+7-14 days ago that are the newest report for their (user, ticker) pair, skipping
+users who set `preferences.notifications.report_expiry` to `false` (defaults on).
+For safe testing against production, pass `--only-user <user_id>` to restrict the
+run to a single user so no real user can be claimed or emailed:
+
+```bash
+railway run python scripts/send_report_expiry_nudges.py --only-user <user_id>
+```
 
 ---
 
